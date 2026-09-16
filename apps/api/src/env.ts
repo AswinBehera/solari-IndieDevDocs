@@ -12,6 +12,15 @@ export interface Env {
   /** Supabase project URL, used to build the JWKS endpoint (ADR-0013). */
   SUPABASE_URL: string
   /**
+   * Local development only: the owner id every request is treated as.
+   *
+   * Set in `.dev.vars`, which `wrangler dev` reads and `wrangler deploy` never
+   * uploads. Present means "accept anything as this owner" (`devVerifier`);
+   * absent means the real JWT path, which refuses everything without
+   * `SUPABASE_URL`. Absence is the safe state, which is why it is the default.
+   */
+  DEV_OWNER_ID?: string
+  /**
    * Fine-grained token, `actions:write` on this repository and nothing else
    * (ADR-0016). The repository is public: this must never be logged, and
    * `workflow_dispatch` must be the only thing it can do.

@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto"
-import type { Engagement, HarvestOutcome, SourceId, StorageRef } from "@samsara/core"
+import type { HarvestOutcome, StorageRef } from "@samsara/core"
 import type { Capture } from "@samsara/sources"
+import type {
+  HarvestRunFilter,
+  HarvestRunRecord,
+  HarvestRunStart,
+  HarvestRunStore,
+  RawItemRow,
+  RawItemStore,
+} from "./ports.js"
+import { boundedLimit, ITEM_LIST_LIMIT, RUN_LIST_LIMIT } from "./ports.js"
 
 /**
  * Where a run and its items are written, and where the untouched bytes go.
@@ -10,58 +19,12 @@ import type { Capture } from "@samsara/sources"
  * items are a bulk append, and an archived capture is an object in a bucket that
  * nothing in this package will ever read back. Collapsing them would mean a test
  * for the run's state machine needed a bucket.
+ *
+ * Two of the three live in `./ports.js` and are re-exported here, so that this
+ * module stays the one import anything inside the package needs.
  */
 
-/** What is known when a run starts. `id` is minted by the caller so it can log it. */
-export interface HarvestRunStart {
-  id: string
-  domainId: string
-  personaId: string
-  sourceId: SourceId
-  query: string
-  sessionId: string
-  startedAt: Date
-}
-
-export interface HarvestRunRecord extends HarvestRunStart {
-  endedAt: Date | null
-  outcome: HarvestOutcome
-  itemCount: number
-}
-
-export interface HarvestRunStore {
-  start(run: HarvestRunStart): Promise<void>
-  /** Terminal transition. Sets `endedAt`, `outcome` and the count in one write. */
-  finish(id: string, outcome: HarvestOutcome, itemCount: number, endedAt: Date): Promise<void>
-  byId(id: string): Promise<HarvestRunRecord | null>
-  list(filter?: { sourceId?: SourceId; personaId?: string }): Promise<HarvestRunRecord[]>
-}
-
-/** A parsed item, completed with the three things a parser is not allowed to know. */
-export interface RawItemRow {
-  id: string
-  harvestRunId: string
-  sourceId: SourceId
-  url: string
-  title: string | null
-  text: string
-  languageGuess: string | null
-  mediaRefs: readonly string[]
-  engagement: Engagement | null
-  capturedAt: Date
-  rawRef: StorageRef
-}
-
-export interface RawItemStore {
-  /**
-   * One call for the whole batch, not one per item.
-   *
-   * A harvest returning forty items should be one statement. Forty round trips
-   * inside a browser session's deadline is a way to have the deadline expire
-   * holding an open browser, which bills for the wait.
-   */
-  insertMany(items: readonly RawItemRow[]): Promise<void>
-}
+export * from "./ports.js"
 
 /**
  * Object storage for the capture, keyed by run.
@@ -101,14 +64,16 @@ export class MemoryHarvestRunStore implements HarvestRunStore {
     return this.runs.get(id) ?? null
   }
 
-  async list(
-    filter: { sourceId?: SourceId; personaId?: string } = {},
-  ): Promise<HarvestRunRecord[]> {
-    return [...this.runs.values()].filter(
-      (r) =>
-        (filter.sourceId === undefined || r.sourceId === filter.sourceId) &&
-        (filter.personaId === undefined || r.personaId === filter.personaId),
-    )
+  async list(filter: HarvestRunFilter = {}): Promise<HarvestRunRecord[]> {
+    return [...this.runs.values()]
+      .filter(
+        (r) =>
+          (filter.sourceId === undefined || r.sourceId === filter.sourceId) &&
+          (filter.personaId === undefined || r.personaId === filter.personaId) &&
+          (filter.query === undefined || r.query === filter.query),
+      )
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
+      .slice(0, boundedLimit(filter.limit, RUN_LIST_LIMIT))
   }
 }
 
@@ -117,6 +82,20 @@ export class MemoryRawItemStore implements RawItemStore {
 
   async insertMany(items: readonly RawItemRow[]): Promise<void> {
     this.items.push(...items)
+  }
+
+  /**
+   * Sorted by rank, not by insertion order — the same as the real store.
+   *
+   * A memory store that returned them in the order they arrived would pass every
+   * test while the Postgres one was wrong, because in practice the two orders are
+   * the same right up until the day somebody inserts a batch twice.
+   */
+  async listByRun(harvestRunId: string, limit?: number): Promise<RawItemRow[]> {
+    return this.items
+      .filter((item) => item.harvestRunId === harvestRunId)
+      .sort((a, b) => a.rank - b.rank)
+      .slice(0, boundedLimit(limit, ITEM_LIST_LIMIT))
   }
 }
 

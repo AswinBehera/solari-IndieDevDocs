@@ -1,14 +1,16 @@
-import type { HarvestOutcome, SourceId } from "@samsara/core"
+import type { Engagement, HarvestOutcome } from "@samsara/core"
 import { harvestRuns, rawItems } from "@samsara/db"
-import { and, eq, type TablesRelationalConfig } from "drizzle-orm"
+import { and, asc, desc, eq, type TablesRelationalConfig } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 import type {
+  HarvestRunFilter,
   HarvestRunRecord,
   HarvestRunStart,
   HarvestRunStore,
   RawItemRow,
   RawItemStore,
-} from "./store.js"
+} from "./ports.js"
+import { boundedLimit, ITEM_LIST_LIMIT, RUN_LIST_LIMIT } from "./ports.js"
 
 /**
  * The real harvest stores.
@@ -77,15 +79,26 @@ export class PostgresHarvestRunStore implements HarvestRunStore {
     return rows[0] ? toRecord(rows[0]) : null
   }
 
-  async list(
-    filter: { sourceId?: SourceId; personaId?: string } = {},
-  ): Promise<HarvestRunRecord[]> {
+  /**
+   * Newest first, and always limited.
+   *
+   * `startedAt desc` is both the order the Lab wants and the order the
+   * `(persona_id, started_at)` index already carries, so "the newest run this
+   * identity did" is an index read of one row rather than a sort of every run
+   * that identity has ever done.
+   */
+  async list(filter: HarvestRunFilter = {}): Promise<HarvestRunRecord[]> {
     const clauses = [
       ...(filter.sourceId ? [eq(harvestRuns.sourceId, filter.sourceId)] : []),
       ...(filter.personaId ? [eq(harvestRuns.personaId, filter.personaId)] : []),
+      ...(filter.query ? [eq(harvestRuns.query, filter.query)] : []),
     ]
-    const query = this.db.select().from(harvestRuns)
-    const rows = clauses.length > 0 ? await query.where(and(...clauses)) : await query
+    const rows = await this.db
+      .select()
+      .from(harvestRuns)
+      .where(clauses.length > 0 ? and(...clauses) : undefined)
+      .orderBy(desc(harvestRuns.startedAt))
+      .limit(boundedLimit(filter.limit, RUN_LIST_LIMIT))
     return rows.map(toRecord)
   }
 }
@@ -114,6 +127,7 @@ export class PostgresRawItemStore implements RawItemStore {
         title: item.title,
         text: item.text,
         languageGuess: item.languageGuess,
+        rank: item.rank,
         mediaRefs: [...item.mediaRefs],
         engagementViews: item.engagement?.views ?? null,
         engagementLikes: item.engagement?.likes ?? null,
@@ -122,5 +136,50 @@ export class PostgresRawItemStore implements RawItemStore {
         rawRef: item.rawRef,
       })),
     )
+  }
+
+  /**
+   * One run's items, in the order the source returned them, always limited.
+   *
+   * The engagement columns are three nullable integers in the table and one
+   * nullable object in the row, and the reconstruction below is the only place
+   * that knows it: a run with no engagement figures at all gets `null` rather
+   * than `{views: null, likes: null, comments: null}`, so that "the source does
+   * not publish these" and "the source published zero" stay different answers.
+   */
+  async listByRun(harvestRunId: string, limit?: number): Promise<RawItemRow[]> {
+    const rows = await this.db
+      .select()
+      .from(rawItems)
+      .where(eq(rawItems.harvestRunId, harvestRunId))
+      .orderBy(asc(rawItems.rank))
+      .limit(boundedLimit(limit, ITEM_LIST_LIMIT))
+
+    return rows.map((row) => {
+      const engagement: Engagement | null =
+        row.engagementViews === null &&
+        row.engagementLikes === null &&
+        row.engagementComments === null
+          ? null
+          : {
+              views: row.engagementViews,
+              likes: row.engagementLikes,
+              comments: row.engagementComments,
+            }
+      return {
+        id: row.id,
+        harvestRunId: row.harvestRunId,
+        sourceId: row.sourceId,
+        rank: row.rank,
+        url: row.url,
+        title: row.title,
+        text: row.text,
+        languageGuess: row.languageGuess,
+        mediaRefs: row.mediaRefs,
+        engagement,
+        capturedAt: row.capturedAt,
+        rawRef: row.rawRef,
+      }
+    })
   }
 }

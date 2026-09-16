@@ -50,6 +50,13 @@
       "when": 1789226338356,
       "tag": "0006_persona_timezone",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789561408842,
+      "tag": "0007_add_raw_item_rank",
+      "breakpoints": true
     }
   ]
 }

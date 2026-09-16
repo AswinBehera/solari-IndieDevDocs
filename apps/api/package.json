@@ -7,7 +7,8 @@
     "./app": "./src/app.ts",
     "./auth": "./src/auth.ts",
     "./dispatch": "./src/dispatch.ts",
-    "./env": "./src/env.ts"
+    "./env": "./src/env.ts",
+    "./lab": "./src/lab.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
@@ -18,9 +19,12 @@
   "dependencies": {
     "@dt/db": "workspace:*",
     "@samsara/core": "workspace:*",
+    "@samsara/harvest": "workspace:*",
     "@samsara/kernel": "workspace:*",
+    "@samsara/personas": "workspace:*",
     "hono": "^4.9.10",
-    "jose": "^6.1.0"
+    "jose": "^6.1.0",
+    "zod": "^4.6.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",

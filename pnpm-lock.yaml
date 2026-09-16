@@ -35,15 +35,24 @@ importers:
       '@samsara/core':
         specifier: workspace:*
         version: link:../../packages/samsara/core
+      '@samsara/harvest':
+        specifier: workspace:*
+        version: link:../../packages/samsara/harvest
       '@samsara/kernel':
         specifier: workspace:*
         version: link:../../packages/samsara/kernel
+      '@samsara/personas':
+        specifier: workspace:*
+        version: link:../../packages/samsara/personas
       hono:
         specifier: ^4.9.10
         version: 4.13.7
       jose:
         specifier: ^6.1.0
         version: 6.2.12
+      zod:
+        specifier: ^4.6.1
+        version: 4.6.1
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20250109.0

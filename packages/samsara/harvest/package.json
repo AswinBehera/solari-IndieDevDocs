@@ -5,6 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./overlap": "./src/overlap.ts",
+    "./ports": "./src/ports.ts",
+    "./store": "./src/store.ts",
     "./postgres": "./src/postgres.ts",
     "./node": "./src/node.ts"
   },

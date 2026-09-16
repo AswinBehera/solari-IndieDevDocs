@@ -2,17 +2,106 @@
 
 Phase: 1 — in progress. Phase 0 is **complete, pending the gate** (below; the gate is a human
 review and does not block buildable work).
-Last completed: **P1.6.2 — the first `pantip.topic` capture, and the redaction rules it broke**.
-Every surface this project has an adapter for has now been run against the real page. 363 tests in
-`@samsara/sources`, seam allowances **0 of 5** across 143 files.
+Last completed: **P1.7 — the Persona Lab, and the column the split screen could not be built
+without**. 683 tests across the repo, seam allowances **0 of 5** across 145 files.
 
-**Ten billed sessions, 4.074 minutes of 4,000** — seven for P1.6.1 below, three for P1.6.2, and two
-of the ten produced nothing. P1.6.1's seven: five `pantip.forum` (0.4584, 0.4584, 0.4587,
+**Ten billed sessions, 4.074 minutes of 4,000 — P1.7 spent none of them.** Seven for P1.6.1
+below, three for P1.6.2, and two of the ten produced nothing. P1.6.1's seven: five `pantip.forum` (0.4584, 0.4584, 0.4587,
 0.44775, 0.5466), one `maps.search` (0.21265), one `maps.reviews` (0.40665). **One of the five
 Pantip sessions was waste and is counted as such**: the first run was piped to `tail`, which does
 not stop the capture — it had already opened the browser and billed — and it was then re-run to see
 the head of the output. The pipe cost 0.4584 minutes and produced nothing. Reading a recorder's
 output through `tail` is not free, because the spend happens before the bytes reach the pipe.
+
+## P1.7 — the Persona Lab, and the column the split screen could not be built without
+
+The task was "list personas, create one, trigger a harvest, view RawItems side by side for two
+personas on the same query", with "rough UI is fine; correctness of the comparison is not". The
+first hour was spent discovering that the comparison could not be computed at all.
+
+**`raw_items` had no rank.** The acceptance criterion is written in terms of "the top twenty
+items", and nothing in the row could reconstruct which twenty those were: `id` is a random uuid,
+`created_at` defaults to `now()` and is identical across a batch insert, and `captured_at` is one
+timestamp for the whole capture. Insertion order in Postgres is not a promise, and the day it
+stops being true is the day a batch is written twice. An arbitrary twenty compared against another
+arbitrary twenty produces a number that looks like a measurement. So `rank integer not null` was
+added to the table, to the canonical `rawItem` schema in `@samsara/core`, and to `RawItemRow`, and
+`run.ts` sets it from the draft's array index — the last place in the pipeline where the order the
+surface chose still exists. Migration `0007_add_raw_item_rank`, which also swaps
+`raw_items_run_idx` for `(harvest_run_id, rank)`: every read of a run's items is a read in rank
+order, and the index that answers it is the one that carries the order. A second index,
+`harvest_runs_persona_started_idx`, answers the Lab's actual question — what did *this* identity
+get back, most recent first — which was otherwise a scan of every run anybody had ever done.
+
+**One implementation of the comparison, on the server.** `/lab/compare` calls `overlapAt` from
+`@samsara/harvest/overlap`, the same function the offline signal matrix uses, and `lab.test.ts`
+asserts the route's figure `toEqual` the primitive's output rather than recomputing the arithmetic
+in the test. The browser never computes the intersection: it marks shared rows for reading, and
+`Compare.tsx` says in its header that if the mark and the headline ever disagree, the mark is the
+one that is wrong. A second implementation in the client would be the convincing one on screen.
+
+**Three refusals, each of which would otherwise produce a plausible wrong number.**
+
+1. `a === b` is a 400. `overlapAt(x, x, k)` is a perfectly good 1.0, and a split screen showing
+   100% because both columns are the same identity is the most convincing wrong answer this tool
+   could produce.
+2. The route takes the **newest** matching run per side, whatever its outcome — `blocked` with zero
+   items included — and never falls back to an older successful one. A silent time-shift would put
+   the two columns on different days and label it a persona effect.
+3. `shared / comparable`, never `shared / k`, and `comparable` is on screen beside the percentage.
+   A side with no matching run comes back as `harvest: null, items: []`, and `comparable === 0` is
+   the field that separates "nothing in common" from "nothing to compare". The UI prints "—" rather
+   than 0% for that case, because a 0% that means missing data is worse than no number.
+
+**Subpath exports, again.** `apps/api` is compiled with `types: ["@cloudflare/workers-types"]`, and
+`@samsara/harvest`'s barrel reaches `run.ts`, `@samsara/sources` and Playwright while `store.ts`
+reaches `node:crypto`. The ports were split out into `ports.ts` — types only, no value imports —
+and `./overlap`, `./ports`, `./store`, `./postgres`, `./node` are now separate entry points, as
+`@samsara/kernel/jobs` has been since P0.5. The rule is the same one: it should be a compile error
+here rather than a deploy-day surprise. Seam count moves 143 → 145 (`ports.ts`, `store.test.ts`).
+
+**`.dev.vars`, and which way a mistake fails.** Every Lab route is authenticated, ADR-0013 puts
+authentication in Supabase, and there is no Supabase project — so without something the internal
+tool is a tool nobody can open, which is how internal tools grow their own unauthenticated side
+door. `devVerifier` answers with one fixed owner and is selected by the **presence** of
+`DEV_OWNER_ID` in `apps/api/.dev.vars`, a file `wrangler dev` reads and `wrangler deploy` does not
+upload. The first draft selected it on the *absence* of `SUPABASE_URL`, which fails open: a
+deployment that forgot a secret would have accepted every request. Written this way, absence falls
+through to the real verifier and 401s. The file is committed on purpose and contains nothing
+secret, the same call as `localConnectionString` in `wrangler.toml`.
+
+**No second door for starting a harvest.** The Lab's form POSTs `harvest.run` to the existing
+`/jobs`, which already has the owner from the verified token, the enqueue-then-dispatch order and
+the double-dispatch refusal of ADR-0016. It sends **no idempotency key**, deliberately: a key
+derived from the question would make the Lab unable to ask the same question twice, which is
+exactly what P1.8's drift experiment does. A double-click is held off by disabling the button.
+
+**What it cost per request.** `GET /lab/compare` at the widest k it allows measures **0.933 ms of
+CPU** (1.063 on a later run) against a 10 ms ceiling and a 5 ms assertion budget — thirteen times
+the next-heaviest route, and the only handler in the app that is not trivially cheap. `cpu.test.ts`
+now drives it with 100 items a side and says in the test that if this ever approaches the ceiling
+the fix is a smaller `MAX_K`, not a bigger budget. `POST /lab/personas`, the only route that runs a
+schema, costs 0.035 ms.
+
+**The web app still has no router.** Two pages, one string comparison in `main.tsx`. A router is a
+dependency, a bundle and a set of conventions bought with one decision that `startsWith` already
+makes; Phase 2's real navigation can bring a real one. The Lab talks only about personas, sources,
+queries and items — the seam rule applied by hand, since `apps/` is allowed travel vocabulary and
+`check:seam` would not have caught a "places found" column.
+
+**The one lint suppression that was not added.** Biome's `noLabelWithoutControl` cannot see through
+a component boundary, and the repo has zero `biome-ignore` comments. Rather than make it one, the
+`Field` helper now generates an id with `useId` and hands it to the control through a render prop,
+which is a real association rather than an incidental one.
+
+**Verified end to end, without a browser.** `wrangler dev` against local Postgres through
+Hyperdrive: a persona created (`country: "TH"` refused, and the 400 does not echo the input), two
+personas with four seeded items each compared through real SQL at `1 of 4 shared, 25%`, `/lab`
+served by Vite's SPA fallback and the `/api` proxy reaching the Worker. The React tree was
+render-checked with `renderToString`; there is no Playwright in this repo (the browser is remote,
+and remote browsers cost minutes), so nothing clicked a button. 15 tests in `lab.test.ts`,
+9 in a new `store.test.ts`, and 5 new Postgres tests covering rank ordering, the bounded read, and
+engagement coming back as an absence rather than three zeroes.
 
 ## P1.6.2 — `pantip.topic`, and five defects in one page
 
@@ -453,8 +542,12 @@ allows of five**. A third finding fell out of the live run — `Asia/Ho_Chi_Minh
 viewpoint check was reporting a false negative. Before that, **P0.7** (the seam check),
 **P0.6** (dev ergonomics) and **P0.5** (the queue and the two runtimes); all three were
 committed this session, having lived only in the working tree until now.
-NEXT: **P1.7 (Persona Lab UI)**. The captures that stood in front of it are done; both questions
-they were bought to answer came back, and the answers are above.
+NEXT: **P1.8 (the drift experiment)** — the same query, daily, for seven days, from a `us`
+persona and a `th` persona, with overlap plotted over time in the Lab. P1.7 built the read surface
+that plot draws from and the `rank` column it needs; what P1.8 adds is a schedule, a second run of
+the same question, and a series rather than a pair. Its first real cost is browser minutes: two
+personas × one source × seven days is fourteen sessions, roughly 6 minutes at the rates measured in
+P1.6, against a ceiling of 4,000.
 
 Closed since: **the two creators' contact details in `tiktok-search-vi-VN-2026-09-13.capture.json`
 are gone.** The question assumed the bio was a field we read and that shape redaction would catch a

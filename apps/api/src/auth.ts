@@ -33,6 +33,31 @@ export function supabaseVerifier(supabaseUrl: string): Verifier {
   }
 }
 
+/**
+ * A verifier that checks nothing and answers with one fixed owner.
+ *
+ * This exists so that the Persona Lab is usable on a laptop. Every route it needs
+ * is authenticated, ADR-0013 puts authentication in Supabase, and there is no
+ * Supabase project — so without this the internal tool would be a tool nobody can
+ * open, which is how internal tools end up with their own unauthenticated side
+ * door instead.
+ *
+ * **Why this cannot reach production.** It is selected only from `DEV_OWNER_ID`,
+ * and that variable lives in `apps/api/.dev.vars` — a file `wrangler dev` reads
+ * and `wrangler deploy` does not upload, by wrangler's own design. The selection
+ * in `index.ts` is written the same way round: the *presence* of the variable
+ * turns this on, and its absence falls through to the real verifier, which 401s.
+ * A deployment that forgot a secret therefore refuses every request rather than
+ * accepting every request, which is the direction a mistake here has to fail.
+ */
+export function devVerifier(ownerId: string): Verifier {
+  return {
+    async verify() {
+      return ownerId
+    },
+  }
+}
+
 declare module "hono" {
   interface ContextVariableMap {
     /**

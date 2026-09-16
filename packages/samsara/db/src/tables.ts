@@ -121,7 +121,13 @@ export const harvestRuns = pgTable(
       .references(() => sessions.id, { onDelete: "restrict" }),
     ...timestamps,
   },
-  (t) => [index("harvest_runs_domain_source_idx").on(t.domainId, t.sourceId, t.startedAt)],
+  (t) => [
+    index("harvest_runs_domain_source_idx").on(t.domainId, t.sourceId, t.startedAt),
+    // The Lab's question, and the drift experiment's: what did *this* identity get
+    // back, most recent first. Without it, "the newest run for persona A" is a scan
+    // of every run anybody has ever done.
+    index("harvest_runs_persona_started_idx").on(t.personaId, t.startedAt),
+  ],
 )
 
 export const rawItems = pgTable(
@@ -132,6 +138,18 @@ export const rawItems = pgTable(
       .notNull()
       .references(() => harvestRuns.id, { onDelete: "cascade" }),
     sourceId: text("source_id").notNull(),
+    /**
+     * Where the source put this item, zero-based, within its own run.
+     *
+     * Not a quality score and not comparable across runs: it is the position the
+     * surface chose, which is the only thing a ranked surface actually tells us.
+     * It is a column rather than a derived order because nothing else in the row
+     * can stand in for it — `capturedAt` is one timestamp for the whole batch and
+     * `id` is random — and "the top twenty" is the unit every comparison in
+     * Phase 1 is stated in. An arbitrary twenty compared against another
+     * arbitrary twenty produces a number that looks like a measurement.
+     */
+    rank: integer("rank").notNull(),
     url: text("url").notNull(),
     title: text("title"),
     text: text("text").notNull(),
@@ -147,7 +165,9 @@ export const rawItems = pgTable(
     ...timestamps,
   },
   (t) => [
-    index("raw_items_run_idx").on(t.harvestRunId),
+    // `(run, rank)` rather than `(run)`: every read of a run's items is a read in
+    // rank order, and the index that answers it is the one that carries the order.
+    index("raw_items_run_rank_idx").on(t.harvestRunId, t.rank),
     // Re-running extraction scans by source and time. It must never scan by URL.
     index("raw_items_source_captured_idx").on(t.sourceId, t.capturedAt),
   ],

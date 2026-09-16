@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./store": "./src/store.ts",
     "./postgres": "./src/postgres.ts"
   },
   "scripts": {

@@ -103,6 +103,7 @@ describe.runIf(hasDb)("harvest, against Postgres", () => {
     id: randomUUID(),
     harvestRunId: runId,
     sourceId: "fake.search",
+    rank: 0,
     url: "https://fake.test/a",
     title: "A",
     text: "xin chào",
@@ -181,6 +182,77 @@ describe.runIf(hasDb)("harvest, against Postgres", () => {
 
   it("refuses an item whose run does not exist", async () => {
     await expect(items().insertMany([item(randomUUID())])).rejects.toThrow()
+  })
+
+  it("reads a run's items back in rank order, whatever order they were written in", async () => {
+    const id = await startRun()
+    // Inserted backwards on purpose. Nothing else in the row can stand in for this
+    // order — `captured_at` is one timestamp for the whole batch and `id` is
+    // random — so a store that returned insertion order would look correct here
+    // every day until the day a batch was written twice.
+    await items().insertMany([
+      item(id, { rank: 2, url: "https://fake.test/c" }),
+      item(id, { rank: 0, url: "https://fake.test/a" }),
+      item(id, { rank: 1, url: "https://fake.test/b" }),
+    ])
+    const rows = await items().listByRun(id)
+    expect(rows.map((r) => r.url)).toEqual([
+      "https://fake.test/a",
+      "https://fake.test/b",
+      "https://fake.test/c",
+    ])
+  })
+
+  it("bounds what a caller can ask for, and takes the bound off the top", async () => {
+    const id = await startRun()
+    await items().insertMany(
+      Array.from({ length: 5 }, (_, rank) => item(id, { rank, url: `https://fake.test/${rank}` })),
+    )
+    // The top two, not two arbitrary rows: a bounded read of a ranked list is only
+    // meaningful if the bound is applied after the order.
+    expect((await items().listByRun(id, 2)).map((r) => r.rank)).toEqual([0, 1])
+    // A caller that asks for more than the ceiling gets the ceiling, not an error:
+    // the read is bounded to protect the handler's 10 ms, and the honest answer to
+    // "give me a million" is the hundred that exist.
+    expect(await items().listByRun(id, 1_000_000)).toHaveLength(5)
+  })
+
+  it("brings engagement back as an absence, not as three zeroes", async () => {
+    const id = await startRun()
+    await items().insertMany([
+      item(id, { rank: 0, engagement: { views: 0, likes: null, comments: null } }),
+      item(id, { rank: 1, url: "https://fake.test/b", engagement: null }),
+    ])
+    const [measured, unknown] = await items().listByRun(id)
+    expect(measured?.engagement).toEqual({ views: 0, likes: null, comments: null })
+    // Three null columns is a source that does not publish these numbers. Rebuilt
+    // as `{ views: null, ... }` it would read as a measurement that came back empty.
+    expect(unknown?.engagement).toBeNull()
+  })
+
+  it("lists runs newest first, because the Lab always wants the latest one", async () => {
+    const older = randomUUID()
+    await runs().start({
+      id: older,
+      domainId: "atlas",
+      personaId,
+      sourceId: "fake.search",
+      query: "xin chào thế giới",
+      sessionId,
+      startedAt: new Date("2026-09-11T10:00:00.000Z"),
+    })
+    const newer = await startRun()
+    const [first] = await runs().list({ personaId, limit: 1 })
+    expect(first?.id).toBe(newer)
+    expect(first?.id).not.toBe(older)
+  })
+
+  it("matches a query exactly, since a comparison only holds within one question", async () => {
+    await startRun()
+    expect(await runs().list({ query: "xin chào thế giới" })).toHaveLength(1)
+    // Not a prefix, not a fuzzy match. Two different questions produce two
+    // different rankings, and comparing them would measure the question.
+    expect(await runs().list({ query: "xin chào" })).toHaveLength(0)
   })
 
   it("lists by source and by persona, which is how a rerun finds its history", async () => {

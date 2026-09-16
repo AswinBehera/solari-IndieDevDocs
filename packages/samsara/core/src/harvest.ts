@@ -39,6 +39,15 @@ export const rawItem = z
     id,
     harvestRunId: id,
     sourceId,
+    /**
+     * Where the source put this item within its own run, zero-based.
+     *
+     * Not a quality score. It is the position a ranked surface chose, which is
+     * the only thing such a surface actually asserts — and it is stored because
+     * "the top twenty" is the unit every comparison between two viewpoints is
+     * stated in, and nothing else in the row can reconstruct it.
+     */
+    rank: z.number().int().nonnegative(),
     url: z.url(),
     title: z.string().nullable(),
     text: z.string(),

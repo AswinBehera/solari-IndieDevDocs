@@ -1,4 +1,7 @@
+import type { HarvestRunRecord, RawItemRow } from "@samsara/harvest/ports"
+import { MemoryHarvestRunStore, MemoryRawItemStore } from "@samsara/harvest/store"
 import type { EnqueueInput, EnqueueResult, JobStore, StoredJobEvent } from "@samsara/kernel/jobs"
+import { MemoryPersonaStore } from "@samsara/personas/store"
 import { describe, expect, it } from "vitest"
 import { createApp } from "./app.js"
 import type { Verifier } from "./auth.js"
@@ -58,7 +61,65 @@ const store: JobStore = {
   },
 }
 
-const app = createApp({ jobs: () => store, verifier, dispatcher: noopDispatcher })
+/**
+ * The Lab's stores, filled once with the widest comparison the route allows.
+ *
+ * `MAX_K` items a side, not a realistic twenty: the number this test has to
+ * defend is the worst case a query string can ask for, because that is the one an
+ * unfriendly caller will ask for.
+ */
+const MAX_K = 100
+const personas = new MemoryPersonaStore()
+const runs = new MemoryHarvestRunStore()
+const items = new MemoryRawItemStore()
+
+const capturedAt = new Date("2026-09-16T10:00:00.000Z")
+const labRun = (id: string, personaId: string): HarvestRunRecord => ({
+  id,
+  domainId: "atlas",
+  personaId,
+  sourceId: "fake.search",
+  query: "ของกินอร่อย",
+  sessionId: "session-1",
+  startedAt: capturedAt,
+  endedAt: capturedAt,
+  outcome: "ok",
+  itemCount: MAX_K,
+})
+runs.runs.set("ra", labRun("ra", "a"))
+runs.runs.set("rb", labRun("rb", "b"))
+
+const labItems: RawItemRow[] = []
+for (const [runId, offset] of [
+  ["ra", 0],
+  ["rb", 50],
+] as const) {
+  for (let rank = 0; rank < MAX_K; rank++) {
+    labItems.push({
+      id: `${runId}-${rank}`,
+      harvestRunId: runId,
+      sourceId: "fake.search",
+      rank,
+      url: `https://x.test/${rank + offset}`,
+      title: "ร้านข้าวมันไก่",
+      // Longer than the preview cut, so the truncation is measured too.
+      text: "อร่อยมาก ".repeat(80),
+      languageGuess: "th",
+      mediaRefs: [`raw/fake.search/${rank}.jpg`],
+      engagement: { views: 1000, likes: 10, comments: null },
+      capturedAt,
+      rawRef: `captures/fake.search/${runId}/1.json`,
+    })
+  }
+}
+await items.insertMany(labItems)
+
+const app = createApp({
+  jobs: () => store,
+  verifier,
+  dispatcher: noopDispatcher,
+  lab: { stores: () => ({ personas, runs, items }) },
+})
 
 /** Total CPU (user + system) per iteration, in milliseconds. */
 async function cpuPerRequest(run: () => Promise<unknown>): Promise<number> {
@@ -108,6 +169,40 @@ describe("CPU per request against the 10 ms free-plan ceiling", () => {
       await res.text()
     })
     console.log(`GET  /jobs/:id/events  ${ms.toFixed(3)} ms CPU/request (ceiling ${CEILING_MS} ms)`)
+    expect(ms).toBeLessThan(BUDGET_MS)
+  })
+
+  it("measures GET /lab/compare at the widest k it allows", async () => {
+    const q = encodeURIComponent("ของกินอร่อย")
+    const ms = await cpuPerRequest(async () => {
+      const res = await app.request(`/lab/compare?a=a&b=b&query=${q}&k=${MAX_K}`, { headers: AUTH })
+      await res.json()
+    })
+    console.log(`GET  /lab/compare ${ms.toFixed(3)} ms CPU/request (ceiling ${CEILING_MS} ms)`)
+    // The heaviest handler in the app: four reads, `overlapAt` over two hundred
+    // strings, and two hundred items serialised. If this ever approaches the
+    // ceiling the fix is a smaller `MAX_K`, not a bigger budget.
+    expect(ms).toBeLessThan(BUDGET_MS)
+  })
+
+  it("measures POST /lab/personas, which is the only route that runs a schema", async () => {
+    let n = 0
+    const ms = await cpuPerRequest(async () => {
+      n += 1
+      const res = await app.request("/lab/personas", {
+        method: "POST",
+        headers: AUTH,
+        body: JSON.stringify({
+          name: `persona ${n}`,
+          locality: "Ari, Bangkok",
+          country: "th",
+          locale: "th-TH",
+          timezoneId: "Asia/Bangkok",
+        }),
+      })
+      await res.json()
+    })
+    console.log(`POST /lab/personas ${ms.toFixed(3)} ms CPU/request (ceiling ${CEILING_MS} ms)`)
     expect(ms).toBeLessThan(BUDGET_MS)
   })
 

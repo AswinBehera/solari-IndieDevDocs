@@ -9,6 +9,7 @@ import { HTTPException } from "hono/http-exception"
 import { streamSSE } from "hono/streaming"
 import { requireAuth, type Verifier } from "./auth.js"
 import type { Dispatcher } from "./dispatch.js"
+import { type LabDeps, labRoutes } from "./lab.js"
 
 /**
  * The API (ADR-0014: Hono on Cloudflare Workers, free plan).
@@ -31,6 +32,13 @@ export interface AppDeps {
   jobs: (env: unknown) => JobStore
   verifier: Verifier
   dispatcher: Dispatcher
+  /**
+   * The Persona Lab's stores (P1.7). Optional, and the API is complete without
+   * them: `/jobs` and `/health` are what a deployment needs to work, and a
+   * deployment that has not been given persona and harvest stores should answer
+   * 404 on `/lab/*` rather than 500 on the first read.
+   */
+  lab?: Omit<LabDeps, "verifier">
   /** Injectable for tests; production gets the defaults. */
   clock?: () => number
   sleep?: (ms: number) => Promise<void>
@@ -166,6 +174,12 @@ export function createApp(deps: AppDeps) {
       }
     })
   })
+
+  // Mounted, not inlined. `/lab/*` is the internal tool's whole surface, so it is
+  // one thing to gate or drop; and a deployment with no `lab` in its deps simply
+  // has no such routes, which is the difference between "not configured" and
+  // "configured and broken".
+  if (deps.lab) app.route("/lab", labRoutes({ ...deps.lab, verifier: deps.verifier }))
 
   app.onError((e, c) => {
     if (e instanceof HTTPException) return c.json({ error: e.message }, e.status)

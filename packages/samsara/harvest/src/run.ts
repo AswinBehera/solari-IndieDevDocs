@@ -222,10 +222,15 @@ export async function runHarvest<P>(
 
   let rows: RawItemRow[] = []
   if (result.ok && capture && rawRef !== null) {
-    rows = held.drafts.map((draft) => ({
+    // The index *is* the rank: `parse` returns what the surface showed, in the
+    // order it showed it, and this is the last place that order still exists.
+    // Everything downstream reads rows back from Postgres, where insertion order
+    // is not a promise.
+    rows = held.drafts.map((draft, rank) => ({
       id: newId(),
       harvestRunId: runId,
       sourceId: adapter.id,
+      rank,
       url: draft.url,
       title: draft.title,
       text: draft.text,

@@ -95,6 +95,7 @@ export const rawItemFixture: RawItem = {
   id: uuid(5),
   harvestRunId: uuid(4),
   sourceId: "shortvideo",
+  rank: 0,
   url: "https://example.com/@someone/video/1234567890",
   title: null,
   text: "อันนี้ดีมาก ราคาไม่แพง",
