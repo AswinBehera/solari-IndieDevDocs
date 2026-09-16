@@ -153,6 +153,27 @@ describe("the bytes that are checked in", () => {
     expect(found).toEqual([])
   })
 
+  it("carries no way to contact anybody in it", () => {
+    // The key walk above already covers `signature` by name, and this asserts the
+    // same subject through a different representation, because the last three
+    // defects in this repository were all a guard that covered one representation of
+    // something and a leak through another. An address can also arrive in a video
+    // description or a comment, which no denylist of key names is watching.
+    //
+    // Email shapes only. A phone pattern over the whole file would match the 273
+    // ten-digit resource ids in it — see `CONTACT_SHAPES` in `redact.ts`, and the
+    // reason it is applied by field name rather than everywhere.
+    const json = JSON.stringify(capture)
+    expect(json).not.toMatch(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/)
+    const folded = [...json]
+      .map((ch) => {
+        const n = ch.normalize("NFKC")
+        return n.length === 1 ? n : "\uFFFF"
+      })
+      .join("")
+    expect(folded).not.toMatch(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/)
+  })
+
   it("carries no bearer-shaped string", () => {
     // Belt and braces over the key-name walk above, and not a theoretical one: the
     // capture as recorded held a live Apple Music developer JWT, four levels inside

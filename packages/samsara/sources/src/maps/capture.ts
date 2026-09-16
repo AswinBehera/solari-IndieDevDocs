@@ -1,5 +1,5 @@
 import type { Capture, CaptureContext } from "../adapter.js"
-import { BASE_REDACTIONS, redactShapes } from "../redact.js"
+import { BASE_REDACTIONS, redactContacts, redactShapes } from "../redact.js"
 import {
   clickMapsTab,
   expandMapsReviews,
@@ -245,8 +245,8 @@ export async function captureMaps(
     surface,
     reviews: read.reviews.map((review) => ({
       ...review,
-      text: scrub(review.text),
-      ownerReply: scrub(review.ownerReply),
+      text: scrubProse(review.text),
+      ownerReply: scrubProse(review.ownerReply),
       // Scrubbed like the other two, and for a stronger reason: a fragment is raw
       // markup, so it carries whatever the page put in its attributes — the one
       // field here most likely to hold a token nobody went looking for.
@@ -329,7 +329,17 @@ function refusal(
   return undefined
 }
 
+/**
+ * A field somebody wrote, as opposed to a field the page emitted.
+ *
+ * The split exists because one rule cannot cross it. `scrub` runs the shape list
+ * over anything, including a state blob full of resource ids; `scrubProse` adds the
+ * contact rules, which read a long run of digits as a phone number and would eat
+ * those ids. Markup goes through `scrub` for the same reason — an `href` is not
+ * prose however much of it is words.
+ */
 const scrub = (value: string | null): string | null => redactShapes(value, SHAPE_REDACTIONS)
+const scrubProse = (value: string | null): string | null => redactContacts(value, SHAPE_REDACTIONS)
 
 function pathOf(href: string): string {
   try {

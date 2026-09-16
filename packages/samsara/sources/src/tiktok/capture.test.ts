@@ -269,8 +269,10 @@ describe("what the redaction list learned from a page that had items", () => {
     // until the fixture tests started passing against nothing.
     expect(json).toContain("7197054038658092315")
     expect(json).toContain("Bánh mì xoay")
-    expect(json).toContain("HÓNG HỚT ĐƯỜNG PHỐ")
     expect(json).toContain("nhạc nền")
+    // The bio is the one field in `body()` that is deliberately *not* here; see the
+    // test below. The id, the description and the music title are the post.
+    expect(json).not.toContain("HÓNG HỚT ĐƯỜNG PHỐ")
   })
 })
 
@@ -400,12 +402,27 @@ describe("captureTikTok", () => {
     expect(json).toContain("yes")
   })
 
-  it("keeps an author's bio, which is content and not a request signature", async () => {
-    // `signature` was on the first draft of the denylist. On a TikTok author it is
-    // the account bio — free text, in the local language, exactly what we harvest.
+  it("does not keep an author's bio, and the reversal is the point", async () => {
+    // This test used to assert the opposite, on the reasoning that `signature` is
+    // free text in the local language and therefore exactly what we harvest. The
+    // reasoning was about an intention: `parse.ts` reads `uniqueId` off an author
+    // and nothing else, so the bio was collected by us, published by us, and read
+    // by nobody. What it did carry in the one recorded fixture was two people's
+    // email addresses and a mobile number. See `REDACTED_KEYS`.
     const fake = fakePage({ state: { author: { signature: "quán ăn Sài Gòn" } } })
     const capture = await captureTikTok(context(fake.page), "x", "search", NO_SETTLE)
-    expect(JSON.stringify(capture)).toContain("quán ăn Sài Gòn")
+    expect(JSON.stringify(capture)).not.toContain("quán ăn Sài Gòn")
+  })
+
+  it("keeps the handle the parser actually reads, which is what makes the drop safe", async () => {
+    // The other half of the reversal. Dropping a field is only cheap while nothing
+    // downstream wants it, and this asserts which field that is: if `parse.ts` ever
+    // starts reading the bio, this pair of tests is where the argument reopens.
+    const fake = fakePage({
+      state: { author: { uniqueId: "nguyenrua", signature: "quán ăn Sài Gòn" } },
+    })
+    const capture = await captureTikTok(context(fake.page), "x", "search", NO_SETTLE)
+    expect(JSON.stringify(capture)).toContain("nguyenrua")
   })
 
   it("names which wall it hit, because three refusals mean three things", async () => {

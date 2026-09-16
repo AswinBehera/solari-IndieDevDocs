@@ -1,5 +1,5 @@
 import type { Capture, CaptureContext } from "../adapter.js"
-import { BASE_REDACTIONS, redactShapes } from "../redact.js"
+import { BASE_REDACTIONS, redactContacts, redactShapes } from "../redact.js"
 import { type PantipPageRead, readPantipPage, scrollPantipPage } from "./inpage.js"
 import type { PantipPayload, PantipSurface } from "./types.js"
 
@@ -195,12 +195,12 @@ export async function capturePantip(
     surface,
     topics: read.topics.map((topic) => ({
       ...topic,
-      excerpt: scrub(topic.excerpt),
+      excerpt: scrubProse(topic.excerpt),
       fragment: scrub(topic.fragment),
     })),
     posts: read.posts.map((post) => ({
       ...post,
-      text: scrub(post.text),
+      text: scrubProse(post.text),
       fragment: scrub(post.fragment),
     })),
     pageTitle: read.title,
@@ -302,7 +302,17 @@ function refusal(read: PantipPageRead, surface: PantipSurface): string | undefin
   return undefined
 }
 
+/**
+ * A field somebody wrote, as opposed to a field the page emitted.
+ *
+ * The split exists because one rule cannot cross it. `scrub` runs the shape list
+ * over anything, including a state blob full of resource ids; `scrubProse` adds the
+ * contact rules, which read a long run of digits as a phone number and would eat
+ * those ids. Markup goes through `scrub` for the same reason — an `href` is not
+ * prose however much of it is words.
+ */
 const scrub = (value: string | null): string | null => redactShapes(value, SHAPE_REDACTIONS)
+const scrubProse = (value: string | null): string | null => redactContacts(value, SHAPE_REDACTIONS)
 
 function pathOf(href: string): string {
   try {

@@ -10,7 +10,7 @@
  * adapter imports, and a site-specific list is now only for a site's own shapes —
  * see `maps/capture.ts`, which adds Google's key formats to these.
  *
- * Two principles, and the order they appear in is the order they run in.
+ * Three principles, and the order they appear in is the order they run in.
  *
  * 1. **Redact what cannot be read.** A long unbroken run of base64 is opaque by
  *    construction, and the only instance of one that has ever been measured in this
@@ -23,6 +23,21 @@
  *    the session cookies a page echoes back into its own state. These are a
  *    denylist, they leak by omission, and they are kept because when they do fire
  *    they name what they found.
+ * 3. **Redact what identifies a person rather than a place.** An email address or a
+ *    phone number in somebody's bio is not evidence about anywhere. It is a way to
+ *    reach a stranger who did not agree to be in this repository, and no part of this
+ *    pipeline reads it to say anything about a place. Rules 1 and 2 protect us from
+ *    a page; this one protects a person from us, which is why it is the only rule
+ *    here that fires on data we went out of our way to keep.
+ *
+ * **Why only the email half of rule 3 is in this list.** A phone number has no shape
+ * of its own — it is a run of digits, and a page is made of runs of digits. Measured
+ * against the one fixture known to contain a real number: a rule tuned to catch it
+ * also matches 273 ten-digit resource ids in the same file, and the prize amount in a
+ * challenge description two fields away. So the phone pattern lives in
+ * `CONTACT_REDACTIONS` below, which adapters apply to a named prose field and never
+ * to a state blob. An email survives that test — two matches in the whole corpus,
+ * both of them somebody's actual address — so it runs everywhere.
  *
  * Where a shape has a name attached — a query parameter, a form field, a JSON key —
  * the name is kept and only the value goes. A fixture should still show *that* a
@@ -60,8 +75,30 @@ export const BASE_REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
     /("[A-Za-z0-9_]*(?:token|session|cookie|visitc|_sid|_uid)[A-Za-z0-9_]*"\s*:\s*")[^"]+/gi,
     "$1[redacted]",
   ],
+  // Rule 3. An address is kept whole or not at all: redacting the local part and
+  // leaving the domain would still single out a person at a small business, and
+  // keeping the domain buys nothing a reader of the fixture needs.
+  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[redacted-email]"],
 ]
 
+/**
+ * Rule 3 in full, for a field that holds prose a person wrote.
+ *
+ * Applied by name — a review, a post, a comment — through `redactContacts` below,
+ * and never to markup or to a state blob, for the reason given above: the phone
+ * pattern cannot tell a number from an id, and the only thing that can is knowing
+ * which field is being scrubbed. That is knowledge an adapter has and this file does
+ * not, so this list is exported rather than merged into `BASE_REDACTIONS`.
+ *
+ * Nine digits is the floor, and it was chosen by measurement rather than taste. The
+ * false positive that decided it was `10.000.000` — a prize in dong, written with
+ * stops, in a challenge description. Eight digits. A mobile number in any country
+ * this project reads is nine or more, so the threshold separates them without
+ * needing to know which locale it is looking at.
+ *
+ * Both patterns replace the whole match and use no capture group, which is what lets
+ * `redactContacts` apply them to a folded copy and splice the result back by offset.
+ */
 /** Applies a list of shape redactions. Greedy on purpose — see `BASE_REDACTIONS`. */
 export function redactShapes(
   value: string | null,
@@ -71,4 +108,79 @@ export function redactShapes(
   let out = value
   for (const [pattern, replacement] of rules) out = out.replace(pattern, replacement)
   return out
+}
+
+export const CONTACT_SHAPES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[redacted-email]"],
+  [/(?<!\d)(?:\+\d{1,3}[\s.-]?)?\d(?:[\s.-]?\d){8,13}(?!\d)/g, "[redacted-phone]"],
+]
+
+/**
+ * One UTF-16 unit per code point, folded toward ASCII where the fold is exact.
+ *
+ * Written because the first run of rule 3 over a real corpus missed an address that
+ * was plainly an address: `𝐲𝐭𝐚𝐝𝐨𝐚𝐧.𝐛𝐨𝐨𝐤𝐢𝐧𝐠@𝐠𝐦𝐚𝐢𝐥.𝐜𝐨𝐦`, in Mathematical Bold, in a bio
+ * that also contained an envelope emoji so nobody could miss the intent. `[A-Za-z]`
+ * does not match U+1D400, and the rule reported success. It is the same failure as
+ * the avatar paths: the guard covered a representation, and the subject had another.
+ *
+ * NFKC per code point rather than over the whole string, because the replacement has
+ * to land in the *original* — folding the string and keeping it would rewrite what
+ * somebody wrote, which is editing evidence to make a test pass. Per code point, the
+ * fold is index-aligned, so a match found at offset n in the folded copy is at code
+ * point n in the original.
+ *
+ * A code point whose fold is not exactly one UTF-16 unit — a ligature that expands,
+ * an emoji that does not fold at all — becomes U+FFFF, which no pattern here can
+ * match. That is a deliberate blind spot in exchange for the alignment, and it is
+ * asserted in `redact.test.ts` rather than left to be discovered.
+ */
+const foldForDetection = (points: readonly string[]): string =>
+  points
+    .map((ch) => {
+      const folded = ch.normalize("NFKC")
+      return folded.length === 1 ? folded : "\uFFFF"
+    })
+    .join("")
+
+/**
+ * A prose field: the adapter's own shape rules, then the contact rules over a fold.
+ *
+ * **What this still cannot see.** A phone number written `0844.ll.OO.ll`, with the
+ * letter `l` for one and the letter `O` for zero, which is in the corpus today and
+ * survives this function. Folding homoglyphs would catch it and would also read
+ * `lollipop` as digits, and a rule that turns prose into phone numbers is worse than
+ * the leak it prevents. So the limit is stated here and tested there: shape
+ * redaction narrows a prose field, it does not clean one. A field that must be clean
+ * is a field that must not be collected — see `REDACTED_KEYS` in `tiktok/capture.ts`,
+ * where that argument is made against a bio and wins.
+ */
+export function redactContacts(
+  value: string | null,
+  rules: ReadonlyArray<readonly [RegExp, string]>,
+): string | null {
+  const base = redactShapes(value, rules)
+  if (base === null) return null
+  const points = [...base]
+  const folded = foldForDetection(points)
+  const hits: { start: number; end: number; with: string }[] = []
+  for (const [pattern, replacement] of CONTACT_SHAPES) {
+    for (const match of folded.matchAll(pattern)) {
+      const start = match.index
+      const end = start + match[0].length
+      // First rule to claim a span keeps it. Email runs before phone, so an address
+      // with digits in the local part is redacted once and as an address.
+      if (hits.some((hit) => start < hit.end && hit.start < end)) continue
+      hits.push({ start, end, with: replacement })
+    }
+  }
+  if (hits.length === 0) return base
+  hits.sort((a, b) => a.start - b.start)
+  let out = ""
+  let cursor = 0
+  for (const hit of hits) {
+    out += points.slice(cursor, hit.start).join("") + hit.with
+    cursor = hit.end
+  }
+  return out + points.slice(cursor).join("")
 }

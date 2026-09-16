@@ -160,20 +160,44 @@ export const REDACTED_KEYS = new Set([
   "playAddr",
   "downloadAddr",
   "bitrateInfo",
+  // The account bio, and the only entry here that is not about a secret. See the
+  // note below, which used to argue the other way.
+  "signature",
 ])
 
-// Two near-misses worth recording, because both would have typechecked, passed
-// every test, and quietly destroyed data:
-//
-// `signature` is not a request signature. On a TikTok author object it is the
-// account's **bio** — free text, in the local language, which is exactly the kind
-// of evidence this project harvests. It was on the first draft of the list above.
+// A near-miss worth recording, because it would have typechecked, passed every
+// test, and quietly destroyed data:
 //
 // `userInfo` is ambiguous: the viewer at the top level of `SIGI_STATE`, and a
 // *result* in the search API's user results. Redacting by key name cannot tell
 // those apart, and the viewer is already covered by `deviceId`, `odinId` and
 // `webIdLastTime`. A denylist entry that is right half the time is not a
 // half-measure; it is a silent data loss with a good reason attached.
+//
+// And one reversal, because the reasoning that saved `signature` from this list was
+// checked against the code a session later and did not survive it.
+//
+// `signature` is not a request signature; on a TikTok author object it is the
+// account's **bio**. It was taken off the first draft of this list on the grounds
+// that free text in the local language "is exactly the kind of evidence this project
+// harvests". That sentence was about an intention. `parse.ts` reads `uniqueId` and
+// nothing else off an author, and no other file in the repository mentions the field
+// — so across two captures the bio was harvested by nobody and published by us.
+//
+// What it did carry, measured on the one recorded fixture: two creators' email
+// addresses and a mobile number, in a public repository, belonging to people who
+// posted a video about a sandwich. Shape redaction was written and tried first and
+// is the reason this entry exists rather than that one — it caught two of the four.
+// The two it missed were an address spelled in Mathematical Bold and a number
+// written with `l` for one and `O` for zero, both perfectly legible to the human
+// the author meant to reach. A bio is prose a person controls, and a pattern that
+// has to recognise every way a person might write their own phone number is a
+// pattern that will be wrong quietly and forever.
+//
+// The asymmetry decides it. An uncollected bio costs one browser session to collect
+// again, roughly half a minute against a four-thousand-minute budget. A stranger's
+// address in a public git history cannot be taken back at any price. When P1.8 wants
+// a bio as a locality signal it can ask for one, and this line is where it says so.
 
 const MAX_DEPTH = 40
 
