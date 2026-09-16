@@ -6,9 +6,19 @@
 #                       is a floor rather than a guarantee: a scheduled run may be
 #                       delayed under load and is dropped entirely on a repository
 #                       with no recent activity. Everything here assumes that.
+#                       **Commented out until a database exists to drain.** There is
+#                       no `DATABASE_URL` secret, because nothing is deployed, so
+#                       every tick since this file landed has failed on the runner's
+#                       own refusal to start without one. A cron that cannot
+#                       succeed is not a safety net: it is a red mark every five
+#                       minutes, and a red mark that is always there is one nobody
+#                       reads on the day it means something. Restore the two lines
+#                       below in the same commit that sets the secret.
 #   workflow_dispatch — foreground work (ADR-0016). A human pressed a button and is
 #                       watching a progress stream; waiting up to five minutes for
-#                       the next tick would make the product look dead.
+#                       the next tick would make the product look dead. Left on, and
+#                       left failing loudly without the secret: somebody who presses
+#                       the button is owed the reason, not a green tick.
 #
 # The `jobId` input is not used to select work. The runner claims from the queue
 # with `FOR UPDATE SKIP LOCKED` and drains whatever it wins, which is what makes a
@@ -18,8 +28,8 @@
 name: worker
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
+  # schedule:
+  #   - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       jobId:

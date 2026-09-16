@@ -1016,3 +1016,11 @@ five minutes.
 **Nothing is deployed, and nothing can be until two things exist:** a Cloudflare account (for the
 Hyperdrive id) and Supabase credentials (`SUPABASE_URL` for the real JWT path). Neither blocks
 any local work.
+
+**The worker's cron is commented out, and is part of that deploy.** `.github/workflows/worker.yml`
+scheduled a drain every five minutes from the day it landed, and every one of those runs failed on
+the runner's refusal to start without `DATABASE_URL` — a secret that does not exist because there is
+no deployed database. Twenty-one consecutive red runs is not a signal, it is wallpaper, so the
+`schedule:` trigger is commented out and `workflow_dispatch` is left alone. **Restoring those two
+lines belongs in the same commit that sets the `DATABASE_URL` secret**; until then a dispatch still
+fails loudly, which is the correct answer to a human who pressed the button.
