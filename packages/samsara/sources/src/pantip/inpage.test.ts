@@ -190,7 +190,10 @@ describe("reading a topic", () => {
     const [opening] = readPantipPage(LIMITS).posts
     expect(opening?.role).toBe("opening")
     expect(opening?.authorName).toBe("คุณนักชิม")
-    expect(opening?.timeLabel).toBe("3 วันที่แล้ว")
+    // The attribute, not the text: an `abbr` carrying "3 วันที่แล้ว" also carries the
+    // absolute date, and a relative label is only meaningful next to the day it was
+    // read on. See "takes the timestamp from the title attribute".
+    expect(opening?.timeLabel).toBe("2026-09-10 09:12:00")
     expect(opening?.voteLabel).toBe("21")
     expect(opening?.text).toContain("เดินหาที่นั่งทำงานแถวอารีย์")
   })
@@ -226,6 +229,142 @@ describe("reading a topic", () => {
     const read = readPantipPage(LIMITS)
     expect(read.topics).toHaveLength(2)
     expect(read.posts.length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * The markup `pantip.forum food` actually returned, reduced to two rows.
+ *
+ * Copied from the stored fragments of the first real listing capture, and the shape
+ * is the finding: the topic link sits inside `<h2>` inside a *title* `<div>` that has
+ * a class, and the row links itself a second time from a sibling `<span>`. Everything
+ * else about the row — who wrote it, when, how many people answered — is in a
+ * different child of the row entirely.
+ */
+const REAL_LISTING = `
+  <ul class="pt-list">
+    <li class="pt-list-item">
+      <div class="pt-list-item__title">
+        <h2><a href="https://pantip.com/topic/42601472" class="gtm-main-content-link">24 ร้านแนะนำ</a></h2>
+        <span><a href="https://pantip.com/topic/42601472"></a></span>
+      </div>
+      <div class="pt-list-item__info">
+        <a href="/profile/1234567">คุณสมชาย</a>
+        <span title="12 กันยายน 2569 เวลา 09:00 น.">12 ก.ย.</span>
+      </div>
+      <div class="pt-li_stats">
+        <span class="pt-li_stats-comment"><i class="material-icons">message</i>18</span>
+        <span class="pt-li_stats-vote"><i class="material-icons">thumb_up_2</i>7</span>
+      </div>
+    </li>
+    <li class="pt-list-item">
+      <div class="pt-list-item__title">
+        <h2><a href="https://pantip.com/topic/42710991" class="gtm-main-content-link">เมนูปลาทู</a></h2>
+      </div>
+      <div class="pt-list-item__info"><a href="/profile/7654321">คุณมานี</a></div>
+    </li>
+  </ul>`
+
+describe("finding the row", () => {
+  it("climbs past the title wrapper, which is what the first real listing did not do", () => {
+    // 259 rows came back with a title, an href and six nulls. The selectors were
+    // fine; the scope was `<div class="pt-list-item__title">`, because the old rule
+    // was `closest("li, article, tr, div[class]")` and that div has a class. Every
+    // field below lives outside it.
+    render(REAL_LISTING)
+    const [first] = readPantipPage(LIMITS).topics
+    expect(first?.title).toBe("24 ร้านแนะนำ")
+    expect(first?.authorName).toBe("คุณสมชาย")
+    expect(first?.authorHref).toBe("/profile/1234567")
+    expect(first?.timeLabel).toBe("12 กันยายน 2569 เวลา 09:00 น.")
+    expect(first?.commentLabel).toBe("18")
+  })
+
+  it("stops before swallowing the next row", () => {
+    // The other half of the rule. Climbing is bounded by content, not by class name:
+    // the `<ul>` contains a link to a different topic, so the `<li>` was the row.
+    render(REAL_LISTING)
+    const topics = readPantipPage(LIMITS).topics
+    expect(topics).toHaveLength(2)
+    expect(topics[1]?.authorName).toBe("คุณมานี")
+    // Row one's fields did not bleed into row two.
+    expect(topics[1]?.commentLabel).toBeNull()
+  })
+
+  it("does not treat a row's second link to itself as a different topic", () => {
+    // The row links its own topic twice and the copies differ by tracking
+    // parameters, so the climb compares topic ids rather than hrefs.
+    render(`
+      <ul><li class="pt-list-item">
+        <div class="t"><a href="/topic/43210987?ref=a">x</a></div>
+        <div class="i"><a href="/topic/43210987?ref=b">y</a><a href="/profile/9">คุณเอ</a></div>
+      </li></ul>`)
+    const [only] = readPantipPage(LIMITS).topics
+    expect(only?.authorName).toBe("คุณเอ")
+  })
+
+  it("takes the timestamp from the title attribute, which is the absolute one", () => {
+    // Pantip's date is a bare `<span title="…">` with an abbreviation in it, and the
+    // attribute carries a year and a clock where the text carries "12 ก.ย.". Four
+    // guesses — `abbr`, `<time>`, a "date" class, a "time" class — all missed it, and
+    // a real listing returned 259 null timestamps before anyone knew that.
+    render(REAL_LISTING)
+    const [first] = readPantipPage(LIMITS).topics
+    expect(first?.timeLabel).toBe("12 กันยายน 2569 เวลา 09:00 น.")
+  })
+
+  it("does not read an icon's name as part of a count", () => {
+    // The silent one. Material Icons puts the glyph's name in the element's text, so
+    // a count reads as `"thumb_up_2 7"` and `parseCount` returns **27** — a number
+    // that looks like an answer. Today's icons are `message` and `add_box`, which
+    // have no digits in them, so every count in the first real capture was right by
+    // luck. Stripping the icon node is what makes it right on purpose.
+    render(REAL_LISTING)
+    const [first] = readPantipPage(LIMITS).topics
+    expect(first?.commentLabel).toBe("18")
+    expect(first?.voteLabel).toBe("7")
+    expect(first?.voteLabel).not.toContain("thumb_up")
+  })
+
+  it("does not read a title as a count because an analytics class says 'voted'", () => {
+    // The fourth thing the forum listing taught, and the one that nearly shipped.
+    // Pantip tags a promoted row's title link `class="gtm-voted-topic"`, and
+    // `[class*="vote"]` matches "vo**ted**". The old guard asked only whether the
+    // text contained a digit — and a title with a date in it does — so four rows
+    // recorded a headline as their vote count. A count is a number followed by at
+    // most one unit word, and a headline is not.
+    render(`
+      <ul><li class="pt-list-item">
+        <div class="pt-list-item__title">
+          <a class="gtm-voted-topic" href="/topic/44226724">24 ร้านแนะนำ 12 กันยายน 2569 มา 4 จาน</a>
+        </div>
+        <div class="pt-li_stats"><span class="pt-li_stats-vote">7</span></div>
+      </li></ul>`)
+    const [only] = readPantipPage(LIMITS).topics
+    expect(only?.voteLabel).toBe("7")
+  })
+
+  it("still takes a localised count that carries its own unit", () => {
+    // The other side of the same rule, so that tightening it did not quietly become
+    // "digits only". A number and one word is a count; a number and a sentence is not.
+    render(`
+      <ul><li class="pt-list-item">
+        <a href="/topic/1">x</a>
+        <span class="pt-li_stats-comment">34 ความคิดเห็น</span>
+      </li></ul>`)
+    expect(readPantipPage(LIMITS).topics[0]?.commentLabel).toBe("34 ความคิดเห็น")
+  })
+
+  it("stores the fragment from one level above the row", () => {
+    // A fragment cropped to the scope the fields were read from cannot show a scope
+    // error, which is the one kind of wrong guess it was bought to repair. The first
+    // capture stored thirty of them and not one could explain its own nulls.
+    render(REAL_LISTING)
+    const [first] = readPantipPage(LIMITS).topics
+    expect(first?.fragment).toContain("pt-list-item__title")
+    // The `<ul>`, so a row misidentified one level too low is still visible.
+    expect(first?.fragment).toContain("pt-list")
+    expect(first?.fragment).toContain("42710991")
   })
 })
 
@@ -280,6 +419,52 @@ describe("the blob and the walls", () => {
     expect(read.stateCandidates).toContain("PANTIP_BOOTSTRAP")
     expect(JSON.stringify(read.stateCandidates)).not.toContain("secret")
     ;(window as unknown as Record<string, unknown>).PANTIP_BOOTSTRAP = undefined
+  })
+
+  it("walks the prototype chain, because that is where the interesting globals live", () => {
+    // The bug the first real capture found. `stateCandidates` came back empty on a
+    // page that has a state blob, because it was built from `Object.keys(window)` —
+    // which reports only a window's **own** enumerable properties. A named element
+    // global (`<div id="APP_STATE">`) lives on the WindowProperties exotic object in
+    // the prototype chain, and browsers put globals of their own on `Window.prototype`
+    // besides. So the diagnostic written to answer "what is this blob really called"
+    // answered "nothing", and the session that bought that answer bought a bug.
+    //
+    // Asserted through the prototype chain directly rather than by rendering an
+    // element with an id: jsdom does not implement named element globals at all, so
+    // the shape has to be built by hand. What is being tested is the traversal, and
+    // the traversal is the part that was wrong.
+    const proto = Object.getPrototypeOf(window) as Record<string, unknown>
+    Object.defineProperty(proto, "APP_BOOTSTRAP_DATA", {
+      value: { secret: "x" },
+      enumerable: true,
+      configurable: true,
+    })
+    render(LISTING)
+    try {
+      expect(Object.keys(window)).not.toContain("APP_BOOTSTRAP_DATA")
+      const read = readPantipPage(LIMITS)
+      expect(read.stateCandidates).toContain("APP_BOOTSTRAP_DATA")
+      expect(JSON.stringify(read.stateCandidates)).not.toContain("secret")
+    } finally {
+      delete proto.APP_BOOTSTRAP_DATA
+    }
+  })
+
+  it("says when a state key was an element rather than the payload", () => {
+    // Also from the first real capture, and the quieter of the two findings.
+    // `window.__NEXT_DATA__` was the *script element*, not its contents: the
+    // `instanceof Node` guard caught it and the script-tag fallback then read it
+    // properly, so the capture worked — but `stateKeys` listed `__NEXT_DATA__` plain
+    // and reported a success that had actually been a near miss rescued by a
+    // fallback. The label is what a person reads first, so the label should say so.
+    render(`<script id="__NEXT_DATA__" type="application/json">{"props":{"n":1}}</script>`)
+    const tag = document.querySelector("script#__NEXT_DATA__")
+    ;(window as unknown as Record<string, unknown>).__NEXT_DATA__ = tag
+    const read = readPantipPage(LIMITS)
+    expect(read.stateKeys).toEqual(["__NEXT_DATA__ (element)", "script#__NEXT_DATA__"])
+    expect(read.state).toBe(`{"props":{"n":1}}`)
+    ;(window as unknown as Record<string, unknown>).__NEXT_DATA__ = undefined
   })
 
   it("names the wall rather than reporting that there is one", () => {

@@ -2,7 +2,73 @@
 
 Phase: 1 — in progress. Phase 0 is **complete, pending the gate** (below; the gate is a human
 review and does not block buildable work).
-Last completed: **P1.6 — the Pantip adapter**. `pantip.forum`, `pantip.tag` and `pantip.topic`,
+Last completed: **P1.6.1 — live captures against Pantip and Maps**, the first time `pantip.forum`,
+`maps.search` on a real category query, or `maps.reviews` had been measured against real markup.
+345 tests in `@samsara/sources`, seam allowances **0 of 5** across 142 files.
+
+**Seven billed sessions, 2.987 minutes of 4,000.** Five `pantip.forum` (0.4584, 0.4584, 0.4587,
+0.44775, 0.5466), one `maps.search` (0.21265), one `maps.reviews` (0.40665). **One of the five
+Pantip sessions was waste and is counted as such**: the first run was piped to `tail`, which does
+not stop the capture — it had already opened the browser and billed — and it was then re-run to see
+the head of the output. The pipe cost 0.4584 minutes and produced nothing. Reading a recorder's
+output through `tail` is not free, because the spend happens before the bytes reach the pipe.
+
+**Eleven defects, nine of which would have shipped silently**, and the eleventh was found by
+re-auditing the fix for the tenth. Five on Pantip (wrong row scope, 259
+rows x 6 null fields; fragments cropped to the wrong scope and therefore unable to diagnose the
+nulls; timestamps in a `title` attribute no selector read; counts contaminated by Material Icons
+ligature text, `parseCount("thumb_up_2 12")` -> 212; a `gtm-voted-topic` decoy that filed four
+headlines as vote counts). Five on Maps, across the first `maps.reviews` capture ever taken and the
+first `maps.search` capture to be given a query that lists rather than resolves — the reviews capture
+was chained off the search capture's entity URL, which exercised the two-surface split end to end.
+
+The two on the search surface are the Pantip decoy in different clothes. `span + span[aria-label]` is
+positional and constrains nothing, so three of six cards filed
+`ไม่มีทางเข้าที่รองรับเก้าอี้รถเข็น` — *no wheelchair accessible entrance* — as a review count;
+`parseCount` refused it and no wrong number reached `engagement`, which is downstream luck rather
+than a guard, and the guard now exists (a digit must be present — only that, because a Maps
+aria-label does not put the number first the way a Thai listing does). And `detailLines` read a
+wrapper and its children both, storing every fact twice and welding an address to an opening time
+with no separator, because the DOM had none either; leaves only now.
+
+**The finding that outlived the session: the same photographs were in a fourth place, and the
+test that said otherwise was looking at the wrong representation.** Auditing the reviews fixture
+once more before committing it, six contributor profile photos were still in the file — in
+`observedPaths`, which is built from network responses, while the avatar guard runs in the DOM.
+`fixture.test.ts` certified the file "carries no photograph of a contributor" by matching
+`googleusercontent.com/a-?/` over the whole document, and passed, because `pathOf` strips the
+hostname before the path is stored. A guard, a second guard, and an assertion, all three about
+contributor photographs, and the photographs sat in a field none of them looked at. `capture.ts`
+now drops them at the response handler and reports `observedAvatarsSkipped`; the six in the
+recorded file are `[redacted-avatar]` rather than deleted, so the count stays legible. **A guard
+covers a representation, not a subject** — and the representation is the part nobody writes down.
+
+**The Maps finding that led to it: a broken selector silently disabled a privacy exclusion.**
+`authorHref` used `a[href*="/contrib/"]`; Google stopped wrapping reviewers' names in that link, so
+it matched nothing. The avatar filter twenty lines below was written against the *same* selector, so
+it stopped excluding and said nothing — five photographs of five named people went into a capture
+bound for a public repository, underneath a comment asserting they were filtered out. Fixed with a
+second guard by URL shape and, more to the point, `nodeCounts.avatarsSkipped`. The shape rule is the
+weak instrument shape rules always are; the counter is the part that matters. **An exclusion that
+cannot report its own count is a comment, not a control** — the same shape as the redaction lesson
+(a denylist cannot catch a first instance), arriving from the other side.
+
+`maps.reviews` filled seven of nine plans 5/5. `helpfulLabel` and `ownerReply` are recorded as
+**unmeasured, not fixed**: there was no `fragment` on `MapsReviewNode`, so the bytes cannot tell
+"this cafe never replies" from "the selector is stale", and a selector edited on no evidence looks
+exactly like a fix until the next billed session. `fragment` now exists, so the next capture settles
+them for free. Related: `button[aria-label*='Helpful']` is **English**, in a system whose purpose is
+non-English viewpoints — a design defect independent of whether it caused the null.
+
+Fixture redaction now states its own boundary. The blanket assertion "no pattern in
+`SHAPE_REDACTIONS` appears anywhere in the file" is wrong and passed on the search fixture only by
+luck: the opaque rule's 120-character threshold legitimately matches googleusercontent photo IDs,
+which `scrub` does not cover and should not. Named credential shapes are forbidden file-wide; the
+opaque rule is asserted only over the fields `scrub` covers; a third test asserts the long photo IDs
+are **still present**, so "clean" can never be reached by widening the scrubber until the evidence
+goes with it.
+
+Before that: **P1.6 — the Pantip adapter**. `pantip.forum`, `pantip.tag` and `pantip.topic`,
 registered in `apps/worker` alongside the YouTube, TikTok and Maps pairs — nine source ids in the
 recorder. 264 tests in `@samsara/sources` (55 new), **0 browser minutes spent**, seam allowances
 **0 of 5** across 135 files.

@@ -64,7 +64,12 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
   for (const name of ["__NEXT_DATA__", "__NUXT__", "__INITIAL_STATE__", "PANTIP"]) {
     const value = globals[name]
     if (value === undefined || value === null) continue
-    stateKeys.push(name)
+    // Labelled, because the label is what a person reads first. On the first real
+    // capture `window.__NEXT_DATA__` was the *script element*, not the payload:
+    // the guard below caught it and the script-tag fallback then read it properly,
+    // but `stateKeys` said `__NEXT_DATA__` and so reported a success that had in
+    // fact been a near miss rescued by a fallback.
+    stateKeys.push(value instanceof Node ? `${name} (element)` : name)
     if (state !== null) continue
     if (value instanceof Node) continue
     let text = ""
@@ -95,9 +100,18 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
    * a thousand globals cannot turn a diagnostic into the payload. P1.5 paid a
    * session to learn that a diagnostic reporting only which guesses were right stops
    * one question short of the useful one.
+   *
+   * `for...in`, and not `Object.keys`, which is what this was and why it returned an
+   * empty list on the first real capture. `Object.keys` reports a window's **own**
+   * enumerable properties, and the interesting ones are not own properties: a named
+   * element global — `<div id="APP_STATE">` — lives on the WindowProperties exotic
+   * object in the prototype chain, and several browsers put their own globals on
+   * `Window.prototype` besides. So the diagnostic written to answer "what is this
+   * blob really called" came back saying "nothing", on a page that has a state blob,
+   * and the session that bought that answer bought a bug instead.
    */
   const stateCandidates: string[] = []
-  for (const key of Object.keys(globals)) {
+  for (const key in globals) {
     if (stateCandidates.length >= 200) break
     if (/^(?:__|_page|PANTIP|APP_)/.test(key) || /^[A-Z][A-Z0-9_]{7,}$/.test(key)) {
       stateCandidates.push(key)
@@ -120,7 +134,18 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
   const topicPlan: Array<[string, string[], string]> = [
     ["authorName", ['a[href*="/profile/"]', '[class*="owner"]', '[class*="author"]'], "text"],
     ["authorHref", ['a[href*="/profile/"]'], "href"],
-    ["timeLabel", ["abbr[title]", "time[datetime]", '[class*="date"]', '[class*="time"]'], "text"],
+    // `stamp`, not `text`, and the selector list was rewritten by a real listing.
+    // Pantip writes the date as a bare `<span title="8 กันยายน 2569 เวลา 11:46 น.">8
+    // ก.ย.</span>` — no `abbr`, no `<time>`, no class with "date" or "time" in it, so
+    // all four original guesses missed and 259 rows came back with a null timestamp.
+    // The `title` attribute is also the better of the two values: absolute, with a
+    // year and a clock on it, where the text is an abbreviation that needs today's
+    // date to mean anything.
+    [
+      "timeLabel",
+      ["abbr[title]", "time[datetime]", "span[title]", '[class*="date"]', '[class*="time"]'],
+      "stamp",
+    ],
     ["voteLabel", ['[class*="vote"]', '[class*="like"]', '[class*="point"]'], "count"],
     ["commentLabel", ['[class*="comment"]', '[class*="reply"]'], "count"],
     ["viewLabel", ['[class*="view"]', '[class*="read"]', '[class*="hit"]'], "count"],
@@ -137,9 +162,47 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
     seenHref[href] = true
     topicAnchors += 1
 
-    // The row, not the link. `closest` walks up to whatever wraps it, and the list
-    // of tags is deliberately generic: an `li` on one build is a `div` on the next.
-    const row = anchor.closest("li, article, tr, div[class]") ?? anchor
+    /**
+     * The row, and finding it structurally rather than by class name.
+     *
+     * This was `anchor.closest("li, article, tr, div[class]")`, on the reasoning
+     * that the tag list should be generic because an `li` on one build is a `div` on
+     * the next. The first real listing capture — `pantip.forum food`, 259 rows —
+     * showed what generic bought: `div[class]` matched
+     * `<div class="pt-list-item__title">`, the innermost wrapper around the link, and
+     * so every row's scope was the title alone. Titles and hrefs came back perfect.
+     * Author, time, votes, comments, views and excerpt came back null for all 259,
+     * not because the selectors were wrong but because none of those fields was
+     * inside the scope they were searched in.
+     *
+     * So the row is defined by what it contains instead. Climb while the ancestor
+     * still belongs to this topic alone — the moment it contains a link to a
+     * *different* topic, it is the list and not the row, and the one below it was the
+     * row. That needs no class names at all, which is the point: class names are the
+     * thing that gets renamed.
+     *
+     * Compared by topic id rather than by href, because a row links its own topic
+     * more than once and the copies differ by tracking parameters. The hop cap stops
+     * a page with a single topic link on it from climbing to `<body>`.
+     */
+    // Inline rather than a helper: this function is serialised into the page and
+    // may declare no function of its own. See the file header.
+    const id = (href.match(/\/topic\/(\d+)/) ?? [])[1] ?? href
+    let row: Element = anchor
+    let cursor: Element | null = anchor.parentElement
+    let hops = 0
+    while (cursor !== null && hops < 8) {
+      if (cursor === document.body) break
+      let foreign = false
+      for (const other of Array.from(cursor.querySelectorAll('a[href*="/topic/"]'))) {
+        const otherHref = other.getAttribute("href") ?? ""
+        if (((otherHref.match(/\/topic\/(\d+)/) ?? [])[1] ?? otherHref) !== id) foreign = true
+      }
+      if (foreign) break
+      row = cursor
+      cursor = cursor.parentElement
+      hops += 1
+    }
 
     const fields: Record<string, string> = {}
     for (const [field, selectors, how] of topicPlan) {
@@ -153,13 +216,52 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
         for (const node of Array.from(row.querySelectorAll(selector))) {
           let value = ""
           if (how === "href") value = node.getAttribute("href") ?? ""
-          else value = node.textContent ?? ""
+          else if (how === "stamp") value = node.getAttribute("title") ?? node.textContent ?? ""
+          else if (how === "count") {
+            /**
+             * The icon is inside the number, and that is not a cosmetic problem.
+             *
+             * Pantip writes a count as `<span class="pt-li_stats-comment"><i
+             * class="material-icons">message</i>39</span>`, and Material Icons puts
+             * the glyph's *name* in the element's text. So `textContent` is
+             * `"message39"`, and `parseCount` reads 39 from it only because
+             * "message" happens to contain no digit. `thumb_up_2` does, and
+             * `parseCount("thumb_up_2 12")` is **212** — a plausible number, wrong,
+             * with nothing anywhere to say so. Today's icons are safe and the next
+             * redesign is a coin flip.
+             *
+             * Cloned and stripped rather than pattern-matched off the front: the
+             * icon is a node, it is removable as a node, and a regex that peeled
+             * leading letters off a count would also eat a legitimate prefix.
+             */
+            const copy = node.cloneNode(true) as Element
+            for (const icon of Array.from(copy.querySelectorAll("i, svg"))) icon.remove()
+            value = copy.textContent ?? ""
+          } else value = node.textContent ?? ""
           value = value.trim()
           if (value.length === 0) continue
-          // A count label with no digit in it is not a count label. Requiring a
-          // digit is a rule about which node to copy, not a reading of what the
-          // copy means — the reading still happens in `parse.ts`.
-          if (how === "count" && !/\d/.test(value)) continue
+          /**
+           * A count label has to *look* like a count, and "contains a digit" is not
+           * that test.
+           *
+           * It was. The first real listing found the hole: Pantip tags a promoted
+           * row's title link with `class="gtm-voted-topic"`, an analytics name, and
+           * `[class*="vote"]` matches "vo**ted**". The matched node's text is the
+           * thread's title — and a title like "…บุฟเฟต์ 12 กันยายน 2569 … มา 4 จาน"
+           * contains plenty of digits, so the old guard waved it through and four
+           * rows recorded a headline as their vote count.
+           *
+           * The rule is: **a number, then at most one unit word.** "39", "5,120",
+           * "1.2K", "34 ความคิดเห็น" and "1,234 ครั้ง" all pass; a label whose number
+           * is not at the front fails, and so does a title that merely begins with a
+           * digit — "24 ร้านแนะนำ ที่ต้องลอง" has a second word and stops there.
+           * Failing a candidate is cheap: the per-match loop moves on to the next
+           * one, which is what it is for. Still a rule about which node to copy, not
+           * a reading of what the copy means — the reading stays in `parse.ts`.
+           */
+          if (how === "count" && !/^\d[\d,.]*(?:\s?[A-Za-z\u0E00-\u0E7F]{1,12})?$/.test(value)) {
+            continue
+          }
           fields[field] = value
           nodeCounts[selector] = (nodeCounts[selector] ?? 0) + 1
           found = true
@@ -174,9 +276,27 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
       if (label.length > 0) tagLabels.push(label)
     }
 
+    /**
+     * The fragment comes from **one level above the row**, and the extra level is
+     * the whole lesson of the first listing capture.
+     *
+     * A fragment is stored so that a wrong selector is a re-parse rather than a
+     * browser session. That works for every kind of wrong guess except one: if the
+     * *scope* is wrong, the fragment is cropped to the wrong scope too, and the bytes
+     * cannot show what was missed. That is exactly what happened — 30 fragments were
+     * stored, all 30 were the title `<div>`, and the author and count markup that
+     * would have explained six null fields was outside every one of them. Thirty
+     * copies of a diagnostic that could not diagnose the thing it was there for.
+     *
+     * One level up is cheap insurance: it is bounded by the same character cap, and
+     * it means the next scope error is visible in bytes already paid for instead of
+     * costing a second session. A diagnostic cropped to the thing being diagnosed is
+     * not a diagnostic.
+     */
     let fragment: string | null = null
     if (fragmentsStored < limits.maxFragments) {
-      const clone = row.cloneNode(true) as Element
+      const around = row.parentElement ?? row
+      const clone = around.cloneNode(true) as Element
       for (const noisy of Array.from(clone.querySelectorAll("script, style, noscript, iframe"))) {
         noisy.remove()
       }
@@ -248,7 +368,18 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
   const postPlan: Array<[string, string[], string]> = [
     ["authorName", ['a[href*="/profile/"]', '[class*="owner"]', '[class*="author"]'], "text"],
     ["authorHref", ['a[href*="/profile/"]'], "href"],
-    ["timeLabel", ["abbr[title]", "time[datetime]", '[class*="date"]', '[class*="time"]'], "text"],
+    // `stamp`, not `text`, and the selector list was rewritten by a real listing.
+    // Pantip writes the date as a bare `<span title="8 กันยายน 2569 เวลา 11:46 น.">8
+    // ก.ย.</span>` — no `abbr`, no `<time>`, no class with "date" or "time" in it, so
+    // all four original guesses missed and 259 rows came back with a null timestamp.
+    // The `title` attribute is also the better of the two values: absolute, with a
+    // year and a clock on it, where the text is an abbreviation that needs today's
+    // date to mean anything.
+    [
+      "timeLabel",
+      ["abbr[title]", "time[datetime]", "span[title]", '[class*="date"]', '[class*="time"]'],
+      "stamp",
+    ],
     ["voteLabel", ['[class*="vote"]', '[class*="like"]', '[class*="point"]'], "count"],
     ["text", ['[class*="story"]', '[class*="message"]', '[class*="detail"]'], "text"],
   ]
@@ -278,12 +409,24 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
       for (const selector of selectors) {
         if (found) break
         for (const inner of Array.from(scope.querySelectorAll(selector))) {
+          // The same four cases as the listing loop above, spelled out a second
+          // time. This function is serialised into the page and may declare no
+          // function of its own, so there is nowhere to factor them to; the comments
+          // that explain each case live at the first copy.
           let value = ""
           if (how === "href") value = inner.getAttribute("href") ?? ""
-          else value = inner.textContent ?? ""
+          else if (how === "stamp") value = inner.getAttribute("title") ?? inner.textContent ?? ""
+          else if (how === "count") {
+            const copy = inner.cloneNode(true) as Element
+            for (const icon of Array.from(copy.querySelectorAll("i, svg"))) icon.remove()
+            value = copy.textContent ?? ""
+          } else value = inner.textContent ?? ""
           value = value.trim()
           if (value.length === 0) continue
-          if (how === "count" && !/\d/.test(value)) continue
+          // The same guard as the listing loop above; see the comment there.
+          if (how === "count" && !/^\d[\d,.]*(?:\s?[A-Za-z\u0E00-\u0E7F]{1,12})?$/.test(value)) {
+            continue
+          }
           fields[field] = value
           nodeCounts[`post ${selector}`] = (nodeCounts[`post ${selector}`] ?? 0) + 1
           found = true

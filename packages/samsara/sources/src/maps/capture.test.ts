@@ -2,6 +2,7 @@ import { silentLogger } from "@samsara/kernel"
 import { describe, expect, it } from "vitest"
 import type { CaptureContext } from "../adapter.js"
 import {
+  AVATAR_PATH,
   buildReviewsUrl,
   buildSearchUrl,
   captureMaps,
@@ -176,6 +177,57 @@ describe("what the capture records", () => {
     expect(JSON.stringify(result.payload.observedPaths)).not.toContain("secret")
   })
 
+  it("keeps contributor photographs out of the paths, and says how many", async () => {
+    // `observedPaths` is built from responses, and the avatar guard runs in the
+    // DOM — so for one release the adapter excluded five photographs from
+    // `photoRefs` while the same six images arrived here as paths. The fixture
+    // test that was supposed to catch it matched on a hostname `pathOf` had
+    // already removed.
+    const { page, respond } = fakePage({ state: "[]" })
+    const capture = captureMaps(ctx(page), ENTITY, "reviews", FAST)
+    respond("https://lh3.googleusercontent.com/a-/ALV-UjV5ja_w=w36-h36-p-rp-mo-br100")
+    respond("https://lh3.googleusercontent.com/a/ACg8ocI01_9Yo=w36-h36-p-k-rp-mo")
+    respond("https://lh3.googleusercontent.com/grass-cs/ACvplmO_4ZJV=w300-h225-p-k-no")
+    respond("https://www.google.com/maps/rpc/listugcposts?pb=!1m2")
+    const result = await capture
+    expect(result.payload.observedPaths).toEqual([
+      "/grass-cs/ACvplmO_4ZJV=w300-h225-p-k-no",
+      "/maps/rpc/listugcposts",
+    ])
+    // The counter is the control. Two reviewers' photographs were fetched and the
+    // file now says so, which is the thing a deleted path cannot say.
+    expect(result.payload.observedAvatarsSkipped).toBe(2)
+  })
+
+  it("does not spend the path budget on photographs it is going to drop", async () => {
+    // The cap is a cap on evidence, not on traffic. Dropping an avatar before the
+    // size check means a reviewer with many photographs cannot crowd out the RPC
+    // paths that make the field worth having.
+    const { page, respond } = fakePage({ state: "[]" })
+    const capture = captureMaps(ctx(page), ENTITY, "reviews", FAST)
+    for (let i = 0; i < 200; i += 1) {
+      respond(`https://lh3.googleusercontent.com/a-/ALV-Uj${i}=w36-h36`)
+    }
+    respond("https://www.google.com/maps/rpc/listugcposts?pb=!1m2")
+    const result = await capture
+    expect(result.payload.observedPaths).toEqual(["/maps/rpc/listugcposts"])
+    expect(result.payload.observedAvatarsSkipped).toBe(200)
+  })
+
+  it("recognises an avatar as a whole url and as a bare path", () => {
+    // The two representations the assertion missed. `AVATAR_PATH` is applied after
+    // `pathOf`, so the host half is optional on purpose; the whole-url form is kept
+    // matchable so the same constant can be pointed at `photoRefs` too.
+    expect(AVATAR_PATH.test("/a-/ALV-UjV5ja_w=w36-h36")).toBe(true)
+    expect(AVATAR_PATH.test("/a/ACg8ocI01_9Yo=w36-h36")).toBe(true)
+    expect(AVATAR_PATH.test("https://lh3.googleusercontent.com/a-/ALV-UjV5=w36")).toBe(true)
+    // Review photographs and place photographs are evidence and stay.
+    expect(AVATAR_PATH.test("/grass-cs/ACvplmO_4ZJV=w300-h225")).toBe(false)
+    expect(AVATAR_PATH.test("/gps-cs-s/AHRPTWmMNIZ=w140-h186")).toBe(false)
+    // And it is anchored, so it cannot eat a path that merely contains the shape.
+    expect(AVATAR_PATH.test("/maps/vt/icon/name=assets/a-/x")).toBe(false)
+  })
+
   it("carries the three diagnostics that would otherwise cost a session each", async () => {
     // Which tab is the reviews tab, whether `data-review-id` still anchors a review,
     // and whether the blob is still called what it was called. One capture answers
@@ -219,6 +271,7 @@ describe("redaction by shape", () => {
         {
           reviewId: "r1",
           authorName: "Ngọc Anh",
+          fragment: null,
           authorHref: null,
           authorMeta: null,
           ratingLabel: "5 sao",

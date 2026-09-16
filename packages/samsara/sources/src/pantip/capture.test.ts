@@ -275,6 +275,36 @@ describe("what counts as a refusal", () => {
     expect(await refusal({ topics: [], state: "{}" }, "tag")).toBeUndefined()
     expect(await refusal({ posts: [postNode()] }, "topic")).toBeUndefined()
   })
+
+  it("calls a 404 a refusal, which cost a session to learn", async () => {
+    // The first real `pantip.tag` capture. Pantip is a Next.js site, so a page that
+    // does not exist is a 200 carrying `__NEXT_DATA__` like any other, and every
+    // clause above reads "a state blob was read" as "the page was real". It reported
+    // zero items and `refused: no` — a tag that does not exist telling exactly the
+    // same story as a tag nobody posts in. That is the P1.5 Maps finding inverted,
+    // and the worse direction: an honest zero is the one nobody investigates.
+    const state = JSON.stringify({ props: { initialProps: { pageProps: { notFound: true } } } })
+    expect(await refusal({ state, title: "ไม่พบหน้านี้ - Pantip" }, "tag")).toBe(
+      "not found (title: ไม่พบหน้านี้ - Pantip)",
+    )
+    // Every surface, because the flag is the site's and not a surface's. (The fake
+    // page's default title stands in for the one a real 404 would carry.)
+    expect(await refusal({ state }, "forum")).toBe("not found (title: Pantip)")
+    expect(await refusal({ state }, "topic")).toBe("not found (title: Pantip)")
+  })
+
+  it("does not call a page a 404 because the flag is false, or because rows came back", async () => {
+    // Two guards on the clause, and both are load-bearing. `notFound: false` is on
+    // every page that *did* resolve, so matching the key alone would refuse the
+    // entire site. And a page that rendered rows rendered something, whatever a
+    // sub-resource's props say about itself — the measurement is worth more than
+    // the flag.
+    const no = JSON.stringify({ props: { pageProps: { notFound: false } } })
+    expect(await refusal({ state: no }, "tag")).toBeUndefined()
+    const yes = JSON.stringify({ props: { pageProps: { notFound: true } } })
+    expect(await refusal({ state: yes, topics: [topicNode()] }, "tag")).toBeUndefined()
+    expect(await refusal({ state: yes, posts: [postNode()] }, "topic")).toBeUndefined()
+  })
 })
 
 describe("what leaves the page", () => {

@@ -69,6 +69,26 @@ const REVIEW = `
   </div>
 `
 
+/**
+ * A review as Maps actually laid one out on 2026-09-13, which is **not** what
+ * `REVIEW` above models.
+ *
+ * There is no `/contrib/` link — Google stopped wrapping the reviewer's name in
+ * one — so the avatar sits loose in the card, and the review's own photos are
+ * painted as CSS backgrounds rather than served as `img` tags. The URLs are
+ * verbatim from `maps-reviews-th-TH-2026-09-13`; the markup around them is
+ * reconstructed, because that capture stored no fragment. That absence is the
+ * reason `fragment` now exists.
+ */
+const REVIEW_NO_CONTRIB = `
+  <div data-review-id="Ci9DQUlRQUNvZENodHl" class="jftiEf">
+    <img src="https://lh3.googleusercontent.com/a-/ALV-UjV5ja_wnult7FraD6MaPAqz8mE6L1D1H6UJniNfSkRlDj2EDZlpew=w36-h36-p-rp-mo-ba12-br100">
+    <div class="d4r55">Mr.Katoon Kamo</div>
+    <span class="wiI7pd">กาแฟอร่อย</span>
+    <div style='background-image: url("https://lh3.googleusercontent.com/grass-cs/ACvplmO_4ZJVbRLj9MFFAM1"); width: calc(50% - 1px);'></div>
+  </div>
+`
+
 describe("what crosses into the page", () => {
   /**
    * The rule every in-page function in this package lives under, asserted rather
@@ -138,6 +158,79 @@ describe("reading a review", () => {
     expect(review?.photoRefs).toEqual(["https://lh5.googleusercontent.com/p/photo-one"])
   })
 
+  it("skips the author's face when the link it used to hang from is gone", () => {
+    render(REVIEW_NO_CONTRIB)
+    const read = readMapsPage()
+    const [review] = read.reviews
+    // The avatar is excluded on its URL shape, because the `/contrib/` guard that
+    // used to exclude it no longer matches anything on this page. What remains is
+    // the review's own photo, still as the raw `style` value — unwrapping `url(…)`
+    // is interpretation and belongs to `parse`, which does it.
+    expect(review?.photoRefs).toHaveLength(1)
+    expect(review?.photoRefs[0]).toContain("grass-cs/ACvplmO_4ZJVbRLj9MFFAM1")
+    expect(review?.photoRefs[0]).not.toContain("ALV-Uj")
+    expect(review?.authorHref).toBeNull()
+    expect(review?.authorName).toBe("Mr.Katoon Kamo")
+  })
+
+  it("counts every face it skipped, so a guard that stops firing is visible", () => {
+    // The whole point. The first guard broke in production and said nothing; five
+    // people's photographs went into a capture under a comment claiming they were
+    // filtered out. A skip that is not counted is indistinguishable from a skip
+    // that never happened, and `0` next to a review count is now a contradiction
+    // somebody can read off the file without opening a browser.
+    render(REVIEW_NO_CONTRIB)
+    expect(readMapsPage().nodeCounts.avatarsSkipped).toBe(1)
+
+    render(REVIEW)
+    expect(readMapsPage().nodeCounts.avatarsSkipped).toBe(1)
+
+    render(`<div data-review-id="x"><span class="wiI7pd">no pictures here</span></div>`)
+    expect(readMapsPage().nodeCounts.avatarsSkipped).toBe(0)
+  })
+
+  it("keeps a photo served from the same host as the face it rejects", () => {
+    // The shape rule is narrow on purpose: it is anchored to the `/a/` and `/a-/`
+    // path prefixes, not to the hostname, so a review photo on googleusercontent
+    // survives it. A guard that ate the evidence would be worse than the leak.
+    render(`
+      <div data-review-id="y">
+        <img src="https://lh3.googleusercontent.com/grass-cs/ACvplmREALPHOTO">
+        <img src="https://lh3.googleusercontent.com/a-/ALV-UjFACE">
+      </div>
+    `)
+    const [review] = readMapsPage().reviews
+    expect(review?.photoRefs).toEqual([
+      "https://lh3.googleusercontent.com/grass-cs/ACvplmREALPHOTO",
+    ])
+    expect(readMapsPage().nodeCounts.avatarsSkipped).toBe(1)
+  })
+
+  it("stores the card's markup, because a null with nothing beside it explains nothing", () => {
+    render(REVIEW_NO_CONTRIB)
+    const read = readMapsPage()
+    const [review] = read.reviews
+    // Three of nine plans returned null on the first real capture and not one of
+    // them could be told from a true absence, because this field did not exist.
+    expect(review?.fragment).toContain("data-review-id")
+    expect(review?.fragment).toContain("background-image")
+    expect(read.nodeCounts.reviewFragments).toBe(1)
+  })
+
+  it("drops scripts and styles from the fragment and truncates it", () => {
+    render(`
+      <div data-review-id="z">
+        <script>window.tracked = 1</script>
+        <style>.a{color:red}</style>
+        <span class="wiI7pd">${"ก".repeat(4000)}</span>
+      </div>
+    `)
+    const [review] = readMapsPage().reviews
+    expect(review?.fragment).not.toContain("window.tracked")
+    expect(review?.fragment).not.toContain("color:red")
+    expect(review?.fragment?.length).toBe(3000)
+  })
+
   it("reads the author's name from the div beside their link", () => {
     render(REVIEW)
     const [review] = readMapsPage().reviews
@@ -190,6 +283,59 @@ describe("reading the result list", () => {
       "Tiệm bánh · 12 Đường Nguyễn Huệ",
       "Mở cửa · Đóng cửa lúc 21:00",
     ])
+  })
+
+  it("refuses an accessibility label that happens to sit where a count sits", () => {
+    // Verbatim from `maps-search-cafes-th-TH-2026-09-13`, where `span +
+    // span[aria-label]` matched this on three of six cards and filed "no
+    // wheelchair accessible entrance" as a review count. `parseCount` returned
+    // null downstream, so nothing wrong reached `engagement` — the containment was
+    // luck, and this is the guard that makes it a design.
+    render(`
+      <div role="feed"><div><a href="/maps/x/data=!1s0x1:0x2" aria-label="Brewlab Cafe Ari">
+        <span>ร้านกาแฟ</span><span aria-label="ไม่มีทางเข้าที่รองรับเก้าอี้รถเข็น"></span>
+      </a></div></div>
+    `)
+    const read = readMapsPage()
+    expect(read.entities[0]?.reviewCountLabel).toBeNull()
+    expect(read.nodeCounts.countLabelsRejected).toBe(1)
+  })
+
+  it("accepts a localised count whose number is not the first thing in it", () => {
+    // The guard is only "contains a digit", on purpose. Pantip's equivalent is
+    // anchored to a leading number because Thai listings put it first; a Maps
+    // aria-label does not, and an anchored pattern here would reject the localised
+    // forms this system exists to read.
+    render(`
+      <div role="feed"><div><a href="/maps/x/data=!1s0x1:0x2" aria-label="ร้าน">
+        <span>ร้านกาแฟ</span><span aria-label="รีวิว 1,234 รายการ"></span>
+      </a></div></div>
+    `)
+    const read = readMapsPage()
+    expect(read.entities[0]?.reviewCountLabel).toBe("รีวิว 1,234 รายการ")
+    expect(read.nodeCounts.countLabelsRejected).toBe(0)
+  })
+
+  it("keeps the leaf detail lines and not the wrapper that runs them together", () => {
+    // A wrapper and its children both carry `W4Efsd`. Reading every match stored
+    // the address twice and, in the wrapper's copy, welded it to the opening time
+    // with no separator — because there was none in the DOM either.
+    render(`
+      <div role="feed"><div><a href="/maps/x/data=!1s0x1:0x2" aria-label="ร้าน"></a>
+        <div class="W4Efsd">4.9</div>
+        <div class="W4Efsd">
+          <span class="W4Efsd">ร้านกาแฟ · 33 ซ. อารีย์ 3</span>
+          <span class="W4Efsd">ปิดอยู่ · เปิดเวลา 09:00 น.</span>
+        </div>
+      </div></div>
+    `)
+    const [entity] = readMapsPage().entities
+    expect(entity?.detailLines).toEqual([
+      "4.9",
+      "ร้านกาแฟ · 33 ซ. อารีย์ 3",
+      "ปิดอยู่ · เปิดเวลา 09:00 น.",
+    ])
+    for (const line of entity?.detailLines ?? []) expect(line).not.toContain("3ปิดอยู่")
   })
 
   it("keeps the rating and the count apart, both as strings", () => {

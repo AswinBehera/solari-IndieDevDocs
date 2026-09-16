@@ -87,8 +87,21 @@ export interface MapsPayload {
    * there. The answer to "then what is it called", bought by a capture that failed.
    */
   stateCandidates: readonly string[]
-  /** Every response path the page requested, deduplicated and sorted. Paths only. */
+  /**
+   * Every response path the page requested, deduplicated and sorted. Paths only,
+   * and with contributor profile photos removed — see `observedAvatarsSkipped`.
+   */
   observedPaths: readonly string[]
+  /**
+   * How many responses were dropped from `observedPaths` as contributor photos.
+   *
+   * The counter is here rather than in `nodeCounts` because `nodeCounts` is written
+   * inside `page.evaluate` and this exclusion happens on the network side. It is
+   * here at all for the reason `avatarsSkipped` is: an exclusion that cannot report
+   * its own count is a comment, not a control, and this one was silently doing
+   * nothing while a test asserted it worked.
+   */
+  observedAvatarsSkipped: number
   strategies: {
     state: boolean
     reviews: number
@@ -132,6 +145,24 @@ export interface MapsReviewNode {
    * it into `text` would file marketing copy as testimony.
    */
   ownerReply: string | null
+  /**
+   * The review's own markup, stripped of scripts and styles and truncated.
+   *
+   * Added after the first real reviews capture, in which three of nine selector
+   * plans returned null for every review and **not one of them could be
+   * diagnosed**, because this field did not exist. A null with no markup beside
+   * it cannot distinguish "the page does not have this" from "the selector is
+   * stale" — and those want opposite responses: one is a finding, the other is a
+   * one-line edit. Without the fragment, telling them apart costs a billed
+   * session; with it, it costs a re-parse.
+   *
+   * Pantip learned the sharper version of this — a fragment cropped to the scope
+   * the fields were read from cannot show a scope error — and this one is cropped
+   * to the review card, which is the scope `[data-review-id]` already
+   * established. The card is not the thing in doubt here; the selectors inside it
+   * are.
+   */
+  fragment: string | null
 }
 
 /** One result card from the search surface. Same rules: strings, verbatim. */

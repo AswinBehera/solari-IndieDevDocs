@@ -1,4 +1,5 @@
 import type { Capture, CaptureContext } from "../adapter.js"
+import { BASE_REDACTIONS, redactShapes } from "../redact.js"
 import { type PantipPageRead, readPantipPage, scrollPantipPage } from "./inpage.js"
 import type { PantipPayload, PantipSurface } from "./types.js"
 
@@ -87,27 +88,18 @@ export const FRAGMENT_CHARS = 3_000
 const MAX_OBSERVED_PATHS = 120
 
 /**
- * Redaction by shape, as on Maps, and with the same justification and the same
- * limit: a pattern list cannot find the first instance of anything.
+ * Pantip's redactions are exactly the shared ones, and that is the finding.
  *
- * What makes it acceptable is that nothing reads either of the two fields it
- * protects. The state blob is stored on the chance that a future build ships named
- * fields, and the fragments are stored so that a wrong selector can be corrected
- * without paying for a session. Both are write-only today, so a false positive costs
- * nothing and these patterns are deliberately greedy.
+ * They live in `../redact.ts` because this adapter is where they were earned: the
+ * first `pantip.tag` session came back with the session's own egress IPv6 inside a
+ * doubly base64-encoded field, invisible to every pattern that existed at the time.
+ * Nothing in that shape is specific to this site, so nothing in the fix is either.
+ * See that file for the two principles and for what they are allowed to damage.
  *
- * The day something does parse a fragment, this comment stops being true and the
- * argument has to be made again rather than inherited.
+ * Site-specific shapes would be appended here. Pantip has none that have been
+ * measured; the day one turns up, it goes in this array and not in the shared file.
  */
-export const SHAPE_REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, "[redacted-jwt]"],
-  [/Bearer\s+[A-Za-z0-9._-]{20,}/gi, "Bearer [redacted]"],
-  // A token in a query string, whatever it is called. Matches the name and keeps it,
-  // so a fixture still shows *that* a token was there.
-  [/([?&](?:token|csrf|auth|key|sig|session|sid|uid)=)[^"'&\s<>]+/gi, "$1[redacted]"],
-  // The same thing as a hidden input, which is how a form carries one.
-  [/(name=["'][^"']*(?:csrf|token)[^"']*["'][^>]*value=["'])[^"']+/gi, "$1[redacted]"],
-]
+export const SHAPE_REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [...BASE_REDACTIONS]
 
 /** Board ids are slugs. Anything else is a path, and a path is a navigation target. */
 const BOARD_ID = /^[A-Za-z0-9_-]{1,64}$/
@@ -256,11 +248,46 @@ export async function capturePantip(
  * cost, taken because a harvest that silently returns nothing from behind a wall is
  * worse than one that says it was stopped.
  */
+/**
+ * A Next.js 404 as it appears in the payload it still ships.
+ *
+ * The site renders "not found" as a 200 with a flag in the state blob, so the
+ * signal is `"notFound":true` and nothing else — no status code reaches this
+ * function, and the page title is in Thai.
+ */
+const NOT_FOUND = /"notFound"\s*:\s*true/
+
 function refusal(read: PantipPageRead, surface: PantipSurface): string | undefined {
   if (read.wall === "captcha") return "captcha"
   if (read.wall === "login") return "login-wall"
   const host = hostOf(read.href)
   if (host.length > 0 && !host.includes("pantip.")) return `redirected to ${host}`
+
+  /**
+   * The 404 clause, and it is the one the first real session paid for.
+   *
+   * `pantip.tag "อารีย์"` returned a page whose title was "ไม่พบหน้านี้" — this page
+   * was not found — and whose state said `notFound: true`. Every refusal clause
+   * below let it through, because they all treat "a state blob was read" as evidence
+   * that the page was real, and on a Next.js site `__NEXT_DATA__` is served by the
+   * 404 as faithfully as by anything else. So the capture reported zero items and
+   * `refused: no`: a tag that does not exist, and a listing with nothing in it,
+   * telling exactly the same story. That is the P1.5 Maps finding inverted — there,
+   * a real page was called a refusal; here, a refusal was called a real page — and
+   * it is the worse direction, because an honest zero is the one nobody investigates.
+   *
+   * Guarded on having found nothing, not on the flag alone: if rows or posts came
+   * back, the page rendered something, and a `notFound` buried in a sub-resource's
+   * props is not a reason to throw away what was measured.
+   */
+  if (
+    read.state !== null &&
+    NOT_FOUND.test(read.state) &&
+    read.posts.length === 0 &&
+    read.topics.length === 0
+  ) {
+    return `not found (title: ${read.title || "none"})`
+  }
   if (surface === "topic") {
     if (read.posts.length === 0 && read.topics.length > 0) {
       return `still on a listing (${read.topics.length} row(s), no post)`
@@ -275,13 +302,7 @@ function refusal(read: PantipPageRead, surface: PantipSurface): string | undefin
   return undefined
 }
 
-/** Applies `SHAPE_REDACTIONS`. Greedy on purpose — see the constant. */
-function scrub(value: string | null): string | null {
-  if (value === null) return null
-  let out = value
-  for (const [pattern, replacement] of SHAPE_REDACTIONS) out = out.replace(pattern, replacement)
-  return out
-}
+const scrub = (value: string | null): string | null => redactShapes(value, SHAPE_REDACTIONS)
 
 function pathOf(href: string): string {
   try {

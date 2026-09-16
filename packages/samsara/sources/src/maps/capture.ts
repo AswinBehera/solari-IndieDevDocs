@@ -1,4 +1,5 @@
 import type { Capture, CaptureContext } from "../adapter.js"
+import { BASE_REDACTIONS, redactShapes } from "../redact.js"
 import {
   clickMapsTab,
   expandMapsReviews,
@@ -89,6 +90,27 @@ export const DEFAULT_REVIEW_TAB_INDEX = 1
 const MAX_OBSERVED_PATHS = 120
 
 /**
+ * A contributor's profile photo, recognised on the *network* side rather than in the
+ * DOM. The same rule as the avatar guard in `inpage.ts`, and it is written out twice
+ * on purpose: the in-page function is serialised into `page.evaluate`, so it cannot
+ * close over anything declared here. `capture.test.ts` asserts the two agree.
+ *
+ * This exists because the first version of the avatar guard was correct and still
+ * leaked. `readMapsPage` kept five photographs out of `photoRefs`, and six of them
+ * arrived in `observedPaths` anyway — `onResponse` sees the same image as a
+ * response and had no opinion about it. The fixture test that certified the file
+ * "carries no photograph of a contributor" matched `googleusercontent.com/a-?/`
+ * against the whole document and passed, because `pathOf` had already thrown the
+ * hostname away. Three guards, one subject, two representations, and the assertion
+ * was written against the representation that was not there.
+ *
+ * So the rule is anchored on the path and the host is optional, which is what makes
+ * it true of both forms. And, as everywhere else here, the exclusion is counted:
+ * `observedAvatarsSkipped` is the part that can be checked.
+ */
+export const AVATAR_PATH = /^(?:https?:\/\/[^/]*googleusercontent\.com)?\/a-?\//
+
+/**
  * Redaction here is by **shape**, not by key name, and that is a real weakening
  * worth stating rather than glossing.
  *
@@ -98,20 +120,17 @@ const MAX_OBSERVED_PATHS = 120
  * filter is a pattern, and a pattern denylist is the weaker instrument: it cannot
  * find the first instance of anything, and it can eat content.
  *
- * What makes it acceptable here, and only here: **nothing reads the blob.** A false
- * positive costs nothing at all, which inverts the trade-off that made the TikTok
- * list dangerous — there, over-redaction was silent data loss (`signature` was an
- * author's bio), and the whole reason for restraint was that the field was read.
- * An unread field can be over-redacted for free, so these patterns are deliberately
- * greedy.
+ * The shared half of the list is in `../redact.ts`, and it was rewritten by a
+ * Pantip capture rather than a Maps one: the shape that mattered turned out to be a
+ * long opaque base64 run hiding **our own egress address**, which is a thing any
+ * site can hand back and therefore not a thing any one adapter should own the rule
+ * for. What stays here is Google's own key formats, which nothing else will meet.
  *
  * `fixture.test.ts` greps the committed bytes for the same shapes, because a
  * denylist that runs once at capture time is not a check.
  */
 export const SHAPE_REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
-  // A JWT, of any issuer. The TikTok capture carried a live Apple Music one three
-  // levels inside every music object; nobody expected it there either.
-  [/eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, "[redacted-jwt]"],
+  ...BASE_REDACTIONS,
   // Google API keys and OAuth tokens. Browser API keys are served to every visitor
   // and are still not ours to republish.
   [/AIza[0-9A-Za-z_-]{35}/g, "[redacted-key]"],
@@ -167,9 +186,15 @@ export async function captureMaps(
     surface === "search" ? buildSearchUrl(query, ctx.persona) : buildReviewsUrl(query, ctx.persona)
 
   const observed = new Set<string>()
+  let observedAvatarsSkipped = 0
   const onResponse = (response: MapsResponse) => {
+    const path = pathOf(response.url())
+    if (AVATAR_PATH.test(path)) {
+      observedAvatarsSkipped += 1
+      return
+    }
     if (observed.size >= MAX_OBSERVED_PATHS) return
-    observed.add(pathOf(response.url()))
+    observed.add(path)
   }
 
   const settle = options.settleMs ?? DEFAULT_SETTLE_MS
@@ -222,6 +247,10 @@ export async function captureMaps(
       ...review,
       text: scrub(review.text),
       ownerReply: scrub(review.ownerReply),
+      // Scrubbed like the other two, and for a stronger reason: a fragment is raw
+      // markup, so it carries whatever the page put in its attributes — the one
+      // field here most likely to hold a token nobody went looking for.
+      fragment: scrub(review.fragment),
     })),
     entities: read.entities,
     state: scrub(read.state),
@@ -234,6 +263,7 @@ export async function captureMaps(
     stateKeys: read.stateKeys,
     stateCandidates: read.stateCandidates,
     observedPaths: [...observed].sort(),
+    observedAvatarsSkipped,
     strategies: {
       state: read.state !== null,
       reviews: read.reviews.length,
@@ -299,13 +329,7 @@ function refusal(
   return undefined
 }
 
-/** Applies `SHAPE_REDACTIONS`. Greedy on purpose — see the constant. */
-function scrub(value: string | null): string | null {
-  if (value === null) return null
-  let out = value
-  for (const [pattern, replacement] of SHAPE_REDACTIONS) out = out.replace(pattern, replacement)
-  return out
-}
+const scrub = (value: string | null): string | null => redactShapes(value, SHAPE_REDACTIONS)
 
 function pathOf(href: string): string {
   try {
