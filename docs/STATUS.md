@@ -404,14 +404,20 @@ allows of five**. A third finding fell out of the live run — `Asia/Ho_Chi_Minh
 viewpoint check was reporting a false negative. Before that, **P0.7** (the seam check),
 **P0.6** (dev ergonomics) and **P0.5** (the queue and the two runtimes); all three were
 committed this session, having lived only in the working tree until now.
-NEXT: **P1.7 (Persona Lab UI)** — or, first, **one or two live captures**, which is a decision to
-spend rather than a task. Two are now worth roughly the same and answer different questions.
-A `pantip.tag` or `pantip.topic` capture is the cheaper and more informative of the two: every
-selector in `pantip/inpage.ts` is a guess, the fragments are the mechanism that is supposed to make
-a wrong guess a re-parse instead of a session, and that mechanism is itself untested until one real
-page has been through it. A `maps.reviews` capture against a **named business in Ari** (a street is
-a poor thing to ask for reviews of) leaves the nine selector plans in `reviewPlan` measured, and
-also tests whether the search surface ever returns a list.
+NEXT: **P1.7 (Persona Lab UI)**. The captures that stood in front of it are done; both questions
+they were bought to answer came back, and the answers are above.
+
+Open, and an architect's call rather than a task: **`tiktok-search-vi-VN-2026-09-13.capture.json`
+holds two creators' contact email addresses and a phone number**, inside `signature` — the profile
+bio, which is content and which the P1.5 note explicitly warned against over-redacting, having
+already destroyed one author's bio that way. They are self-published business contact details on a
+public profile, and the repository is public. Three options, none obviously right: leave them,
+because the field is the item and a bio is what its author chose to publish; redact contact shapes
+in `signature` only, and accept a denylist on a field that *is* read; or stop storing `signature`
+at all. Nothing is blocked either way — this is the first instance of "our own rule about not
+over-redacting a read field" colliding with "somebody else's personal data in a public repo", and
+it wants a decision before there are ten fixtures rather than three.
+
 And **the Phase 0 gate** (see below), whose fourth question — P1.0 measured the signal stack and it
 does not match ADR-0015's ordering — is still open. Gate question 1 (`Viewpoint`'s shape) is now
 answered in code: `{country, locale, timezoneId}`, stored on the persona row and read straight
@@ -421,11 +427,11 @@ truncate *each other* — a Postgres advisory lock in `@samsara/db/testing` seri
 processes. They still truncate the same database `pnpm dev` drains, which remains an architect's
 call: harmless while the dev data is disposable, and not the day it is not. The lock makes the
 suite correct; it does not make the choice of database correct.
-Also unresolved: `@samsara/sources` has three recorded fixtures (YouTube, TikTok, Maps) and three
-adapters with none — `pantip.forum`, `pantip.tag` and `pantip.topic` have never been executed
-against a real page. The `CaptureArchive` decision is still live (no Supabase
-credentials), and `FilesystemCaptureArchive` is an explicit stand-in that does not survive an
-Actions runner.
+Resolved since: `@samsara/sources` now has six recorded fixtures across four sources.
+`pantip.topic` and `maps.search`-that-resolves remain unrecorded; `pantip.topic` is the one with
+real selector risk left, since it shares a parser with the two boards that have now been measured.
+Still unresolved: the `CaptureArchive` decision (no Supabase credentials), with
+`FilesystemCaptureArchive` an explicit stand-in that does not survive an Actions runner.
 Branch: main
 Known breakage: none. (The 0003/0004 gap from last session is closed — Docker was started, all six
 migrations are recorded, and `places.external_ref`/`resolved_tier` are live.)
