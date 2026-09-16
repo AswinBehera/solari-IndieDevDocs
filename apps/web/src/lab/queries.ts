@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { api } from "../api"
-import type { Harvest, Persona } from "./types"
+import type { DriftExperiment, DriftSeries, Harvest, Persona } from "./types"
 
 /**
  * Query keys in one file, because two components read the same personas.
@@ -16,6 +16,12 @@ import type { Harvest, Persona } from "./types"
 export const labKeys = {
   personas: ["lab", "personas"] as const,
   harvests: (personaId: string | null) => ["lab", "harvests", personaId] as const,
+  // A prefix of `drift` below, on purpose: stopping an experiment changes both the
+  // row in the list and the `state` the series header reads, and one invalidation
+  // that covers both is one fewer way for the two to disagree on screen.
+  driftList: ["lab", "drift"] as const,
+  drift: (experimentId: string | null, k: number | null) =>
+    ["lab", "drift", experimentId, k] as const,
 }
 
 export function usePersonas() {
@@ -61,6 +67,46 @@ export function useHarvests(personaId: string | null, watchSince: number | null)
         (h) => h.outcome !== null && Date.parse(h.startedAt) >= watchSince,
       )
       return settled ? false : WATCH_INTERVAL_MS
+    },
+  })
+}
+
+/**
+ * The drift experiments, and one of them as a series (P1.8).
+ *
+ * **The poll is the experiment's own interval.** A series changes when a day comes
+ * due and its two runs land, which for the default experiment is once every 1,440
+ * minutes; polling faster than the thing can change is the tab-left-open arithmetic
+ * `useHarvests` above refuses. A demonstration experiment with `intervalMinutes: 1`
+ * therefore refreshes about once a minute and a real one effectively never refreshes
+ * inside a session, which is correct in both cases and is one rule rather than two.
+ *
+ * It stops when there is nothing left to wait for: a stopped experiment's remaining
+ * days will be refused by the runner, and a complete one has no days left to come.
+ */
+const MIN_POLL_MS = 30_000
+
+export function useDriftExperiments() {
+  return useQuery({
+    queryKey: labKeys.driftList,
+    queryFn: () => api<{ experiments: DriftExperiment[] }>("/lab/drift"),
+    select: (data) => data.experiments,
+  })
+}
+
+export function useDriftSeries(experimentId: string | null, k: number | null) {
+  return useQuery({
+    queryKey: labKeys.drift(experimentId, k),
+    enabled: experimentId !== null,
+    queryFn: () =>
+      api<DriftSeries>(
+        `/lab/drift/${encodeURIComponent(experimentId as string)}${k ? `?k=${k}` : ""}`,
+      ),
+    refetchInterval: (query) => {
+      const series = query.state.data
+      if (!series) return false
+      if (series.experiment.state === "stopped" || series.summary.complete) return false
+      return Math.max(MIN_POLL_MS, series.experiment.intervalMinutes * 60_000)
     },
   })
 }

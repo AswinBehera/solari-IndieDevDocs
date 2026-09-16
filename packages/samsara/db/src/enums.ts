@@ -1,6 +1,8 @@
 import {
   type BudgetWindow,
   budgetWindow,
+  type DriftState,
+  driftState,
   type HarvestOutcome,
   harvestOutcome,
   type JobState,
@@ -60,6 +62,11 @@ export const resolutionStateEnum = pgEnum(
 )
 /** Nullable in the row; the enum itself holds only the real cadences. */
 export const probeCadenceEnum = pgEnum("probe_cadence", ["hourly", "daily", "weekly"])
+
+export const driftStateEnum = pgEnum(
+  "drift_state",
+  driftState.options as unknown as Values<DriftState>,
+)
 
 export const meterIdEnum = pgEnum("meter_id", meterId.options as unknown as Values<MeterId>)
 export const budgetWindowEnum = pgEnum(

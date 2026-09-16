@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto"
 import type { HarvestOutcome, StorageRef } from "@samsara/core"
 import type { Capture } from "@samsara/sources"
 import type {
+  DriftExperimentFilter,
+  DriftExperimentRecord,
+  DriftExperimentStore,
   HarvestRunFilter,
   HarvestRunRecord,
   HarvestRunStart,
@@ -9,7 +12,13 @@ import type {
   RawItemRow,
   RawItemStore,
 } from "./ports.js"
-import { boundedLimit, ITEM_LIST_LIMIT, RUN_LIST_LIMIT } from "./ports.js"
+import {
+  boundedLimit,
+  EXPERIMENT_LIST_LIMIT,
+  EXPERIMENT_RUN_LIMIT,
+  ITEM_LIST_LIMIT,
+  RUN_LIST_LIMIT,
+} from "./ports.js"
 
 /**
  * Where a run and its items are written, and where the untouched bytes go.
@@ -75,6 +84,18 @@ export class MemoryHarvestRunStore implements HarvestRunStore {
       .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
       .slice(0, boundedLimit(filter.limit, RUN_LIST_LIMIT))
   }
+
+  /** Oldest first — a series is drawn left to right. See `DriftRunReader`. */
+  async listByExperiment(experimentId: string, limit?: number): Promise<HarvestRunRecord[]> {
+    return [...this.runs.values()]
+      .filter((r) => r.experiment?.id === experimentId)
+      .sort(
+        (a, b) =>
+          (a.experiment?.day ?? 0) - (b.experiment?.day ?? 0) ||
+          a.startedAt.getTime() - b.startedAt.getTime(),
+      )
+      .slice(0, boundedLimit(limit, EXPERIMENT_RUN_LIMIT))
+  }
 }
 
 export class MemoryRawItemStore implements RawItemStore {
@@ -96,6 +117,56 @@ export class MemoryRawItemStore implements RawItemStore {
       .filter((item) => item.harvestRunId === harvestRunId)
       .sort((a, b) => a.rank - b.rank)
       .slice(0, boundedLimit(limit, ITEM_LIST_LIMIT))
+  }
+
+  async rankedUrls(harvestRunIds: readonly string[], k: number): Promise<Map<string, string[]>> {
+    const wanted = new Set(harvestRunIds)
+    const bound = boundedLimit(k, ITEM_LIST_LIMIT)
+    const out = new Map<string, string[]>()
+    for (const item of [...this.items].sort((a, b) => a.rank - b.rank)) {
+      if (!wanted.has(item.harvestRunId)) continue
+      const urls = out.get(item.harvestRunId)
+      if (urls === undefined) out.set(item.harvestRunId, [item.url])
+      else if (urls.length < bound) urls.push(item.url)
+    }
+    return out
+  }
+}
+
+/**
+ * Experiments in a Map. Enough to drive the whole of P1.8 without a database.
+ *
+ * Insert is not idempotent and says so by throwing: two experiments with the same
+ * id would produce two sets of queued jobs whose idempotency keys collide, and the
+ * failure would surface as a week of half-missing days rather than as an error.
+ */
+export class MemoryDriftExperimentStore implements DriftExperimentStore {
+  readonly experiments = new Map<string, DriftExperimentRecord>()
+
+  async insert(row: DriftExperimentRecord): Promise<void> {
+    if (this.experiments.has(row.id)) throw new Error(`experiment already exists: ${row.id}`)
+    this.experiments.set(row.id, row)
+  }
+
+  async byId(id: string): Promise<DriftExperimentRecord | null> {
+    return this.experiments.get(id) ?? null
+  }
+
+  async list(filter: DriftExperimentFilter = {}): Promise<DriftExperimentRecord[]> {
+    return [...this.experiments.values()]
+      .filter(
+        (e) =>
+          (filter.state === undefined || e.state === filter.state) &&
+          (filter.ownerId === undefined || e.ownerId === filter.ownerId),
+      )
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
+      .slice(0, boundedLimit(filter.limit, EXPERIMENT_LIST_LIMIT))
+  }
+
+  async setState(id: string, state: DriftExperimentRecord["state"]): Promise<void> {
+    const row = this.experiments.get(id)
+    if (!row) throw new Error(`no such experiment: ${id}`)
+    this.experiments.set(id, { ...row, state })
   }
 }
 

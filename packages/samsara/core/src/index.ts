@@ -4,6 +4,7 @@
 // style preference; `pnpm check:seam` fails the build on it (P0.7).
 
 export * from "./budget.js"
+export * from "./drift.js"
 export * from "./harvest.js"
 export * from "./job.js"
 export * from "./persona.js"

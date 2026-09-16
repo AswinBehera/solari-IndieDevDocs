@@ -2,16 +2,123 @@
 
 Phase: 1 — in progress. Phase 0 is **complete, pending the gate** (below; the gate is a human
 review and does not block buildable work).
-Last completed: **P1.7 — the Persona Lab, and the column the split screen could not be built
-without**. 683 tests across the repo, seam allowances **0 of 5** across 145 files.
+Last completed: **P1.8 — the drift experiment, and the difference between a zero and a gap**.
+761 tests across the repo, seam allowances **0 of 5** across 148 files.
 
-**Ten billed sessions, 4.074 minutes of 4,000 — P1.7 spent none of them.** Seven for P1.6.1
-below, three for P1.6.2, and two of the ten produced nothing. P1.6.1's seven: five `pantip.forum` (0.4584, 0.4584, 0.4587,
+**Thirteen billed sessions, 4.41 minutes of 4,000.** P1.8 spent one proving the schedule against
+local Postgres (0.10068, one `youtube.search` run, 20 items, day 0 of a three-day experiment at a
+one-minute interval), then two more on the real thing: **day 0 of the acceptance week, on hosted
+Postgres, 0.2388 minutes, 60.0% overlap.** Six days of it are still queued. Seven for P1.6.1 below, three for P1.6.2, and two of those
+ten produced nothing. P1.6.1's seven: five `pantip.forum` (0.4584, 0.4584, 0.4587,
 0.44775, 0.5466), one `maps.search` (0.21265), one `maps.reviews` (0.40665). **One of the five
 Pantip sessions was waste and is counted as such**: the first run was piped to `tail`, which does
 not stop the capture — it had already opened the browser and billed — and it was then re-run to see
 the head of the output. The pipe cost 0.4584 minutes and produced nothing. Reading a recorder's
 output through `tail` is not free, because the spend happens before the bytes reach the pipe.
+
+## P1.8 — the drift experiment, and the difference between a zero and a gap
+
+The task is one line: "run the same query daily for 7 days from a `us` persona and a `th` persona.
+Store results. Plot overlap percentage over time in the Lab." P1.7 built the comparison; this is
+the same comparison with a schedule attached, and almost everything decided here is about the
+seven-day part rather than the overlap part.
+
+**An experiment is fourteen queued rows, written up front.** The obvious design is a job that does
+today's pair and enqueues tomorrow's. It is one row instead of fourteen and it is wrong under
+ADR-0014: a scheduled runner can be cancelled between any two statements, and a chain that breaks
+on day 3 loses days 4 to 7 *silently* — there is no row left that was ever going to ask. Queueing
+the whole plan makes a dead runner produce late days rather than missing ones, because
+`jobs.run_after` is already the column that holds work until its time. The cost is that a plan
+cannot be edited once queued, only stopped, which is the right way round for something that spends
+browser minutes. Each day is anchored to `startedAt + day × interval`, never to the previous run,
+so a day that fires six hours late does not push the rest of the week six hours later; the plot
+still draws the time the run *actually* started, and the two are allowed to differ visibly.
+
+**Day-major, with the pair adjacent.** The runner drains one job at a time, so the two identities
+are asked minutes apart. Interleaving by identity — all of A's week, then all of B's — would make
+every point on the chart a comparison between two different days, and a ranked surface reshuffles
+itself through the day.
+
+**`MAX_DAYS` is 14, and the number comes from subrequests.** Creating an experiment is two persona
+reads, one insert and `days × 2` enqueues: `3 + 2d` against the free plan's 50 (ADR-0014). Fourteen
+days is 31; thirty days would be 63 — a limit that would be hit in production and nowhere else,
+halfway through queueing a month of work, leaving an experiment whose second half does not exist.
+`intervalMinutes` has a floor of one minute, settable so the mechanism can be demonstrated in ten
+minutes rather than being provable only by waiting a week or faking a clock.
+
+**Four states for a day, because three of them are not measurements.** `pending` (not due),
+`missing` (due, one or both sides have no run), `empty` (both ran, one came back with nothing, so
+`comparable` is 0), `compared` (the number means what it says). `overlapAt` returns `overlap: 0`
+when `comparable` is 0, and on a chart that is indistinguishable from *the two identities agreed on
+nothing* — which is the single most interesting finding this experiment can produce. So `overlap`
+is `null` in all three non-measured states, the plot draws a marker only for `compared`, the line
+breaks across the rest, and the table prints "—". This is the P1.7 rule about `comparable` again,
+extended from one number to a series.
+
+**The stop button cannot unqueue anything, so it refuses instead.** A stopped experiment's
+remaining days are already rows in the queue. `POST /lab/drift/:id/stop` sets the state; the
+*worker* reads `drift_experiments` before a browser opens and heartbeats "was stopped; not spending
+on day N" without launching. That is the only thing the button does, and if the check lived in the
+API it would do nothing at all.
+
+**One implementation of the arithmetic, still.** `driftSeries` calls the same `overlapAt` the split
+screen and P1.0's offline matrix call; the browser computes no percentages. `meanRankShift` is
+carried beside the overlap because the headline cannot tell "the same twenty, reordered" from "the
+same twenty" — a week at 0.95 overlap with a mean shift of 8 is a surface reshuffling itself daily,
+and reads nothing like the same week with a shift of 0. It is in the table and never on the plot:
+two measures of different scale on one chart is a dual axis, which this repo does not draw.
+
+**The summary carries spread, not just a mean.** A mean of 0.3 across seven days that ranged
+0.28–0.32 is a stable effect; the same mean across days that ranged 0.05–0.62 is a surface that
+happens to average to an effect. The plan's 40% threshold reads identically in both cases, so
+`max - min` sits next to the mean.
+
+**The chart, and three defects that only rendering found.** The palette was validated with the
+dataviz skill's script rather than by eye, and the first draft failed: a green acceptance line
+against a red gate line is ΔE 4.1 under deuteranopia. The design uses one status colour (the red
+gate) and a neutral rule for acceptance. Then rendering the SVG and looking at it caught what
+reasoning had not — unmeasured days drawn as hollow ticks *on the 0% line*, which is exactly the
+lie the four states exist to prevent (they moved into the axis band below the baseline); a 40% rule
+indistinguishable from the 50% gridline (the interior gridlines went, so every horizontal line on
+the plot is now a decision); and the endpoint label colliding with the rule labels (which moved to
+the left edge). Hit targets are an HTML `<button>` overlay rather than SVG rects — Biome was right
+that a `tabIndex` on a `<rect>` is a lie about what is focusable — so hover, keyboard focus and a
+click-to-pin readout are the same code path, and the `<details>` table twin means no value is
+reachable only by pointing at it.
+
+**What it costs per request.** `GET /lab/drift/:id` over a full fortnight at the widest k measures
+**0.539 ms of CPU** against the 10 ms ceiling — half of `/lab/compare`'s 1.012, because it compares
+short lists many times rather than long lists once. Reading a series is two queries, not fourteen:
+one for the runs, one for the ranked urls of all of them.
+
+**A defect this run paid to find, twice.** Day 0's second persona failed with
+`internal: unhandled kernel error` and nothing else — the diagnosis was on `Failure.cause` the
+whole time and was dropped one line before it reached `jobs.last_error`. `record-capture.ts`
+carries a comment saying a session had already been spent on exactly this, in almost those words;
+`harvest.ts` had the same line and the same defect. Both now append the cause, and a worker test
+pins it. Separately, the local capture archive (`.captures/`, `FilesystemCaptureArchive`'s default)
+had been landing raw provider JSON inside the repo where `biome check` read it as an unformatted
+source file; it is ignored now, with the reason written down.
+
+**Verified end to end against local Postgres through Hyperdrive**, with a three-day experiment at a
+one-minute interval: six jobs queued day-major with staggered `run_after` and keys of the form
+`drift:<experiment>:<day>:<persona>`; day 0 side A produced a real `harvest_runs` row with
+`experiment_id` and `experiment_day` set, outcome ok, 20 items, **0.10068 billed minutes**; `/stop`
+returned `stopped`; the series then read day 0 as `missing` with `overlap: null` (one side only),
+days 1–2 as `pending`, and `meanOverlap: null`. Day 1's two jobs reached the runner afterwards and
+logged the refusal without opening a browser. The stop path is the only part of this feature that
+has been proved on real infrastructure end to end.
+
+**What P1.8 has not produced is the acceptance number.** The instrument exists; the week has not
+run. With the cron commented out (P1.7, and still waiting on a `DATABASE_URL` secret) nothing
+drains the queue, so a seven-day experiment's days come due and stay due, and the plot honestly
+shows six `missing` points and no line. Phase 1's acceptance — "Bangkok street food", th top 20
+under 40% URL overlap with the us persona's, no captcha loops in the recordings — is therefore
+still unmeasured, and so is the 60% gate. That is a scheduling dependency, not missing code: the
+first thing that turns it into a number is a runner that wakes up for seven days.
+
+761 tests across the repo, seam allowances **0 of 5** across 148 files.
+See `casestudy_and_thinking/sessions/2026-09-16-p18-a-zero-and-a-gap.md`.
 
 ## P1.7 — the Persona Lab, and the column the split screen could not be built without
 
@@ -542,12 +649,33 @@ allows of five**. A third finding fell out of the live run — `Asia/Ho_Chi_Minh
 viewpoint check was reporting a false negative. Before that, **P0.7** (the seam check),
 **P0.6** (dev ergonomics) and **P0.5** (the queue and the two runtimes); all three were
 committed this session, having lived only in the working tree until now.
-NEXT: **P1.8 (the drift experiment)** — the same query, daily, for seven days, from a `us`
-persona and a `th` persona, with overlap plotted over time in the Lab. P1.7 built the read surface
-that plot draws from and the `rank` column it needs; what P1.8 adds is a schedule, a second run of
-the same question, and a series rather than a pair. Its first real cost is browser minutes: two
-personas × one source × seven days is fourteen sessions, roughly 6 minutes at the rates measured in
-P1.6, against a ceiling of 4,000.
+NEXT: **wait for days 1 to 6, and set the two Actions secrets so something wakes up for them.**
+The week is running. Supabase (`ap-southeast-1`) exists, nine migrations are applied, the two
+personas are seeded — `sg`/`th-TH`/`Asia/Bangkok` and `us`/`en-US`/`America/New_York`, PLAN's
+option (c) — and experiment `f60fb262` queued fourteen `harvest.run` jobs on "Bangkok street food"
+against `youtube.search`, one pair a day, `recording: true` on all fourteen.
+
+**Day 0 came in at 60.0%** — twelve of twenty URLs shared, mean rank shift 5.2, two `ok` sessions
+with recordings, 0.2388 billed minutes. That is exactly the gate: Phase 1 wants the week under 40%
+and says "stop and redesign adapters" above 60%. One day is not the series, and the ambiguity PLAN
+wrote down applies — with `country` held at `sg` rather than `th`, a high number cannot distinguish
+a surface that barely personalises from one that keys on an IP neither persona has.
+
+**One blocker, and it is not code.** `DATABASE_URL` and `SOLARI_API_KEY` are not set as repository
+secrets, so the restored `*/15` schedule fails on every tick and days 1 to 6 will come due and stay
+due — the exact `missing`-points rendering the chart was built to be honest about. Day 0 was drained
+by hand from this machine, which does not scale to six more days. Until the secrets exist the week
+is a queue nobody is reading.
+
+**Single source, on purpose.** The acceptance criterion says "across adapters" and an experiment
+carries one `sourceId`; `youtube.search` is the only adapter this phase has run end to end against
+a live page, and it genuinely personalises. Adding `maps.search` or Pantip would not have measured
+more — a forum that does not personalise contributes a flat line near 100% that drags a
+cross-adapter average toward the gate for a reason that has nothing to do with the personas. A
+second source means a second seven-day week, started on its own day 0.
+
+**P2.1 (`@samsara/llm`) is buildable in parallel** and does not depend on the number — but the 60%
+gate does, and the gate is what says whether the refine pipeline is being built on signal or noise.
 
 Closed since: **the two creators' contact details in `tiktok-search-vi-VN-2026-09-13.capture.json`
 are gone.** The question assumed the bio was a field we read and that shape redaction would catch a

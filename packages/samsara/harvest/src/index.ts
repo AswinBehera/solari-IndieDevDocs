@@ -15,11 +15,14 @@
 // `./overlap` is a separate entry point for the same reason `./postgres` is, in the
 // other direction: the comparison arithmetic is pure, and the API has to run it
 // inside a Worker that cannot load Playwright. Importing the barrel to get
-// `overlapAt` would pull `run.ts` and `@samsara/sources` in with it.
+// `overlapAt` would pull `run.ts` and `@samsara/sources` in with it. `./drift`
+// (P1.8) is the same again — it schedules a week of runs and draws the series they
+// produce, both of which happen in the Worker and neither of which opens a browser.
 //
 // `./postgres` is a separate entry point, like the kernel's, so importing this
 // package does not drag a database driver into a runtime that cannot load one.
 
+export * from "./drift.js"
 export * from "./matrix.js"
 export * from "./overlap.js"
 export * from "./pace.js"

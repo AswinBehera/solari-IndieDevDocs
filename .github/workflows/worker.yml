@@ -6,14 +6,34 @@
 #                       is a floor rather than a guarantee: a scheduled run may be
 #                       delayed under load and is dropped entirely on a repository
 #                       with no recent activity. Everything here assumes that.
-#                       **Commented out until a database exists to drain.** There is
-#                       no `DATABASE_URL` secret, because nothing is deployed, so
-#                       every tick since this file landed has failed on the runner's
-#                       own refusal to start without one. A cron that cannot
-#                       succeed is not a safety net: it is a red mark every five
-#                       minutes, and a red mark that is always there is one nobody
-#                       reads on the day it means something. Restore the two lines
-#                       below in the same commit that sets the secret.
+#
+#                       **Restored 2026-09-16, in the commit that set the secret**,
+#                       as this file said it had to be. It had been commented out
+#                       since P1.7 because there was no database to drain and every
+#                       tick failed on the runner's refusal to start without one —
+#                       a red mark every five minutes is one nobody reads on the day
+#                       it means something. Supabase (ap-southeast-1) exists now.
+#
+#                       **Fifteen minutes, not five.** The floor is for foreground
+#                       work, and foreground work does not come through here: a
+#                       human pressing a button gets `workflow_dispatch` (ADR-0016).
+#                       What the schedule carries is the drift experiment, whose
+#                       jobs come due once a day. At five minutes a seven-day
+#                       experiment costs about two thousand runs to drain fourteen
+#                       jobs; at fifteen it costs under seven hundred, and the
+#                       worst case is that a day starts fourteen minutes late on a
+#                       plot whose x-axis is the time the run actually happened.
+#                       Minutes are free on a public repository, but a queue that
+#                       is polled three times as often is not three times more
+#                       correct, and GitHub drops scheduled runs under load.
+#
+#                       **The drift experiment (P1.8) is what depends on this.** It
+#                       queues a week of `harvest.run` jobs up front, each with a
+#                       `run_after` a day apart, and nothing else drains them: with
+#                       no schedule, the days come due and stay due, and the plot
+#                       shows six `missing` points and no line — the honest
+#                       rendering of a queue nobody is reading, not a bug in the
+#                       chart.
 #   workflow_dispatch — foreground work (ADR-0016). A human pressed a button and is
 #                       watching a progress stream; waiting up to five minutes for
 #                       the next tick would make the product look dead. Left on, and
@@ -28,8 +48,8 @@
 name: worker
 
 on:
-  # schedule:
-  #   - cron: "*/5 * * * *"
+  schedule:
+    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       jobId:

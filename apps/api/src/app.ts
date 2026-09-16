@@ -38,7 +38,7 @@ export interface AppDeps {
    * deployment that has not been given persona and harvest stores should answer
    * 404 on `/lab/*` rather than 500 on the first read.
    */
-  lab?: Omit<LabDeps, "verifier">
+  lab?: Omit<LabDeps, "verifier" | "jobs">
   /** Injectable for tests; production gets the defaults. */
   clock?: () => number
   sleep?: (ms: number) => Promise<void>
@@ -179,7 +179,9 @@ export function createApp(deps: AppDeps) {
   // one thing to gate or drop; and a deployment with no `lab` in its deps simply
   // has no such routes, which is the difference between "not configured" and
   // "configured and broken".
-  if (deps.lab) app.route("/lab", labRoutes({ ...deps.lab, verifier: deps.verifier }))
+  if (deps.lab) {
+    app.route("/lab", labRoutes({ ...deps.lab, verifier: deps.verifier, jobs: deps.jobs }))
+  }
 
   app.onError((e, c) => {
     if (e instanceof HTTPException) return c.json({ error: e.message }, e.status)

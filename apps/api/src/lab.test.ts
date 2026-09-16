@@ -1,6 +1,10 @@
 import { overlapAt } from "@samsara/harvest/overlap"
 import type { HarvestRunRecord, RawItemRow } from "@samsara/harvest/ports"
-import { MemoryHarvestRunStore, MemoryRawItemStore } from "@samsara/harvest/store"
+import {
+  MemoryDriftExperimentStore,
+  MemoryHarvestRunStore,
+  MemoryRawItemStore,
+} from "@samsara/harvest/store"
 import { MemoryPersonaStore } from "@samsara/personas/store"
 import { beforeEach, describe, expect, it } from "vitest"
 import { createApp } from "./app.js"
@@ -49,13 +53,14 @@ const at = (iso: string) => new Date(iso)
 let personas: MemoryPersonaStore
 let runs: MemoryHarvestRunStore
 let items: MemoryRawItemStore
+let experiments: MemoryDriftExperimentStore
 
 const build = (withLab = true) =>
   createApp({
     jobs: () => jobs,
     verifier,
     dispatcher: noopDispatcher,
-    ...(withLab ? { lab: { stores: () => ({ personas, runs, items }) } } : {}),
+    ...(withLab ? { lab: { stores: () => ({ personas, runs, items, experiments }) } } : {}),
   })
 
 const persona = (id: string, over: Partial<Parameters<MemoryPersonaStore["insert"]>[0]> = {}) => ({
@@ -86,6 +91,7 @@ const run = (
   endedAt: at("2026-09-16T10:01:00.000Z"),
   outcome: "ok",
   itemCount: 0,
+  experiment: null,
   ...over,
 })
 
@@ -114,6 +120,7 @@ beforeEach(() => {
   personas = new MemoryPersonaStore()
   runs = new MemoryHarvestRunStore()
   items = new MemoryRawItemStore()
+  experiments = new MemoryDriftExperimentStore()
 })
 
 describe("the Lab's surface exists only where it is configured", () => {

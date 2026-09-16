@@ -575,6 +575,28 @@ Tasks:
 - **P1.6** Adapter: **Pantip** (Thai forum) boards; board ids are a parameter. Plain HTML, good signal.
 - **P1.7** Persona Lab UI (`apps/web`, internal route `/lab`): list personas, create one for a locality/country, trigger a harvest, view RawItems side by side for two personas on the same query. This is the "tourist vs local" split screen. Rough UI is fine; correctness of the comparison is not. The Lab is an engine-facing tool that happens to live in the travel app: it talks about personas, sources, and queries, not about places.
 - **P1.8** Drift experiment: run the same query daily for 7 days from a `us` persona and a `th` persona. Store results. Plot overlap percentage over time in the Lab.
+  ✅ **Built, and running: day 0 of seven is in, at 60.0%.** `drift_experiments` plus `experiment_id` /
+  `experiment_day` on `harvest_runs` (paired by a CHECK, because half a pairing key is a run that
+  can never be put opposite anything); an experiment queues its whole week up front — fourteen rows,
+  day-major, anchored to `startedAt` — rather than chaining one job to the next, so a runner that
+  dies produces late days instead of days that no longer exist. `MAX_DAYS = 14` is derived from the
+  free plan's 50 subrequests (`3 + 2d`), not chosen. A day is one of four states and only
+  `compared` carries a number: `overlapAt` returns 0 when nothing was comparable, and on this chart
+  a zero is the finding, so the other three states plot as a gap in the line. Stopping is a refusal
+  at claim time in the worker, since the remaining days are already queued and there is nothing to
+  cancel. `GET /lab/drift/:id` costs 0.539 ms of CPU over a fortnight at the widest k, in two
+  queries.
+  **One of the seven days has run.** Experiment `f60fb262` on hosted Postgres, `youtube.search`,
+  "Bangkok street food", `sg`/`th-TH`/`Asia/Bangkok` against `us`/`en-US`/`America/New_York`, all
+  fourteen payloads carrying `recording: true`. **Day 0: 60.0% — twelve of twenty URLs shared, mean
+  rank shift 5.2 on the twelve, both sessions `ok` with a `recording_ref`, 0.2388 billed minutes.**
+  That is the gate's number to the decimal, from a single day, with `country` deliberately held
+  wrong — so it is not yet an answer to anything, and reading it as one would be the compressed-day
+  mistake in a different costume. Six days remain queued. They will only run if `DATABASE_URL` and
+  `SOLARI_API_KEY` exist as repository secrets; day 0 was drained by hand and that does not repeat
+  six times. P0.8's lesson still applies to the other six sevenths: an acceptance criterion that has
+  not finished executing is not yet a test.
+  See `casestudy_and_thinking/sessions/2026-09-16-p18-a-zero-and-a-gap.md`.
 
 Acceptance: for the query "Bangkok street food", the th persona's top 20 items across adapters share less than 40% URL overlap with the us persona's. Recorded sessions show no captcha loops.
 
@@ -786,6 +808,19 @@ Unit economics sanity check to run at Phase 6: cost per active user per month vs
 8. `@dt/*` is a placeholder scope for the travel packages and is tied to the "Doen Thang" name lock in question 5. Confirm both together.
 9. *Answered 11 September 2026 — **ADR-0015**: keep Bangkok, treat the viewpoint as a stack of signals rather than an IP, and measure which of them actually move the result (new task P1.0). Option (c) in substance, with (a)'s Singapore egress as the weakest ingredient rather than the premise. Asked: **`th` is not on Solari's near-term roadmap** (Aswin, 11 September 2026), so nothing waits for it and the signal stack is the design rather than an interim measure.* Original framing kept below because P1.4's acceptance criterion depends on it:
    **Bangkok, without a Thai IP.** Solari's residential pool has no `th` (section 1.4, found in P0.4). Three ways forward, and they are not equivalent: (a) run Bangkok personas through `sg` and say so in the Persona Lab, accepting that "what a local sees" becomes "what a regional neighbour sees"; (b) make Tokyo the first city, since `jp` is in the pool and section 1.4 already names it second; (c) keep `th` as the target and shape the persona through account locale, language, and search terms rather than IP, treating egress country as one signal of several. (a) keeps the brand and weakens the claim; (b) keeps the claim and costs the brand; (c) is the most honest about how these platforms actually localise, and the most work. Worth asking Solari whether `th` is on their roadmap before choosing.
+
+  **Answered 2026-09-16 by Aswin (architect): (c).** The Phase 1 drift experiment runs
+  `sg` / `th-TH` / `Asia/Bangkok` against `us` / `en-US` / `America/New_York`. This is what
+  ADR-0015 already committed the code to — a `Viewpoint` is `{country, locale, timezoneId}`, not
+  an IP — so the experiment measures the thing the system actually models rather than the thing
+  the provider happens to sell. **What the number will and will not mean:** one of the three
+  signals is held wrong on purpose, because `sg` is not `th`. A *low* overlap is therefore a
+  strong result (locale and timezone moved the surface despite a neighbouring egress), and a
+  *high* overlap is ambiguous — it could be a surface that does not personalise, or it could be
+  one that keys on IP alone, and this run cannot tell those apart. That ambiguity has to be
+  carried into the gate: above 60% the instruction is "redesign adapters", and the first thing
+  to check instead is whether `th` egress has become available, because a week that failed for
+  want of an IP is not evidence about the adapters.
 
 ---
 

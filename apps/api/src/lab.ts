@@ -7,11 +7,18 @@ import { countryCode, locale, personaTier } from "@samsara/core"
 // somebody puts a value in them.
 import { overlapAt } from "@samsara/harvest/overlap"
 import type { HarvestRunRecord, RawItemRow } from "@samsara/harvest/ports"
+import type { JobStore } from "@samsara/kernel/jobs"
 import type { PersonaRecord, PersonaStore } from "@samsara/personas/store"
 import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { z } from "zod"
 import { requireAuth, type Verifier } from "./auth.js"
+import {
+  type DriftExperimentStoreWriter,
+  type DriftItemReaderSlice,
+  type DriftRunReaderSlice,
+  driftRoutes,
+} from "./drift.js"
 
 /**
  * The Persona Lab's read surface (P1.7).
@@ -50,15 +57,27 @@ import { requireAuth, type Verifier } from "./auth.js"
  */
 export interface LabStores {
   personas: PersonaStore
-  runs: HarvestRunStoreReader
-  items: RawItemStoreReader
+  runs: HarvestRunStoreReader & DriftRunReaderSlice
+  items: RawItemStoreReader & DriftItemReaderSlice
+  experiments: DriftExperimentStoreWriter
 }
 
 export interface LabDeps {
   /** Per-request, like `jobs`: a Workers isolate may serve requests for many seconds. */
   stores: (env: unknown) => LabStores
   verifier: Verifier
+  /**
+   * The queue, for `/lab/drift` alone.
+   *
+   * Handed down from `AppDeps` rather than built here, because a drift experiment
+   * is `days × 2` ordinary `harvest.run` jobs and must go through the same queue,
+   * the same idempotency and the same dispatch refusal that `/jobs` uses. A second
+   * path into the same work would be a second place for the double-click bug
+   * ADR-0016 already closed.
+   */
+  jobs: (env: unknown) => JobStore
   newId?: () => string
+  clock?: () => Date
 }
 
 /**
@@ -306,6 +325,20 @@ export function labRoutes(deps: LabDeps) {
       },
     })
   })
+
+  // The drift experiment (P1.8): the same comparison above, repeated daily. It
+  // gets its own file because it is the only part of the Lab that *writes* — an
+  // experiment row and a fortnight of queued jobs — and that difference should be
+  // visible in the import list rather than buried in a handler halfway down.
+  lab.route(
+    "/drift",
+    driftRoutes({
+      stores: (env) => deps.stores(env),
+      jobs: deps.jobs,
+      ...(deps.newId ? { newId: deps.newId } : {}),
+      ...(deps.clock ? { clock: deps.clock } : {}),
+    }),
+  )
 
   return lab
 }

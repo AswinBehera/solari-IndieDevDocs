@@ -1,5 +1,6 @@
 import type {
   CaptureArchive,
+  DriftExperimentStore,
   HarvestRunStore,
   Pacer,
   PersonaSink,
@@ -41,6 +42,16 @@ export interface HarvestPayload {
    * off — which is how recordings stay on for six months.
    */
   recording?: boolean
+  /**
+   * Which drift experiment this run is a cell of, and which day (P1.8).
+   *
+   * Both or neither — the run table has a CHECK saying so, and half a pairing key
+   * is a run that can never be put opposite anything. Present in the payload
+   * rather than looked up here because the experiment's plan was written when it
+   * was created; this job is just one of the fourteen it queued.
+   */
+  experimentId?: string
+  experimentDay?: number
 }
 
 /**
@@ -67,6 +78,19 @@ function parsePayload(raw: unknown): HarvestPayload {
   if (p.recording !== undefined && typeof p.recording !== "boolean") {
     throw new Error("harvest.run: payload.recording must be a boolean")
   }
+  const hasId = typeof p.experimentId === "string" && p.experimentId.length > 0
+  const hasDay = typeof p.experimentDay === "number" && Number.isInteger(p.experimentDay)
+  if (hasId !== hasDay) {
+    // The same all-or-nothing rule the table's CHECK enforces, stated here so the
+    // failure is a refused job rather than a constraint violation three statements
+    // into a browser session that has already been paid for.
+    throw new Error(
+      "harvest.run: payload.experimentId and payload.experimentDay are set together or not at all",
+    )
+  }
+  if (hasDay && (p.experimentDay as number) < 0) {
+    throw new Error("harvest.run: payload.experimentDay must not be negative")
+  }
   return {
     personaId: p.personaId as string,
     sourceId: p.sourceId as string,
@@ -75,6 +99,8 @@ function parsePayload(raw: unknown): HarvestPayload {
     ...(p.deadlineMs === undefined ? {} : { deadlineMs: p.deadlineMs }),
     ...(p.attempts === undefined ? {} : { attempts: p.attempts }),
     ...(p.recording === undefined ? {} : { recording: p.recording }),
+    ...(hasId ? { experimentId: p.experimentId as string } : {}),
+    ...(hasDay ? { experimentDay: p.experimentDay as number } : {}),
   }
 }
 
@@ -85,6 +111,16 @@ export interface HarvestHandlerDeps {
   items: RawItemStore
   archive: CaptureArchive
   pacer?: Pacer
+  /**
+   * The drift experiments, read-only in practice (P1.8).
+   *
+   * Optional because a deployment that never runs an experiment does not need it,
+   * and because the refusal below is the *only* thing it is for. It has to be here
+   * rather than in the API: stopping an experiment cannot unqueue the days it
+   * already queued, so "stopped" only stops spend if something reads it at claim
+   * time, before a browser opens.
+   */
+  experiments?: Pick<DriftExperimentStore, "byId">
 }
 
 export function createHarvestHandler(deps: HarvestHandlerDeps): JobHandler {
@@ -96,6 +132,22 @@ export function createHarvestHandler(deps: HarvestHandlerDeps): JobHandler {
       // `config`, and therefore not retried: a source that is not registered will
       // not become registered by trying again in thirty seconds.
       throw new Error(`harvest.run: no adapter registered for source ${input.sourceId}`)
+    }
+
+    if (input.experimentId !== undefined && deps.experiments) {
+      const experiment = await deps.experiments.byId(input.experimentId)
+      if (!experiment) {
+        throw new Error(`harvest.run: no such experiment: ${input.experimentId}`)
+      }
+      if (experiment.state === "stopped") {
+        // Not a retry and not a failure of this job — the experiment was called
+        // off after this day was queued, which is the ordinary way a week ends
+        // early. The days already measured stay where they are.
+        await ctx.heartbeat(
+          `experiment ${experiment.id} was stopped; not spending on day ${input.experimentDay}`,
+        )
+        return
+      }
     }
 
     const persona = await deps.personas.byId(input.personaId)
@@ -137,10 +189,24 @@ export function createHarvestHandler(deps: HarvestHandlerDeps): JobHandler {
         ...(input.deadlineMs === undefined ? {} : { deadlineMs: input.deadlineMs }),
         ...(input.attempts === undefined ? {} : { attempts: input.attempts }),
         ...(input.recording === undefined ? {} : { recording: input.recording }),
+        ...(input.experimentId === undefined || input.experimentDay === undefined
+          ? {}
+          : { experiment: { id: input.experimentId, day: input.experimentDay } }),
       },
     )
 
-    if (!result.ok) throw new Error(`${result.error.kind}: ${result.error.message}`)
+    if (!result.ok) {
+      // `cause` as well as `kind: message`, because the kind alone is not a
+      // diagnosis. This cost a session during P1.8's end-to-end run: a harvest
+      // failed twice as `internal: unhandled kernel error`, which is what
+      // `classify` says when it cannot positively identify a thrown value, and
+      // the actual content was sitting on `Failure.cause` the whole time and was
+      // dropped one line before it reached `jobs.last_error`. `record-capture.ts`
+      // learned the same lesson and says so in the same words. `cause` is an
+      // Error's name and message only, never a stack, so it is safe in a column.
+      const { kind, message, cause } = result.error
+      throw new Error(`${kind}: ${message}${cause ? ` — ${cause}` : ""}`)
+    }
 
     const report = result.value
     await ctx.heartbeat(

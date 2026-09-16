@@ -17,8 +17,26 @@ export const harvestRun = z
     outcome: harvestOutcome,
     itemCount: z.number().int().nonnegative(),
     sessionId: id,
+    /**
+     * Which designed measurement this run is a cell of, and which day of it.
+     *
+     * Null for the ordinary case — a run somebody asked for once — and the pair is
+     * all-or-nothing, which the refinement below enforces. It is a stored pairing
+     * key rather than a reconstruction from `startedAt` for the same reason
+     * `rawItem.rank` is a column: two runs are comparable because the same tick
+     * asked for both, and nothing else in the row can say that. Pairing by clock
+     * instead would put a delayed run on the wrong day, and a schedule that may be
+     * delayed is the one guarantee ADR-0014 explicitly withholds.
+     */
+    experimentId: id.nullable(),
+    /** Zero-based day within the experiment's plan. */
+    experimentDay: z.number().int().nonnegative().nullable(),
   })
   .extend(timestamps.shape)
+  .refine((r) => (r.experimentId === null) === (r.experimentDay === null), {
+    message: "experimentId and experimentDay are set together or not at all",
+    path: ["experimentDay"],
+  })
 export type HarvestRun = z.infer<typeof harvestRun>
 
 /** Nullable throughout: plenty of sources show none of this, and zero is not the same as unknown. */

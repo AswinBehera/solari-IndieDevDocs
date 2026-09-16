@@ -1,5 +1,9 @@
 import type { HarvestRunRecord, RawItemRow } from "@samsara/harvest/ports"
-import { MemoryHarvestRunStore, MemoryRawItemStore } from "@samsara/harvest/store"
+import {
+  MemoryDriftExperimentStore,
+  MemoryHarvestRunStore,
+  MemoryRawItemStore,
+} from "@samsara/harvest/store"
 import type { EnqueueInput, EnqueueResult, JobStore, StoredJobEvent } from "@samsara/kernel/jobs"
 import { MemoryPersonaStore } from "@samsara/personas/store"
 import { describe, expect, it } from "vitest"
@@ -72,9 +76,14 @@ const MAX_K = 100
 const personas = new MemoryPersonaStore()
 const runs = new MemoryHarvestRunStore()
 const items = new MemoryRawItemStore()
+const experiments = new MemoryDriftExperimentStore()
 
 const capturedAt = new Date("2026-09-16T10:00:00.000Z")
-const labRun = (id: string, personaId: string): HarvestRunRecord => ({
+const labRun = (
+  id: string,
+  personaId: string,
+  experiment: HarvestRunRecord["experiment"] = null,
+): HarvestRunRecord => ({
   id,
   domainId: "atlas",
   personaId,
@@ -85,6 +94,7 @@ const labRun = (id: string, personaId: string): HarvestRunRecord => ({
   endedAt: capturedAt,
   outcome: "ok",
   itemCount: MAX_K,
+  experiment,
 })
 runs.runs.set("ra", labRun("ra", "a"))
 runs.runs.set("rb", labRun("rb", "b"))
@@ -118,8 +128,56 @@ const app = createApp({
   jobs: () => store,
   verifier,
   dispatcher: noopDispatcher,
-  lab: { stores: () => ({ personas, runs, items }) },
+  lab: { stores: () => ({ personas, runs, items, experiments }) },
 })
+
+/**
+ * A full fortnight of measured days, at the widest k the route allows.
+ *
+ * The drift series is the one handler whose cost grows with something a client
+ * chooses — days × two runs, each compared at k — so it is measured at the
+ * maximum of both rather than at the seven days the plan asks for. `MAX_DAYS` is
+ * bounded by the subrequest ceiling on the *write* side; this is the read side
+ * proving the arithmetic that bound allows still fits in 10 ms.
+ */
+const DRIFT_DAYS = 14
+await experiments.insert({
+  id: "exp-1",
+  domainId: "atlas",
+  ownerId: "owner-1",
+  sourceId: "fake.search",
+  query: "ของกินอร่อย",
+  personaAId: "a",
+  personaBId: "b",
+  days: DRIFT_DAYS,
+  k: MAX_K,
+  intervalMinutes: 1440,
+  startedAt: capturedAt,
+  state: "running",
+})
+const driftItems: RawItemRow[] = []
+for (let day = 0; day < DRIFT_DAYS; day++) {
+  for (const [side, personaId, offset] of [
+    ["a", "a", 0],
+    ["b", "b", 50],
+  ] as const) {
+    const runId = `d${day}${side}`
+    runs.runs.set(runId, {
+      ...labRun(runId, personaId, { id: "exp-1", day }),
+      startedAt: new Date(capturedAt.getTime() + day * 86_400_000),
+    })
+    for (let rank = 0; rank < MAX_K; rank++) {
+      driftItems.push({
+        ...(labItems[0] as RawItemRow),
+        id: `${runId}-${rank}`,
+        harvestRunId: runId,
+        rank,
+        url: `https://x.test/${rank + offset}`,
+      })
+    }
+  }
+}
+await items.insertMany(driftItems)
 
 /** Total CPU (user + system) per iteration, in milliseconds. */
 async function cpuPerRequest(run: () => Promise<unknown>): Promise<number> {
@@ -203,6 +261,18 @@ describe("CPU per request against the 10 ms free-plan ceiling", () => {
       await res.json()
     })
     console.log(`POST /lab/personas ${ms.toFixed(3)} ms CPU/request (ceiling ${CEILING_MS} ms)`)
+    expect(ms).toBeLessThan(BUDGET_MS)
+  })
+
+  it("measures GET /lab/drift/:id over a full fortnight at the widest k", async () => {
+    const ms = await cpuPerRequest(async () => {
+      const res = await app.request(`/lab/drift/exp-1?k=${MAX_K}`, { headers: AUTH })
+      await res.json()
+    })
+    console.log(`GET  /lab/drift/:id ${ms.toFixed(3)} ms CPU/request (ceiling ${CEILING_MS} ms)`)
+    // Fourteen `overlapAt` calls and fourteen `meanRankShift` calls over two
+    // hundred strings each. If this ever approaches the ceiling the fix is fewer
+    // days or a smaller k — both are already columns — not a bigger budget.
     expect(ms).toBeLessThan(BUDGET_MS)
   })
 

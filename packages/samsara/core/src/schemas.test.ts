@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import * as fx from "./fixtures.js"
 import {
   countryCode,
+  driftExperiment,
   entityRef,
   evidence,
   harvestRun,
@@ -27,6 +28,7 @@ describe("every engine schema parses its fixture", () => {
     ["evidence", evidence, fx.evidenceFixture],
     ["probeTarget", probeTarget, fx.probeTargetFixture],
     ["observation", observation, fx.observationFixture],
+    ["driftExperiment", driftExperiment, fx.driftExperimentFixture],
   ] as const
 
   for (const [name, schema, fixture] of cases) {
@@ -67,5 +69,22 @@ describe("constraints that are load-bearing rather than decorative", () => {
 
   it("bounds confidence to 0..1", () => {
     expect(mention.safeParse({ ...fx.mentionFixture, confidence: 1.4 }).success).toBe(false)
+  })
+
+  it("refuses an experiment that compares one persona with itself", () => {
+    // Not an arithmetic problem: `overlapAt(x, x, k)` is a perfectly good 1.0. It
+    // is a week of sessions spent plotting a flat line at 100% that reads as the
+    // strongest finding the tool can produce.
+    const same = { ...fx.driftExperimentFixture, personaBId: fx.driftExperimentFixture.personaAId }
+    expect(driftExperiment.safeParse(same).success).toBe(false)
+  })
+
+  it("keeps a run's experiment pairing all-or-nothing", () => {
+    // A run that knows which experiment it belongs to but not which day is a run
+    // that cannot be paired with the other side, which is the only thing the
+    // pairing key exists for.
+    const half = { ...fx.harvestRunFixture, experimentId: fx.driftExperimentFixture.id }
+    expect(harvestRun.safeParse(half).success).toBe(false)
+    expect(harvestRun.safeParse({ ...half, experimentDay: 0 }).success).toBe(true)
   })
 })

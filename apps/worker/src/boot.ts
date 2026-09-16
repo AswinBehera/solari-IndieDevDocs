@@ -1,7 +1,11 @@
 import { createDb } from "@dt/db"
 import { MemoryPacer } from "@samsara/harvest"
 import { FilesystemCaptureArchive } from "@samsara/harvest/node"
-import { PostgresHarvestRunStore, PostgresRawItemStore } from "@samsara/harvest/postgres"
+import {
+  PostgresDriftExperimentStore,
+  PostgresHarvestRunStore,
+  PostgresRawItemStore,
+} from "@samsara/harvest/postgres"
 import { BudgetGuard, Kernel, type Logger, loadCeilings, SessionRegistry } from "@samsara/kernel"
 import { jsonLogger } from "@samsara/kernel/node"
 import {
@@ -97,6 +101,10 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       // limits: this cannot span a scheduled runner's exit, and the cross-process
       // answer is `jobs.run_after`, not a shared limiter.
       pacer: new MemoryPacer(),
+      // Read before a browser opens, and the only reason stopping a drift
+      // experiment stops anything: its remaining days are already rows in the
+      // queue, so there is nothing to cancel — only something to refuse (P1.8).
+      experiments: new PostgresDriftExperimentStore(database.db),
     }),
   )
 

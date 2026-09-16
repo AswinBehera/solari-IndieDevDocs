@@ -1,8 +1,11 @@
-import type { Engagement, HarvestOutcome } from "@samsara/core"
-import { harvestRuns, rawItems } from "@samsara/db"
-import { and, asc, desc, eq, type TablesRelationalConfig } from "drizzle-orm"
+import type { DriftState, Engagement, HarvestOutcome } from "@samsara/core"
+import { driftExperiments, harvestRuns, rawItems } from "@samsara/db"
+import { and, asc, desc, eq, inArray, lt, type TablesRelationalConfig } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 import type {
+  DriftExperimentFilter,
+  DriftExperimentRecord,
+  DriftExperimentStore,
   HarvestRunFilter,
   HarvestRunRecord,
   HarvestRunStart,
@@ -10,7 +13,13 @@ import type {
   RawItemRow,
   RawItemStore,
 } from "./ports.js"
-import { boundedLimit, ITEM_LIST_LIMIT, RUN_LIST_LIMIT } from "./ports.js"
+import {
+  boundedLimit,
+  EXPERIMENT_LIST_LIMIT,
+  EXPERIMENT_RUN_LIMIT,
+  ITEM_LIST_LIMIT,
+  RUN_LIST_LIMIT,
+} from "./ports.js"
 
 /**
  * The real harvest stores.
@@ -34,6 +43,29 @@ const toRecord = (row: RunRow): HarvestRunRecord => ({
   endedAt: row.endedAt,
   outcome: row.outcome,
   itemCount: row.itemCount,
+  // Two columns, one field. The table's CHECK keeps them from disagreeing, so
+  // the `null` branch here is the only one either column can produce alone.
+  experiment:
+    row.experimentId === null || row.experimentDay === null
+      ? null
+      : { id: row.experimentId, day: row.experimentDay },
+})
+
+type ExperimentRow = typeof driftExperiments.$inferSelect
+
+const toExperiment = (row: ExperimentRow): DriftExperimentRecord => ({
+  id: row.id,
+  domainId: row.domainId,
+  ownerId: row.ownerId,
+  sourceId: row.sourceId,
+  query: row.query,
+  personaAId: row.personaAId,
+  personaBId: row.personaBId,
+  days: row.days,
+  k: row.k,
+  intervalMinutes: row.intervalMinutes,
+  startedAt: row.startedAt,
+  state: row.state,
 })
 
 export class PostgresHarvestRunStore implements HarvestRunStore {
@@ -51,6 +83,8 @@ export class PostgresHarvestRunStore implements HarvestRunStore {
       endedAt: null,
       outcome: "running",
       itemCount: 0,
+      experimentId: run.experiment?.id ?? null,
+      experimentDay: run.experiment?.day ?? null,
     })
   }
 
@@ -99,6 +133,25 @@ export class PostgresHarvestRunStore implements HarvestRunStore {
       .where(clauses.length > 0 ? and(...clauses) : undefined)
       .orderBy(desc(harvestRuns.startedAt))
       .limit(boundedLimit(filter.limit, RUN_LIST_LIMIT))
+    return rows.map(toRecord)
+  }
+
+  /**
+   * One experiment's runs, day order, both identities, always limited.
+   *
+   * `(experiment_id, experiment_day)` is an index, so this is a range read of the
+   * dozen-odd rows one experiment owns rather than a filter over every run in the
+   * table. `started_at` breaks ties within a day: a retried cell has two rows, and
+   * the series takes the first, so the order it arrives in has to be the order it
+   * happened in.
+   */
+  async listByExperiment(experimentId: string, limit?: number): Promise<HarvestRunRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(harvestRuns)
+      .where(eq(harvestRuns.experimentId, experimentId))
+      .orderBy(asc(harvestRuns.experimentDay), asc(harvestRuns.startedAt))
+      .limit(boundedLimit(limit, EXPERIMENT_RUN_LIMIT))
     return rows.map(toRecord)
   }
 }
@@ -181,5 +234,93 @@ export class PostgresRawItemStore implements RawItemStore {
         rawRef: row.rawRef,
       }
     })
+  }
+
+  /**
+   * The compared identifiers for many runs, in one statement.
+   *
+   * Two columns and `rank < k` rather than `select *` and a slice in memory: a
+   * week's plot is fourteen runs, and fourteen runs of `pantip.topic` is megabytes
+   * of post text crossing Hyperdrive to compute a number that only ever looks at
+   * URLs. The whole read is bounded twice over — by `k` inside each run, and by
+   * how many run ids the caller was allowed to collect in the first place.
+   *
+   * Runs with no items simply do not appear in the result, which is what lets the
+   * series tell a day that returned nothing from a day that never ran.
+   */
+  async rankedUrls(harvestRunIds: readonly string[], k: number): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>()
+    if (harvestRunIds.length === 0) return out
+    const bound = boundedLimit(k, ITEM_LIST_LIMIT)
+    const rows = await this.db
+      .select({ harvestRunId: rawItems.harvestRunId, url: rawItems.url })
+      .from(rawItems)
+      .where(and(inArray(rawItems.harvestRunId, [...harvestRunIds]), lt(rawItems.rank, bound)))
+      .orderBy(asc(rawItems.harvestRunId), asc(rawItems.rank))
+      .limit(harvestRunIds.length * bound)
+    for (const row of rows) {
+      const urls = out.get(row.harvestRunId)
+      if (urls === undefined) out.set(row.harvestRunId, [row.url])
+      else urls.push(row.url)
+    }
+    return out
+  }
+}
+
+/**
+ * The experiment plan rows.
+ *
+ * No update path beyond `setState`, because everything else about an experiment is
+ * already queued the moment it is created: changing `days` or `query` afterwards
+ * would leave the row describing one measurement and the queue holding another.
+ */
+export class PostgresDriftExperimentStore implements DriftExperimentStore {
+  constructor(private readonly db: Db) {}
+
+  async insert(row: DriftExperimentRecord): Promise<void> {
+    await this.db.insert(driftExperiments).values({
+      id: row.id,
+      domainId: row.domainId,
+      ownerId: row.ownerId,
+      sourceId: row.sourceId,
+      query: row.query,
+      personaAId: row.personaAId,
+      personaBId: row.personaBId,
+      days: row.days,
+      k: row.k,
+      intervalMinutes: row.intervalMinutes,
+      startedAt: row.startedAt,
+      state: row.state,
+    })
+  }
+
+  async byId(id: string): Promise<DriftExperimentRecord | null> {
+    const rows = await this.db
+      .select()
+      .from(driftExperiments)
+      .where(eq(driftExperiments.id, id))
+      .limit(1)
+    return rows[0] ? toExperiment(rows[0]) : null
+  }
+
+  async list(filter: DriftExperimentFilter = {}): Promise<DriftExperimentRecord[]> {
+    const clauses = [
+      ...(filter.state ? [eq(driftExperiments.state, filter.state)] : []),
+      ...(filter.ownerId ? [eq(driftExperiments.ownerId, filter.ownerId)] : []),
+    ]
+    const rows = await this.db
+      .select()
+      .from(driftExperiments)
+      .where(clauses.length > 0 ? and(...clauses) : undefined)
+      .orderBy(desc(driftExperiments.startedAt))
+      .limit(boundedLimit(filter.limit, EXPERIMENT_LIST_LIMIT))
+    return rows.map(toExperiment)
+  }
+
+  async setState(id: string, state: DriftState): Promise<void> {
+    await this.db
+      .update(driftExperiments)
+      .set({ state, updatedAt: new Date() })
+      .where(eq(driftExperiments.id, id))
   }
 }

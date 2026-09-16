@@ -12,6 +12,7 @@
  */
 
 import type {
+  DriftExperiment,
   Evidence,
   HarvestRun,
   Mention,
@@ -88,6 +89,25 @@ export const harvestRunFixture: HarvestRun = {
   outcome: "ok",
   itemCount: 18,
   sessionId: uuid(3),
+  // The ordinary case: a run somebody asked for once, belonging to no design.
+  experimentId: null,
+  experimentDay: null,
+  ...stamps,
+}
+
+export const driftExperimentFixture: DriftExperiment = {
+  id: uuid(11),
+  domainId: "atlas",
+  ownerId: "owner_42",
+  sourceId: "shortvideo",
+  query: "ของอร่อย ใกล้ฉัน",
+  personaAId: uuid(1),
+  personaBId: uuid(12),
+  days: 7,
+  k: 20,
+  intervalMinutes: 1440,
+  startedAt: at,
+  state: "running",
   ...stamps,
 }
 

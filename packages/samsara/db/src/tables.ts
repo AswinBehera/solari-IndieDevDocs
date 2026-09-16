@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm"
 import {
   boolean,
+  check,
   doublePrecision,
   index,
   integer,
@@ -13,6 +15,7 @@ import {
 import { timestamps } from "./columns.js"
 import {
   budgetWindowEnum,
+  driftStateEnum,
   harvestOutcomeEnum,
   jobStateEnum,
   meterIdEnum,
@@ -102,6 +105,70 @@ export const sessions = pgTable(
   ],
 )
 
+/**
+ * A repeated measurement (P1.8): the same question, the same two identities, one
+ * run each per interval, for a fixed number of days.
+ *
+ * The row is the **plan**. What happened is the harvest runs that carry its id, and
+ * the two are allowed to disagree — a day whose runs never happened leaves a hole,
+ * and under ADR-0014 that is the ordinary case rather than an incident. Nothing
+ * here records progress, because a progress column is a fact that goes stale the
+ * first time the thing that would update it does not run.
+ *
+ * No `complete` state, for the same reason: the last day being in the past is
+ * arithmetic. `stopped` is not — it is somebody deciding to stop spending browser
+ * minutes on this question, and that decision is the only thing a reader cannot
+ * derive.
+ */
+export const driftExperiments = pgTable(
+  "drift_experiments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    domainId: text("domain_id").notNull(),
+    ownerId: text("owner_id"),
+    sourceId: text("source_id").notNull(),
+    query: text("query").notNull(),
+    /**
+     * Two identities, `restrict` on both.
+     *
+     * A persona deleted mid-experiment would leave a series whose other column has
+     * nothing to be compared against and no way to say whose fault that is — the
+     * same reasoning that makes `harvest_runs.persona_id` restrict.
+     */
+    personaAId: uuid("persona_a_id")
+      .notNull()
+      .references(() => personas.id, { onDelete: "restrict" }),
+    personaBId: uuid("persona_b_id")
+      .notNull()
+      .references(() => personas.id, { onDelete: "restrict" }),
+    days: integer("days").notNull(),
+    /** The top-k the experiment was designed at. A reader may ask for another. */
+    k: integer("k").notNull().default(20),
+    /**
+     * Minutes between days; 1440 is "daily" and the only value Phase 1 uses.
+     *
+     * A column rather than a constant because a seven-day experiment cannot be
+     * demonstrated or exercised end to end at its real cadence, and the
+     * alternative to a parameter is a test that fakes a clock — which proves the
+     * schedule arithmetic and not the queue that has to carry it.
+     */
+    intervalMinutes: integer("interval_minutes").notNull().default(1440),
+    /** The anchor every day is computed from. Day n is due n intervals after it. */
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    state: driftStateEnum("state").notNull().default("running"),
+    ...timestamps,
+  },
+  (t) => [
+    index("drift_experiments_state_started_idx").on(t.state, t.startedAt),
+    // In the database rather than only in the Zod schema, because the row can be
+    // written by anything holding the connection string. `overlapAt(x, x, k)` is a
+    // perfectly good 1.0, so an experiment pointed at one identity twice spends a
+    // week of sessions drawing a flat line at 100% that reads as the strongest
+    // result the tool can produce.
+    check("drift_experiments_two_personas", sql`${t.personaAId} <> ${t.personaBId}`),
+  ],
+)
+
 export const harvestRuns = pgTable(
   "harvest_runs",
   {
@@ -119,10 +186,41 @@ export const harvestRuns = pgTable(
     sessionId: uuid("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "restrict" }),
+    /**
+     * Which designed measurement asked for this run, and which day of it.
+     *
+     * Null for an ordinary run. Set together or not at all — the check constraint
+     * in the migration says so, because half a pairing key is worse than none: a
+     * run that knows its experiment and not its day cannot be put opposite
+     * anything.
+     *
+     * It is a stored key rather than a reconstruction from `started_at`, and that
+     * is the same argument `raw_items.rank` settles one table over. Two runs are
+     * comparable because one tick asked for both; pairing them by clock instead
+     * puts a delayed run on the wrong day, and a schedule that may be delayed is
+     * precisely the guarantee ADR-0014 withholds. `set null` rather than cascade
+     * on delete, because deleting the plan must not delete the evidence — the runs
+     * happened and the minutes were billed whatever becomes of the row that asked.
+     */
+    experimentId: uuid("experiment_id").references(() => driftExperiments.id, {
+      onDelete: "set null",
+    }),
+    experimentDay: integer("experiment_day"),
     ...timestamps,
   },
   (t) => [
     index("harvest_runs_domain_source_idx").on(t.domainId, t.sourceId, t.startedAt),
+    // The series read, and the only index it needs: one experiment's runs, in day
+    // order, both sides interleaved. Without it, drawing a seven-point plot is a
+    // scan of every run anybody has ever done.
+    index("harvest_runs_experiment_day_idx").on(t.experimentId, t.experimentDay),
+    // Half a pairing key is worse than none: a run that knows its experiment and
+    // not its day cannot be put opposite anything, and would read as a day-0 run
+    // if anything ever coalesced the null.
+    check(
+      "harvest_runs_experiment_pair",
+      sql`(${t.experimentId} IS NULL) = (${t.experimentDay} IS NULL)`,
+    ),
     // The Lab's question, and the drift experiment's: what did *this* identity get
     // back, most recent first. Without it, "the newest run for persona A" is a scan
     // of every run anybody has ever done.

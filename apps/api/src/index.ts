@@ -1,7 +1,11 @@
 // @dt/api — Hono on Cloudflare Workers (ADR-0014). Thin: validates, enqueues, reads.
 
 import { createDb } from "@dt/db"
-import { PostgresHarvestRunStore, PostgresRawItemStore } from "@samsara/harvest/postgres"
+import {
+  PostgresDriftExperimentStore,
+  PostgresHarvestRunStore,
+  PostgresRawItemStore,
+} from "@samsara/harvest/postgres"
 import { PostgresJobStore } from "@samsara/kernel/postgres"
 import { PostgresPersonaStore } from "@samsara/personas/postgres"
 import { createApp } from "./app.js"
@@ -41,7 +45,7 @@ export default {
           const e = bindings as Env
           return new PostgresJobStore(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
         },
-        // The Lab's three stores over one connection. Same per-request rule as
+        // The Lab's four stores over one connection. Same per-request rule as
         // `jobs` above and for the same reason: Hyperdrive hands out a pooled
         // connection per request, and holding one across requests in a long-lived
         // isolate is how a pool is exhausted by an API that looks idle.
@@ -53,6 +57,7 @@ export default {
               personas: new PostgresPersonaStore(db),
               runs: new PostgresHarvestRunStore(db),
               items: new PostgresRawItemStore(db),
+              experiments: new PostgresDriftExperimentStore(db),
             }
           },
         },

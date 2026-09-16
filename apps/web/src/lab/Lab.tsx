@@ -1,4 +1,5 @@
 import { Compare } from "./Compare"
+import { Drift } from "./Drift"
 import { Personas } from "./Personas"
 import { RunHarvest } from "./RunHarvest"
 
@@ -17,7 +18,9 @@ import { RunHarvest } from "./RunHarvest"
  * get the same answer. Three sections in the order the work happens: the
  * identities exist, one of them asks, and then two of them are compared. The
  * comparison is the point; the first two sections exist so that there is
- * something to compare without a psql session.
+ * something to compare without a psql session. The fourth asks the same question
+ * for a week, because one afternoon's comparison is a fact and a week's is a
+ * finding (P1.8).
  */
 
 export function Lab() {
@@ -37,6 +40,7 @@ export function Lab() {
       <Personas />
       <RunHarvest />
       <Compare />
+      <Drift />
     </main>
   )
 }

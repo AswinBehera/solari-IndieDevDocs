@@ -98,3 +98,72 @@ export const SOURCE_IDS = [
   "pantip.tag",
   "pantip.topic",
 ] as const
+
+/**
+ * The drift experiment (P1.8): the same question, asked every day, by two
+ * identities.
+ *
+ * `@samsara/harvest/drift`'s `DriftSeries`, restated for the same reason the rest
+ * of this file restates things — the wire is a format, not a module. The one field
+ * worth reading twice is `state`, because it is what keeps the chart honest:
+ * `overlap` is `null` on every day that is not `compared`, and a day that was never
+ * measured must not be drawn as agreement of zero.
+ */
+export type DriftExperimentState = "running" | "stopped"
+
+export interface DriftExperiment {
+  id: string
+  domainId: string
+  sourceId: string
+  query: string
+  personaAId: string
+  personaBId: string
+  days: number
+  k: number
+  intervalMinutes: number
+  startedAt: string
+  state: DriftExperimentState
+}
+
+/**
+ * Why a day has no number, in four words.
+ *
+ * - `compared` — both identities ran, and the overlap is real.
+ * - `empty` — both ran and at least one came back with nothing, so there was
+ *   nothing to compare. Not the same as agreeing on nothing.
+ * - `missing` — the day came due and did not produce two runs. A gap.
+ * - `pending` — the day has not come due yet. Not a gap; a future.
+ */
+export type DriftPointState = "pending" | "missing" | "empty" | "compared"
+
+export interface DriftSide {
+  runId: string
+  personaId: string
+  outcome: HarvestOutcome
+  itemCount: number
+  startedAt: string
+}
+
+export interface DriftPoint {
+  day: number
+  dueAt: string
+  measuredAt: string | null
+  state: DriftPointState
+  overlap: OverlapAtK | null
+  meanRankShift: number | null
+  a: DriftSide | null
+  b: DriftSide | null
+}
+
+export interface DriftSeries {
+  experiment: DriftExperiment
+  k: number
+  summary: {
+    comparedDays: number
+    missingDays: number
+    meanOverlap: number | null
+    spread: number | null
+    complete: boolean
+  }
+  points: DriftPoint[]
+}

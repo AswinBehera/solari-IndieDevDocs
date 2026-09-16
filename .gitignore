@@ -17,3 +17,15 @@ coverage/
 
 # wrangler dev local state (workerd cache, local D1/KV/Hyperdrive shims)
 .wrangler/
+
+# The local capture archive. `FilesystemCaptureArchive` is a stand-in for bucket
+# storage (section 8), and its default directory is `.captures` next to whatever
+# started the runner — so a dev harvest drops raw provider JSON inside the repo.
+# It is evidence, not source: too large to review, not ours to publish, and
+# `biome check` reads it as an unformatted file until it is ignored here.
+.captures/
+
+# The hosted database's connection string. Deliberately NOT `DATABASE_URL` in
+# `.env`: the Postgres tests truncate whatever `DATABASE_URL` names, so the hosted
+# database is reachable only through `tools/with-hosted-env.sh`, which explains why.
+.env.supabase

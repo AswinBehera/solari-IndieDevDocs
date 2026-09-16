@@ -153,3 +153,68 @@ is lost — the run was already a widget flattened into one string — and
 `fixture.test.ts` pins it with that reasoning, so the day the rating is worth parsing
 the parser is told where it went. Same family as Q10: a dotted number means a version
 on TikTok, a rating here, and an address only in a field that could hold one.
+
+## Q12 — a week nothing can wake up for, and what a compressed day would prove  [ANSWERED]
+
+Raised 2026-09-16 (Claude Code), out of P1.8.
+
+Phase 1's acceptance criterion is a seven-day measurement, and there is nothing in
+this system that stays awake for seven days. The worker is a GitHub Actions workflow
+whose schedule has been commented out since P1.7, because it needs `DATABASE_URL`,
+because there is no hosted Postgres, because ADR-0013's Supabase project does not
+exist yet. An experiment therefore queues fourteen jobs that come due and stay due.
+
+The instrument is finished and honest about this — six `missing` points and no line —
+so the question is not what to build, it is which of three things to spend:
+
+1. **Restore the cron in the same commit that sets the secret.** Needs the hosted
+   database, which is blocked on a decision nobody has made. This is the only option
+   that measures drift as the plan defines it: seven real days, seven real diurnal
+   cycles of a ranked surface.
+2. **Run it locally at a short interval** — `intervalMinutes` exists exactly so the
+   mechanism can be demonstrated in ten minutes — and say plainly that a day was ten
+   minutes. This proves the machinery and produces a number that looks like the
+   acceptance number and is not it. A surface's results at 14:00 and 14:10 are far
+   more alike than at 14:00 on Monday and Tuesday, so a compressed run is
+   **biased toward high overlap**: it would fail the 40% acceptance and could trip
+   the 60% gate for a reason that has nothing to do with the adapters. That failure
+   mode is the dangerous one, because the gate's instruction is "stop and redesign
+   adapters", and redesigning adapters in response to a clock is pure waste.
+3. **Leave a local runner draining for a week.** Free, uses the daily interval, and
+   depends on a laptop staying awake — which will produce late days, which the plot
+   is designed to show rather than hide. Not obviously worse than (1) for a
+   measurement whose whole subject is that schedules slip.
+
+My inclination is (3) for the acceptance number and (2) only ever as a demo that is
+labelled as one, never as the figure the gate reads. What I want from an architect is
+whether the Phase 1 gate may be answered by (3) at all, or whether "seven days" in the
+plan means seven days on the infrastructure Phase 2 will run on.
+
+**Also unmeasured, and part of the same question:** the acceptance sentence says
+"recorded sessions show no captcha loops", and recordings are off by default (section
+8: on for the first 20 runs of a new adapter). A drift experiment does not currently
+turn them on for its own runs. Fourteen recorded sessions is the cheapest evidence
+this project will ever have for the captcha half of the criterion, and the flag is
+already a payload field.
+
+**Answered 2026-09-16 by Aswin (architect): (1).** The hosted database was the thing
+blocking it and it is no longer blocking: a Supabase project in `ap-southeast-1`, nine
+migrations applied, eighteen tables, reached through the **session pooler** rather than
+the direct host, because the direct host resolves to AAAA only and GitHub's runners are
+IPv4-only — a string that would have been green on a laptop and red in Actions. The
+cron is restored at `*/15` rather than `*/5`, for the arithmetic in `worker.yml`: the
+jobs this schedule carries come due once a day.
+
+Option (2) was not used for anything, not even as a labelled demo, so there is no
+compressed number anywhere near the gate to be mistaken for the real one.
+
+**The recording half is settled too.** `POST /lab/drift` now takes `recording`, off by
+default and on for this run, so all fourteen payloads carry it — a create-time body
+field rather than a column on `drift_experiments`, because what a recording *is* already
+lives on `sessions.recording_ref`, one row per session, and a flag on the experiment
+would be a second place for the same fact to be wrong. Day 0's two sessions both came
+back with a `recording_ref`.
+
+**What is still open is not a question, it is a secret.** The `*/15` schedule fails on
+every tick until `DATABASE_URL` and `SOLARI_API_KEY` exist as repository secrets. Day 0
+was drained by hand. Days 1 to 6 have no such fallback.

@@ -18,6 +18,7 @@
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @dt/db db:generate",
     "db:migrate": "pnpm --filter @dt/db db:migrate",
+    "db:migrate:hosted": "./tools/with-hosted-env.sh pnpm --filter @dt/db db:migrate",
     "db:seed": "pnpm --filter @dt/db db:seed",
     "db:reset": "docker compose down -v && pnpm db:up && pnpm db:migrate && pnpm db:seed",
     "check:seam": "tsx tools/check-seam.ts",

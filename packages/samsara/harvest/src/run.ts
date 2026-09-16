@@ -21,7 +21,13 @@ import {
   type SourceAdapter,
 } from "@samsara/sources"
 import { immediatePacer, type Pacer } from "./pace.js"
-import type { CaptureArchive, HarvestRunStore, RawItemRow, RawItemStore } from "./store.js"
+import type {
+  CaptureArchive,
+  ExperimentCell,
+  HarvestRunStore,
+  RawItemRow,
+  RawItemStore,
+} from "./store.js"
 
 /**
  * One identity asking one source one question, once (plan section 3, `HarvestRun`).
@@ -79,6 +85,16 @@ export interface HarvestInput {
   attempts?: number
   /** On for the first runs of a new adapter, off by default (section 8). */
   recording?: boolean
+  /**
+   * The designed measurement this run is a cell of, when it is one.
+   *
+   * Passed straight through to the run row and looked at nowhere else here. A
+   * harvest asked for by an experiment opens the same browser, asks the same
+   * question and is paced by the same limiter as one somebody asked for by hand —
+   * the pairing key is the only difference, and it exists so the series can be
+   * drawn later, not so this function can behave differently.
+   */
+  experiment?: ExperimentCell | null
 }
 
 export interface HarvestReport {
@@ -176,6 +192,7 @@ export async function runHarvest<P>(
     query: input.query,
     sessionId: sessionId ?? runId,
     startedAt: spends[0] ? new Date(endedAt.getTime() - minutes * 60_000) : endedAt,
+    experiment: input.experiment ?? null,
   })
 
   // Archive first, parse second — even on the failure path. A refused capture is

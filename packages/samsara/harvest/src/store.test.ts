@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 import { boundedLimit, ITEM_LIST_LIMIT, RUN_LIST_LIMIT } from "./ports.js"
-import { MemoryHarvestRunStore, MemoryRawItemStore, type RawItemRow } from "./store.js"
+import {
+  MemoryDriftExperimentStore,
+  MemoryHarvestRunStore,
+  MemoryRawItemStore,
+  type RawItemRow,
+} from "./store.js"
 
 /**
  * The in-memory stores, held to the behaviour the real ones have.
@@ -39,6 +44,7 @@ const run = (id: string, over: Partial<Parameters<MemoryHarvestRunStore["start"]
   query: "ของกินอร่อย",
   sessionId: "session-1",
   startedAt: capturedAt,
+  experiment: null,
   ...over,
 })
 
@@ -89,6 +95,29 @@ describe("the in-memory raw item store", () => {
     )
     expect((await items.listByRun("r1", 2)).map((i) => i.rank)).toEqual([0, 1])
   })
+
+  it("returns ranked urls for several runs at once, k each", async () => {
+    const items = new MemoryRawItemStore()
+    await items.insertMany([
+      ...Array.from({ length: 4 }, (_, rank) => item({ harvestRunId: "r1", rank })),
+      ...Array.from({ length: 4 }, (_, rank) => item({ harvestRunId: "r2", rank })),
+    ])
+    const urls = await items.rankedUrls(["r1", "r2"], 2)
+    expect(urls.get("r1")).toEqual(["https://fake.test/0", "https://fake.test/1"])
+    // k applies per run, not across the batch: a fourteen-day plot asking for the
+    // top 20 wants twenty from each day, not twenty spread over the week.
+    expect(urls.get("r2")).toHaveLength(2)
+  })
+
+  it("leaves a run with no items out of the map rather than putting an empty list in it", async () => {
+    const items = new MemoryRawItemStore()
+    await items.insertMany([item({ harvestRunId: "r1", rank: 0 })])
+    const urls = await items.rankedUrls(["r1", "r2"], 20)
+    // Present-and-empty and absent read the same to `overlapAt`, but only one of
+    // them lets the caller tell "this run returned nothing" from "this run is not
+    // in the result", and the series needs that distinction to mark a day empty.
+    expect(urls.has("r2")).toBe(false)
+  })
 })
 
 describe("the in-memory harvest run store", () => {
@@ -130,5 +159,58 @@ describe("the in-memory harvest run store", () => {
     // source telling us what it thinks of an identity.
     expect(read?.outcome).toBe("blocked")
     expect(read?.itemCount).toBe(0)
+  })
+
+  it("lists one experiment's runs oldest first, and nobody else's", async () => {
+    const runs = new MemoryHarvestRunStore()
+    await runs.start(run("e-day-1", { experiment: { id: "exp-1", day: 1 } }))
+    await runs.start(run("e-day-0", { experiment: { id: "exp-1", day: 0 } }))
+    await runs.start(run("other-exp", { experiment: { id: "exp-2", day: 0 } }))
+    await runs.start(run("ad-hoc"))
+    // Oldest first, unlike every other list in the package: a series is a line
+    // drawn left to right, not a "what happened most recently" panel.
+    expect((await runs.listByExperiment("exp-1")).map((r) => r.id)).toEqual(["e-day-0", "e-day-1"])
+  })
+})
+
+describe("the in-memory experiment store", () => {
+  const experiment = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    domainId: "atlas",
+    ownerId: "owner-1",
+    sourceId: "fake.search",
+    query: "ของกินอร่อย",
+    personaAId: "persona-1",
+    personaBId: "persona-2",
+    days: 7,
+    k: 20,
+    intervalMinutes: 1440,
+    startedAt: capturedAt,
+    state: "running" as const,
+    ...over,
+  })
+
+  it("refuses to insert the same experiment twice", async () => {
+    const store = new MemoryDriftExperimentStore()
+    await store.insert(experiment("exp-1"))
+    // Two rows with one id would enqueue two sets of jobs whose idempotency keys
+    // collide, and that surfaces as a half-missing week rather than as an error.
+    await expect(store.insert(experiment("exp-1"))).rejects.toThrow(/already exists/)
+  })
+
+  it("filters by state, which is how the runner finds what is still spending", async () => {
+    const store = new MemoryDriftExperimentStore()
+    await store.insert(experiment("exp-1"))
+    await store.insert(experiment("exp-2", { state: "stopped" }))
+    expect((await store.list({ state: "running" })).map((e) => e.id)).toEqual(["exp-1"])
+  })
+
+  it("stops an experiment in a way the handler can read before it opens a browser", async () => {
+    const store = new MemoryDriftExperimentStore()
+    await store.insert(experiment("exp-1"))
+    await store.setState("exp-1", "stopped")
+    // The remaining days are already queued rows. Nothing is cancelled by this —
+    // the refusal has to happen at claim time, and this is what it reads.
+    expect((await store.byId("exp-1"))?.state).toBe("stopped")
   })
 })

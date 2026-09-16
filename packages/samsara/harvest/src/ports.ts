@@ -1,4 +1,4 @@
-import type { Engagement, HarvestOutcome, SourceId, StorageRef } from "@samsara/core"
+import type { DriftState, Engagement, HarvestOutcome, SourceId, StorageRef } from "@samsara/core"
 
 /**
  * The harvest ports, and nothing that implements them.
@@ -13,6 +13,20 @@ import type { Engagement, HarvestOutcome, SourceId, StorageRef } from "@samsara/
  * in `store.ts` instead.
  */
 
+/**
+ * Which designed measurement a run belongs to, and which day of it.
+ *
+ * A pair rather than two fields that can be set independently, so that "this run
+ * is a cell of an experiment" and "this run is day 3" cannot be known separately.
+ * Half of it is useless: the day is the key the two identities are paired on, and
+ * a run carrying an experiment id and no day cannot be put opposite anything.
+ */
+export interface ExperimentCell {
+  id: string
+  /** Zero-based day within the experiment's plan. */
+  day: number
+}
+
 /** What is known when a run starts. `id` is minted by the caller so it can log it. */
 export interface HarvestRunStart {
   id: string
@@ -22,6 +36,8 @@ export interface HarvestRunStart {
   query: string
   sessionId: string
   startedAt: Date
+  /** Null for an ordinary run — one somebody asked for once. */
+  experiment: ExperimentCell | null
 }
 
 export interface HarvestRunRecord extends HarvestRunStart {
@@ -46,10 +62,26 @@ export interface HarvestRunFilter {
   limit?: number
 }
 
+/**
+ * One experiment's runs, both identities, in day order.
+ *
+ * Deliberately not expressible through `HarvestRunFilter`, whose every read is
+ * "newest first, bounded" — the series wants the *oldest* first and wants both
+ * sides interleaved, because it is drawing a line rather than showing a latest
+ * state. Squeezing it into the filter would mean an `order` parameter, and an
+ * order parameter is how a bounded read quietly becomes a scan with a `LIMIT`.
+ */
+export interface DriftRunReader {
+  listByExperiment(experimentId: string, limit?: number): Promise<HarvestRunRecord[]>
+}
+
+/** The bound on a series read: two identities across `EXPERIMENT_RUN_LIMIT / 2` days. */
+export const EXPERIMENT_RUN_LIMIT = 64
+
 /** The bound applied when a caller asks for none, and the ceiling on what it may ask for. */
 export const RUN_LIST_LIMIT = 50
 
-export interface HarvestRunStore {
+export interface HarvestRunStore extends DriftRunReader {
   start(run: HarvestRunStart): Promise<void>
   /** Terminal transition. Sets `endedAt`, `outcome` and the count in one write. */
   finish(id: string, outcome: HarvestOutcome, itemCount: number, endedAt: Date): Promise<void>
@@ -96,6 +128,23 @@ export interface RawItemStore {
    * that is allowed to take a second, not to a handler with a 10 ms budget.
    */
   listByRun(harvestRunId: string, limit?: number): Promise<RawItemRow[]>
+
+  /**
+   * The compared identifiers for several runs at once, and nothing else in the row.
+   *
+   * A second read method, rather than calling `listByRun` in a loop, because the
+   * two reads want different things. The split screen shows items, so it pays for
+   * their text. A seven-day plot shows one number per day and never renders an
+   * item at all — and a run of `pantip.topic` items is tens of kilobytes each, so
+   * fourteen `listByRun` calls would pull megabytes across Hyperdrive to compute
+   * a number that only needs the URLs.
+   *
+   * Keyed by run id, values in rank order, `k` per run. A run with no items is
+   * absent from the map rather than present and empty: `overlapAt` is given the
+   * empty list either way, and a map that invents keys for runs it did not find
+   * would hide a missing run behind a zero.
+   */
+  rankedUrls(harvestRunIds: readonly string[], k: number): Promise<Map<string, string[]>>
 }
 
 /** The bound applied when a caller asks for none, and the ceiling on what it may ask for. */
@@ -113,4 +162,52 @@ export const ITEM_LIST_LIMIT = 100
 export const boundedLimit = (limit: number | undefined, max: number): number => {
   if (limit === undefined || !Number.isFinite(limit)) return max
   return Math.max(1, Math.min(Math.floor(limit), max))
+}
+
+/**
+ * The experiment row as a store hands it back (plan P1.8, `DriftExperiment`).
+ *
+ * A plan, not a log: it says what was designed, and the harvest runs carrying its
+ * id say what happened. Nothing here counts days completed, because a progress
+ * column is stale the first moment the thing that would update it does not run —
+ * and under ADR-0014 a schedule that does not run is the ordinary case.
+ */
+export interface DriftExperimentRecord {
+  id: string
+  domainId: string
+  ownerId: string | null
+  sourceId: SourceId
+  query: string
+  personaAId: string
+  personaBId: string
+  days: number
+  k: number
+  intervalMinutes: number
+  startedAt: Date
+  state: DriftState
+}
+
+export interface DriftExperimentFilter {
+  state?: DriftState
+  ownerId?: string
+  limit?: number
+}
+
+export const EXPERIMENT_LIST_LIMIT = 50
+
+export interface DriftExperimentStore {
+  insert(row: DriftExperimentRecord): Promise<void>
+  byId(id: string): Promise<DriftExperimentRecord | null>
+  /** Newest first, bounded, like every other list in this file. */
+  list(filter?: DriftExperimentFilter): Promise<DriftExperimentRecord[]>
+  /**
+   * The brake, and the only mutation this store has.
+   *
+   * An experiment's remaining days are already rows in the queue when it is
+   * created, so there is nothing to cancel by not-scheduling: stopping has to be
+   * something the handler reads before it opens a browser. That is why this is a
+   * state transition rather than a delete — a deleted plan would leave fourteen
+   * queued jobs pointing at nothing and spending anyway.
+   */
+  setState(id: string, state: DriftState): Promise<void>
 }

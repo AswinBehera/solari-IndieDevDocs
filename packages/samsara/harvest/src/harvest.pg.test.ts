@@ -5,7 +5,11 @@ import { sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { PostgresHarvestRunStore, PostgresRawItemStore } from "./postgres.js"
+import {
+  PostgresDriftExperimentStore,
+  PostgresHarvestRunStore,
+  PostgresRawItemStore,
+} from "./postgres.js"
 import type { RawItemRow } from "./store.js"
 
 /**
@@ -61,13 +65,14 @@ describe.runIf(hasDb)("harvest, against Postgres", () => {
   const d = () => db as NonNullable<typeof db>
   const runs = () => new PostgresHarvestRunStore(d())
   const items = () => new PostgresRawItemStore(d())
+  const experiments = () => new PostgresDriftExperimentStore(d())
 
   let personaId: string
   let sessionId: string
 
   beforeEach(async () => {
     await d().execute(
-      sql`truncate table raw_items, harvest_runs, sessions, personas restart identity cascade`,
+      sql`truncate table raw_items, harvest_runs, drift_experiments, sessions, personas restart identity cascade`,
     )
     personaId = randomUUID()
     await d().insert(personas).values({
@@ -95,6 +100,7 @@ describe.runIf(hasDb)("harvest, against Postgres", () => {
       query: "xin chào thế giới",
       sessionId,
       startedAt: capturedAt,
+      experiment: null,
     })
     return id
   }
@@ -240,6 +246,7 @@ describe.runIf(hasDb)("harvest, against Postgres", () => {
       query: "xin chào thế giới",
       sessionId,
       startedAt: new Date("2026-09-11T10:00:00.000Z"),
+      experiment: null,
     })
     const newer = await startRun()
     const [first] = await runs().list({ personaId, limit: 1 })
@@ -264,5 +271,152 @@ describe.runIf(hasDb)("harvest, against Postgres", () => {
     expect(await runs().list({ personaId })).toHaveLength(2)
     expect(await runs().list({ sourceId: "other.source" })).toHaveLength(0)
     expect(await runs().list()).toHaveLength(2)
+  })
+
+  // -------------------------------------------------------------------------
+  // The drift experiment (P1.8). What needs real SQL here is the pair of CHECK
+  // constraints: one says an experiment cannot compare an identity with itself,
+  // the other says a run's `(experiment_id, experiment_day)` is set together or
+  // not at all. Both are rules a Map cannot hold, and both exist because the
+  // alternative is a row that produces a plausible-looking plot of nothing.
+
+  /**
+   * The constraint a statement actually tripped over.
+   *
+   * Drizzle wraps the driver error, so the name lives on `cause` and a plain
+   * `rejects.toThrow()` would pass for any failure at all — including a typo in
+   * the SQL. These tests exist to prove one specific constraint fires, so they
+   * have to name it.
+   */
+  const violated = async (work: Promise<unknown>): Promise<string | undefined> => {
+    try {
+      await work
+      return undefined
+    } catch (error) {
+      const cause = (error as { cause?: { constraint_name?: string } }).cause
+      return cause?.constraint_name
+    }
+  }
+
+  const secondPersona = async () => {
+    const id = randomUUID()
+    await d().insert(personas).values({
+      id,
+      name: "the other one",
+      // A second identity, and deliberately an unremarkable one: the engine does
+      // not know what these two places are, only that they are different. The
+      // seam check caught the first draft of this, which named a city the
+      // lexicon forbids here (ADR-0009) for exactly that reason.
+      locality: "Mapo",
+      country: "kr",
+      locale: "ko-KR",
+      timezoneId: "Asia/Seoul",
+      tier: "anon",
+    })
+    return id
+  }
+
+  const experiment = async (over: Record<string, unknown> = {}) => {
+    const id = randomUUID()
+    await experiments().insert({
+      id,
+      domainId: "atlas",
+      ownerId: "owner-1",
+      sourceId: "fake.search",
+      query: "xin chào thế giới",
+      personaAId: personaId,
+      personaBId: await secondPersona(),
+      days: 7,
+      k: 20,
+      intervalMinutes: 1440,
+      startedAt: capturedAt,
+      state: "running",
+      ...over,
+    })
+    return id
+  }
+
+  it("refuses an experiment that compares one identity with itself", async () => {
+    // `overlapAt(x, x, k)` is a perfectly good 1.0, which is the problem: a week
+    // of them is a flat line at the top of the chart that looks like a finding.
+    expect(await violated(experiment({ personaBId: personaId }))).toBe(
+      "drift_experiments_two_personas",
+    )
+  })
+
+  it("holds the persona a week of evidence belongs to", async () => {
+    const id = await experiment()
+    const row = await experiments().byId(id)
+    // `ON DELETE restrict`, like `harvest_runs.persona_id`: an identity that is
+    // half of a running comparison cannot be deleted out from under it.
+    expect(
+      await violated(d().execute(sql`delete from personas where id = ${row?.personaAId ?? ""}`)),
+    ).toBe("drift_experiments_persona_a_id_personas_id_fk")
+  })
+
+  it("will not let a run carry half a pairing key", async () => {
+    const id = await experiment()
+    await startRun()
+    expect(
+      await violated(
+        d().execute(
+          sql`update harvest_runs set experiment_id = ${id} where persona_id = ${personaId}`,
+        ),
+      ),
+    ).toBe("harvest_runs_experiment_pair")
+  })
+
+  it("lists an experiment's runs in day order, oldest first", async () => {
+    const id = await experiment()
+    const mk = async (day: number, at: Date) => {
+      const runId = randomUUID()
+      await runs().start({
+        id: runId,
+        domainId: "atlas",
+        personaId,
+        sourceId: "fake.search",
+        query: "xin chào thế giới",
+        sessionId,
+        startedAt: at,
+        experiment: { id, day },
+      })
+      return runId
+    }
+    const day1 = await mk(1, new Date("2026-09-13T10:00:00.000Z"))
+    const day0 = await mk(0, new Date("2026-09-12T10:00:00.000Z"))
+    await startRun()
+
+    const series = await runs().listByExperiment(id)
+    // Oldest first and only this experiment's: the ad-hoc run above shares the
+    // persona, the source and the question, and belongs to no measurement.
+    expect(series.map((r) => r.id)).toEqual([day0, day1])
+    expect(series[0]?.experiment).toEqual({ id, day: 0 })
+  })
+
+  it("reads only the urls a plot needs, k per run", async () => {
+    const a = await startRun()
+    const b = await startRun()
+    await items().insertMany([
+      ...Array.from({ length: 5 }, (_, rank) => item(a, { rank, url: `https://a.test/${rank}` })),
+      ...Array.from({ length: 5 }, (_, rank) => item(b, { rank, url: `https://b.test/${rank}` })),
+    ])
+
+    const urls = await items().rankedUrls([a, b], 3)
+    expect(urls.get(a)).toEqual(["https://a.test/0", "https://a.test/1", "https://a.test/2"])
+    expect(urls.get(b)).toHaveLength(3)
+    // A run with no items is absent rather than empty — that is what lets the
+    // series say "this day returned nothing" instead of "these two agreed on
+    // nothing", which are different findings that both plot as zero.
+    expect(await items().rankedUrls([randomUUID()], 3)).toEqual(new Map())
+  })
+
+  it("stops an experiment without touching what it already measured", async () => {
+    const id = await experiment()
+    await experiments().setState(id, "stopped")
+    expect((await experiments().byId(id))?.state).toBe("stopped")
+    // Stopped, not deleted. A deleted plan would leave its remaining queued jobs
+    // pointing at nothing and spending anyway, and would take the evidence with
+    // it — the days already run are the reason the experiment existed.
+    expect((await experiments().list({ state: "running" })).map((e) => e.id)).not.toContain(id)
   })
 })
