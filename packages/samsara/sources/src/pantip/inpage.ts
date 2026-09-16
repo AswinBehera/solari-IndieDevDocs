@@ -361,6 +361,29 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
         if (already.contains(node) || node.contains(already)) nested = true
       }
       if (nested) continue
+      /**
+       * A comment is numbered. Page furniture is not.
+       *
+       * `[id^="comment-"]` also finds `comment-counter`, the "46 ความคิดเห็น"
+       * heading above the thread, and `comment-count-tmpl`, a jsrender template
+       * whose text is a literal `{{if count}}`; `[class*="display-post-wrapper"]`
+       * also finds three boxes carrying no id at all — the deleted-comment tally,
+       * the "leave a comment" heading, and the prompt to log in. The first capture
+       * of this surface stored all five as posts, which is a fixture certifying
+       * that a template is something a person wrote.
+       *
+       * Pantip numbers the real ones `comment-120277350` and `reply-40463805`, so
+       * requiring digits after the dash keeps all 91 and drops all 5. `data-cid`
+       * is exempt from the shape because it is an attribute Pantip puts on nothing
+       * but a comment. Counted rather than silently dropped: an exclusion that
+       * cannot report its own count is a comment, not a control, and if Pantip
+       * renumbers its comments this line is where the posts went.
+       */
+      if (!/^(?:comment|reply)-\d+$/.test(key) && !node.hasAttribute("data-cid")) {
+        nodeCounts["reply with no comment number"] =
+          (nodeCounts["reply with no comment number"] ?? 0) + 1
+        continue
+      }
       postNodes.push([node, "reply"])
     }
   }
@@ -381,7 +404,21 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
       "stamp",
     ],
     ["voteLabel", ['[class*="vote"]', '[class*="like"]', '[class*="point"]'], "count"],
-    ["text", ['[class*="story"]', '[class*="message"]', '[class*="detail"]'], "text"],
+    /**
+     * `prose`, and `story` is narrowed by what it must not be.
+     *
+     * `[class*="story"]` matches `display-post-story-footer` too — the bar holding
+     * the reply button and the vote count, a *sibling* of the story rather than a
+     * child of it. A comment that is only an emoticon has an empty story box, the
+     * loop walked on, and the footer answered: 50 of the 96 posts in the first
+     * capture of this surface came back reading "ตอบกลับ … 0", which is the page's
+     * word for "reply", stored as though somebody had typed it.
+     */
+    [
+      "text",
+      ['[class*="story"]:not([class*="footer"])', '[class*="message"]', '[class*="detail"]'],
+      "prose",
+    ],
   ]
 
   for (const [node, role] of postNodes) {
@@ -404,6 +441,8 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
     }
 
     const fields: Record<string, string> = {}
+    /** Whether a box that holds the body exists, separately from whether it has one. */
+    let bodyBox = false
     for (const [field, selectors, how] of postPlan) {
       let found = false
       for (const selector of selectors) {
@@ -420,9 +459,23 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
             const copy = inner.cloneNode(true) as Element
             for (const icon of Array.from(copy.querySelectorAll("i, svg"))) icon.remove()
             value = copy.textContent ?? ""
+          } else if (how === "prose") {
+            // The same removal the fragment does below, for the same reason and with
+            // the same list. Pantip closes the opening post's review block with an
+            // inline `$(document).ready(…)` that turns the star widget read-only, and
+            // `textContent` returns it: the first capture of this surface stored a
+            // jQuery call as the first thing the author of the topic said.
+            const copy = inner.cloneNode(true) as Element
+            for (const noisy of Array.from(copy.querySelectorAll("script, style, noscript"))) {
+              noisy.remove()
+            }
+            value = copy.textContent ?? ""
           } else value = inner.textContent ?? ""
           value = value.trim()
-          if (value.length === 0) continue
+          if (value.length === 0) {
+            if (how === "prose") bodyBox = true
+            continue
+          }
           // The same guard as the listing loop above; see the comment there.
           if (how === "count" && !/^\d[\d,.]*(?:\s?[A-Za-z\u0E00-\u0E7F]{1,12})?$/.test(value)) {
             continue
@@ -434,9 +487,17 @@ export function readPantipPage(limits: PantipReadLimits): PantipPageRead {
         }
       }
     }
-    // The node's own text when no inner selector claimed it. A post whose body we
-    // could not locate precisely is still worth more than a null.
-    if (fields.text === undefined) {
+    /**
+     * The node's own text when no inner selector claimed it. A post whose body we
+     * could not locate precisely is still worth more than a null.
+     *
+     * Not when the box was found and was empty, though. A comment that is only an
+     * emoticon has a real, empty story box and `mediaRefs` holding the emoticon;
+     * `scope.textContent` would answer with the byline, the reply button and the
+     * vote count instead, which is not a body we failed to locate but a body that
+     * is not there. Null says that and a fallback cannot.
+     */
+    if (fields.text === undefined && !bodyBox) {
       const own = (scope.textContent ?? "").trim()
       if (own.length > 0) fields.text = own
     }

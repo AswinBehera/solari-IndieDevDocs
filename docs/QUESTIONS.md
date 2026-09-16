@@ -124,3 +124,32 @@ for.
 
 Nothing is leaking through the gap today; this is about the next capture, not the
 recorded ones.
+
+## Q11 — which fields count as something somebody wrote
+
+Raised 2026-09-16 (Claude Code), out of the first `pantip.topic` capture.
+
+The contact rules run on the fields listed as prose. On Pantip that was `excerpt` and
+`text`, and the first topic capture showed the list was short by one: a sidebar topic
+titled "มีเบอร์ 027009089 โทรเข้ามาค่ะ" — *a number 027009089 called me* — kept the
+number in `title` and lost it in `excerpt`, which is the same sentence twice with two
+different answers. `title` and `pageTitle` are now prose; that part is settled and
+committed.
+
+**`authorName` is not, and is deliberately left out.** A display name is written by a
+person and spam accounts do put numbers in them. But it is also where Pantip writes
+`สมาชิกหมายเลข 4268252`, the name it gives a member who has none, and where this
+capture found `13800 ล้านปี` — *13.8 billion years*. Today's rule does not match
+either (seven digits, no separator; a space before a four-digit run is not how a
+person writes a phone number), so the question is not whether it would fire now but
+whether a name field should be under a rule at all, given that the cost of a wrong
+redaction there is the identity of the row rather than a word in the middle of one.
+Unmeasured: no capture so far contains a display name with a contact detail in it.
+
+**The related false positive, recorded rather than fixed.** The opening post's star
+widget renders `<a title="0.5">0.5</a>` ten times, and `textContent` concatenates
+them into `0.51.1.52.2.5…`, which rule 2 reads as two IPv4 addresses. Nothing legible
+is lost — the run was already a widget flattened into one string — and
+`fixture.test.ts` pins it with that reasoning, so the day the rating is worth parsing
+the parser is told where it went. Same family as Q10: a dotted number means a version
+on TikTok, a rating here, and an address only in a field that could hold one.

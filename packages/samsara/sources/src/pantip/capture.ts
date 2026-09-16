@@ -195,6 +195,12 @@ export async function capturePantip(
     surface,
     topics: read.topics.map((topic) => ({
       ...topic,
+      // A title is prose. The sidebar of this board's first topic capture carried
+      // "มีเบอร์ 027009089 โทรเข้ามาค่ะ" — *a number 027009089 called me* — and the
+      // excerpt below it, which is the same sentence, came back redacted while the
+      // title did not. Somebody's number, published by somebody else, kept because
+      // of which field it landed in.
+      title: scrubProse(topic.title),
       excerpt: scrubProse(topic.excerpt),
       fragment: scrub(topic.fragment),
     })),
@@ -203,7 +209,12 @@ export async function capturePantip(
       text: scrubProse(post.text),
       fragment: scrub(post.fragment),
     })),
-    pageTitle: read.title,
+    // The topic's own title, by the same argument, and on a topic surface it is the
+    // one field guaranteed to be somebody's sentence.
+    // `scrubProse` returns null only for a null and a read always has a title, so the
+    // fallback is unreachable; it is `""` rather than `read.title` so that the
+    // unreachable branch drops the value instead of restoring the raw one.
+    pageTitle: scrubProse(read.title) ?? "",
     state: scrub(read.state),
     stateLength: read.stateLength,
     stateKeys: read.stateKeys,

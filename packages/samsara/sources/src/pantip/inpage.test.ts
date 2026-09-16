@@ -233,6 +233,102 @@ describe("reading a topic", () => {
 })
 
 /**
+ * Written from the first capture of a real topic rather than from a guess: every
+ * box below was stored as a post by that capture, and the emoticon comment's body
+ * came back reading "ตอบกลับ 0". The markup is trimmed to the parts that decide it,
+ * and the class names are Pantip's own.
+ */
+const FURNITURE = `
+  <div class="display-post-wrapper pageno-title-counter" id="comment-counter">
+    <span class="title">46 ความคิดเห็น</span>
+  </div>
+  <div id="comment-120277350" class="display-post-wrapper section-comment">
+    <a class="display-post-name" href="/profile/7654321">คุณกาแฟดำ</a>
+    <div class="display-post-story-wrapper comment-wrapper">
+      <div class="display-post-story">น่าทาน น่าตามรอย</div>
+    </div>
+    <div class="display-post-story-footer">
+      <a class="comment-reply" href="javascript:void(0);">ตอบกลับ</a>
+      <span class="like-vote">2</span>
+    </div>
+  </div>
+  <div id="comment-120278009" class="display-post-wrapper section-comment">
+    <a class="display-post-name" href="/profile/6027005">สมาชิกหมายเลข 6027005</a>
+    <div class="display-post-story-wrapper comment-wrapper">
+      <div class="display-post-story">
+        <img class="img-in-emotion" src="https://ptcdn.info/emoticons/smiley05.png">
+      </div>
+    </div>
+    <div class="display-post-story-footer">
+      <a class="comment-reply" href="javascript:void(0);">ตอบกลับ</a>
+      <span class="like-vote">0</span>
+    </div>
+  </div>
+  <div class="display-post-wrapper" id="comment-count-tmpl">
+    {{if count}}<h3>{{:count}} ความคิดเห็น</h3>{{/if}}
+  </div>
+  <div class="display-post-wrapper"><span>1 คห. ถูกลบ</span></div>
+  <div class="display-post-wrapper"><span>แสดงความคิดเห็น</span></div>
+`
+
+describe("what a topic page holds that nobody wrote", () => {
+  it("stores the two numbered comments and none of the four boxes around them", () => {
+    render(FURNITURE)
+    const posts = readPantipPage(LIMITS).posts
+    expect(posts.map((post) => post.postId)).toEqual(["comment-120277350", "comment-120278009"])
+  })
+
+  it("says how many it dropped, because a silent exclusion is a comment", () => {
+    render(FURNITURE)
+    expect(readPantipPage(LIMITS).nodeCounts["reply with no comment number"]).toBe(4)
+  })
+
+  it("does not store a template as something a person said", () => {
+    // `comment-count-tmpl` holds jsrender source. The first capture kept it, which
+    // is a fixture certifying that `{{if count}}` is a post.
+    render(FURNITURE)
+    const json = JSON.stringify(readPantipPage(LIMITS).posts)
+    expect(json).not.toContain("{{if count}}")
+  })
+
+  it("leaves a comment that is only an emoticon with no text rather than the reply button", () => {
+    // `[class*="story"]` matches `display-post-story-footer`, a sibling of the
+    // story holding the reply link and the vote. When the story is empty the loop
+    // used to walk on and the footer answered.
+    render(FURNITURE)
+    const [, emoticon] = readPantipPage(LIMITS).posts
+    expect(emoticon?.text).toBeNull()
+    expect(emoticon?.mediaRefs).toEqual(["https://ptcdn.info/emoticons/smiley05.png"])
+    // The vote still comes from the footer, which is where Pantip prints it.
+    expect(emoticon?.voteLabel).toBe("0")
+  })
+
+  it("still reads a comment that has a body, and stops at the body", () => {
+    render(FURNITURE)
+    const [first] = readPantipPage(LIMITS).posts
+    expect(first?.text).toBe("น่าทาน น่าตามรอย")
+  })
+
+  it("keeps the opening post's writing and not the script under it", () => {
+    // Pantip closes a CR review with an inline `$(document).ready(…)` that turns
+    // the star widget read-only. `textContent` returns it, and the first capture of
+    // this surface opened with a jQuery call.
+    render(`
+      <div class="display-post-wrapper-inner">
+        <a class="display-post-name owner" href="/profile/1234567">คุณนักชิม</a>
+        <div class="display-post-story">
+          อาหารทะเล ปรุงสดๆ ใหม่ๆ
+          <script>$('.sel').rating('readOnly', true);</script>
+        </div>
+      </div>
+    `)
+    const [opening] = readPantipPage(LIMITS).posts
+    expect(opening?.text).toContain("อาหารทะเล")
+    expect(opening?.text).not.toContain("readOnly")
+  })
+})
+
+/**
  * The markup `pantip.forum food` actually returned, reduced to two rows.
  *
  * Copied from the stored fragments of the first real listing capture, and the shape

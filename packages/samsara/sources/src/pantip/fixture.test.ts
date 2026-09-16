@@ -290,3 +290,147 @@ describe("the committed forum file", () => {
     expect(JSON.stringify(forum).length).toBeLessThan(400_000)
   })
 })
+
+/**
+ * The third capture, and the first post on this source anybody has read: the topic
+ * `44223610` — `[CR] ร้านลุงไสว`, a long consumer review with photographs, a star
+ * widget and 46 comments — from the same Singapore egress with a `th-TH` persona, on
+ * 2026-09-16.
+ *
+ * It was recorded twice. The first session cost 0.52 minutes and produced a payload
+ * that no test in this suite could have called wrong, and that a person reading it
+ * could not miss:
+ *
+ * 1. **The opening post began with a jQuery call.** Pantip closes a CR review with an
+ *    inline `$(document).ready(…)` that turns the star widget read-only, and
+ *    `textContent` returns the source of a script as though the author had typed it.
+ * 2. **Fifty of the ninety-six posts said "ตอบกลับ … 0"** — the page's word for
+ *    *reply*, and the vote count beside it. `[class*="story"]` also matches
+ *    `display-post-story-footer`, the action bar, which is a *sibling* of the story
+ *    rather than a child; when a comment is only an emoticon its story box is empty,
+ *    the loop walked on, and the footer answered. Half the thread was a record of a
+ *    button.
+ * 3. **Five posts were furniture**: the "46 ความคิดเห็น" heading, a jsrender template
+ *    whose body is a literal `{{if count}}`, the deleted-comment tally, the
+ *    "leave a comment" heading and the prompt to log in. A template is not something
+ *    a person wrote.
+ * 4. **A count was redacted as a phone number.** `123456789 คห. ถูกลบ` is *123456789
+ *    comments deleted*, and the contact rule added hours earlier ate it. The rule now
+ *    also requires the run to be written the way a person writes a number.
+ * 5. **A title was not redacted at all.** The sidebar carried a real topic —
+ *    "มีเบอร์ 027009089 โทรเข้ามาค่ะ", *a number 027009089 called me* — whose excerpt
+ *    came back redacted and whose title did not, because `title` was not in the list
+ *    of fields somebody wrote. A guard covers a representation, not a subject: the
+ *    same sentence, in two fields, got two answers.
+ *
+ * The second session cost 0.5 minutes and is the file below. Findings 1 to 3 are
+ * `inpage.ts` and had to be re-recorded; 4 and 5 are redaction and were re-run over
+ * bytes already on disk. The 0.52 minutes bought all five, which is the whole
+ * argument for recording a surface before trusting a selector written blind.
+ */
+const topic = readFixture<PantipPayload>(DIR, "pantip-topic-th-TH-2026-09-16")
+const topicItems = createPantipAdapter("topic").parse(topic)
+
+describe("the recorded topic capture", () => {
+  it("is the session it says it is", () => {
+    expect(topic.sourceId).toBe("pantip.topic")
+    expect(topic.query).toBe("44223610")
+    expect(topic.url).toBe("https://pantip.com/topic/44223610")
+    expect(topic.payload.surface).toBe("topic")
+  })
+
+  it("reads the opening post and every numbered comment under it", () => {
+    // 1 opening + 90 comments. The page says 46, and Pantip renders a nested reply
+    // *outside* the comment it answers, so `reply-40463805` is a post of its own.
+    expect(topic.payload.posts).toHaveLength(91)
+    expect(topic.payload.posts.filter((post) => post.role === "opening")).toHaveLength(1)
+    expect(topic.payload.posts[0]?.authorName).toBe("deauny")
+  })
+
+  it("stored none of the five boxes that are not posts, and says how many it dropped", () => {
+    const json = JSON.stringify(topic.payload.posts)
+    expect(json).not.toContain("{{if count}}")
+    expect(json).not.toContain("46 ความคิดเห็น")
+    expect(topic.payload.posts.map((post) => post.postId)).not.toContain("comment-counter")
+    expect(topic.payload.nodeCounts["reply with no comment number"]).toBeGreaterThan(0)
+  })
+
+  it("does not record a button as a comment", () => {
+    for (const post of topic.payload.posts) expect(post.text ?? "").not.toContain("ตอบกลับ")
+  })
+
+  it("leaves 45 comments with no text at all, and every one of them is a picture", () => {
+    // The half of the thread that used to read "ตอบกลับ … 0". These are replies made
+    // of Pantip's emoticons — the author of the topic thanking each commenter — so
+    // the honest value is null with the emoticon in `mediaRefs` beside it. A post
+    // with neither would be a selector that missed, and there are none.
+    const wordless = topic.payload.posts.filter((post) => post.text === null)
+    expect(wordless).toHaveLength(45)
+    for (const post of wordless) expect(post.mediaRefs.length).toBeGreaterThan(0)
+  })
+
+  it("keeps the writing and not the script that follows it", () => {
+    const opening = topic.payload.posts[0]?.text ?? ""
+    expect(opening).toContain("อาหารทะเล ปรุงสดๆ")
+    expect(opening).not.toContain("$(document)")
+    expect(opening).not.toContain("readOnly")
+  })
+
+  it("reads a star rating as two IP addresses, which is a defect and is pinned here", () => {
+    // `<a title="0.5">0.5</a>` per half-star, ten of them, concatenated by
+    // `textContent` into `0.51.1.52.2.5…` — which is four dotted numbers, which is
+    // what an IPv4 address looks like. Nothing is lost that was readable: the run was
+    // already a rating widget flattened into one string. It is here so that the day
+    // the score becomes worth parsing, the parser is told where it went.
+    expect(topic.payload.posts[0]?.text).toContain("[redacted-ip]")
+  })
+
+  it("yields the thread and the sidebar as items a caller can tell apart", () => {
+    expect(topicItems).toHaveLength(101)
+    expect(topicItems[0]?.url).toBe("https://pantip.com/topic/44223610")
+    expect(topicItems[0]?.title).toBe("ร้านลุงไสว")
+    expect(topicItems.filter((item) => item.url.includes("#comment-"))).not.toHaveLength(0)
+  })
+
+  it("guesses a language for everything with words in it and for nothing else", () => {
+    // 46 nulls: the 45 emoticon replies, and one comment whose entire body is 🤤.
+    // A guess made from no characters would be a guess about the thread rather than
+    // about the post, which is what this null is refusing to be.
+    const guessed = topicItems.filter((item) => item.languageGuess !== null)
+    expect(guessed).not.toHaveLength(0)
+    for (const item of guessed) expect(item.languageGuess).toBe("th")
+    expect(topicItems.filter((item) => item.languageGuess === null)).toHaveLength(46)
+  })
+})
+
+describe("the committed topic file", () => {
+  it("carries nobody's phone number, in a title as well as in an excerpt", () => {
+    // The sidebar topic that made the case: the same sentence in two fields, and
+    // before this the two fields disagreed.
+    const json = JSON.stringify(topic)
+    expect(json).toContain("[redacted-phone]")
+    expect(json).not.toContain("027009089")
+  })
+
+  it("keeps a resource id that only looks like a number somebody could dial", () => {
+    // `/doodle/2026/6aaa13d8caac0ad019678446_9mdhx92i2q.png`. Markup and paths run the
+    // shape rules and not the contact rules, which is the whole reason the two lists
+    // are separate: a rule that redacted this would redact the evidence.
+    expect(JSON.stringify(topic)).toContain("019678446")
+  })
+
+  it("carries no credential shape, re-checked against the current patterns", () => {
+    const json = JSON.stringify(topic)
+    for (const [pattern] of SHAPE_REDACTIONS) {
+      expect(json).not.toMatch(new RegExp(pattern.source, pattern.flags.replace("g", "")))
+    }
+  })
+
+  it("holds paths and never query strings", () => {
+    for (const path of topic.payload.observedPaths) expect(path).not.toContain("?")
+  })
+
+  it("is small enough that a person will actually read it before committing it", () => {
+    expect(JSON.stringify(topic).length).toBeLessThan(400_000)
+  })
+})

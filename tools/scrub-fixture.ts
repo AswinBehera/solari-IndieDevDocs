@@ -75,7 +75,7 @@ const SHAPE_FIELDS: Record<string, ReadonlySet<string>> = {
  * catches one is only safe where the other cannot appear. See `CONTACT_SHAPES`.
  */
 const PROSE_FIELDS: Record<string, ReadonlySet<string>> = {
-  pantip: new Set(["excerpt", "text"]),
+  pantip: new Set(["excerpt", "text", "title", "pageTitle"]),
   maps: new Set(["text", "ownerReply"]),
   tiktok: new Set(),
   youtube: new Set(),

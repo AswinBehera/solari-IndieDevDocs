@@ -2,16 +2,65 @@
 
 Phase: 1 — in progress. Phase 0 is **complete, pending the gate** (below; the gate is a human
 review and does not block buildable work).
-Last completed: **P1.6.1 — live captures against Pantip and Maps**, the first time `pantip.forum`,
-`maps.search` on a real category query, or `maps.reviews` had been measured against real markup.
-345 tests in `@samsara/sources`, seam allowances **0 of 5** across 142 files.
+Last completed: **P1.6.2 — the first `pantip.topic` capture, and the redaction rules it broke**.
+Every surface this project has an adapter for has now been run against the real page. 363 tests in
+`@samsara/sources`, seam allowances **0 of 5** across 143 files.
 
-**Seven billed sessions, 2.987 minutes of 4,000.** Five `pantip.forum` (0.4584, 0.4584, 0.4587,
+**Ten billed sessions, 4.074 minutes of 4,000** — seven for P1.6.1 below, three for P1.6.2, and two
+of the ten produced nothing. P1.6.1's seven: five `pantip.forum` (0.4584, 0.4584, 0.4587,
 0.44775, 0.5466), one `maps.search` (0.21265), one `maps.reviews` (0.40665). **One of the five
 Pantip sessions was waste and is counted as such**: the first run was piped to `tail`, which does
 not stop the capture — it had already opened the browser and billed — and it was then re-run to see
 the head of the output. The pipe cost 0.4584 minutes and produced nothing. Reading a recorder's
 output through `tail` is not free, because the spend happens before the bytes reach the pipe.
+
+## P1.6.2 — `pantip.topic`, and five defects in one page
+
+**Three sessions on 2026-09-16; the day's meter reads 1.087 minutes.** One of them is a
+`page.goto` timeout that produced nothing and billed 0.521 — the navigation failed, the browser had
+already opened, and a failed capture is a capture that was paid for. The re-record cost 0.5.
+
+`pantip.topic` shares a parser with two boards that had been measured, and shared nothing else: the
+posts path had never seen a post. The first capture came back with 96 of them and five separate
+defects, none of which any test in the suite could have found, and all five visible to a person
+reading the file.
+
+1. **The opening post began with a jQuery call.** Pantip closes a consumer review with an inline
+   `$(document).ready(…)` that turns the star widget read-only, and `textContent` returns the source
+   of a script as though the author had typed it. Prose fields now strip `script, style, noscript`
+   before reading — the same removal, with the same list, that stored fragments already did.
+2. **Fifty of the ninety-six posts said "ตอบกลับ … 0"** — the page's word for *reply*, and the vote
+   count beside it. `[class*="story"]` also matches `display-post-story-footer`, the action bar,
+   which is a **sibling** of the story rather than a child of it; when a comment is only an emoticon
+   its story box is empty, the loop walked on, and the footer answered. Half a thread recorded as a
+   button. The selector now says what it must not be, and an empty body box is treated as an answer
+   rather than a miss: 45 comments come back with `text: null` and the emoticon in `mediaRefs`, and
+   a test asserts every one of the 45 has media, because a null with nothing beside it would be a
+   selector that missed.
+3. **Five posts were furniture**: the "46 ความคิดเห็น" heading, a jsrender template whose body is a
+   literal `{{if count}}`, the deleted-comment tally, the "leave a comment" heading and the prompt
+   to log in. A comment is numbered — `comment-120277350`, `reply-40463805` — and page furniture is
+   not, so a reply must now carry a number or a `data-cid`. Counted in `nodeCounts`, not silently
+   dropped.
+4. **A count was redacted as a phone number.** `123456789 คห. ถูกลบ` is *123456789 comments
+   deleted*, and the contact rule written hours earlier ate it. The rule now carries two conditions
+   rather than one: nine digits minimum, **and** the run has to be written the way a person writes a
+   number. Verified against 11 probe cases and all 111 prose strings in the corpus.
+5. **A title was not redacted at all.** The sidebar carried a real topic — "มีเบอร์ 027009089
+   โทรเข้ามาค่ะ", *a number 027009089 called me* — whose `excerpt` came back redacted and whose
+   `title` did not, because `title` was not on the list of fields somebody wrote. The same sentence,
+   in two fields, got two answers. **A guard covers a representation, not a subject** — the sixth
+   instance, and the first where the two representations were three lines apart in the same object.
+
+Defects 1 to 3 are `inpage.ts` and had to be re-recorded, which is what the second session bought.
+Defects 4 and 5 are redaction and were re-run over bytes already on disk by `tools/scrub-fixture.ts`
+at no cost. The fixture in the repository is the second capture: 189 KB, 91 posts, 11 sidebar rows,
+101 parsed items, `reply with no comment number: 6`.
+
+**What the shape rules still get wrong, recorded rather than fixed.** The star widget renders
+`<a title="0.5">0.5</a>` ten times and `textContent` concatenates them into `0.51.1.52.2.5…`, which
+rule 2 reads as two IPv4 addresses. Nothing legible is lost and a test pins it with the reasoning.
+Raised with the `authorName` question as Q11; same family as Q10.
 
 **Eleven defects, nine of which would have shipped silently**, and the eleventh was found by
 re-auditing the fix for the tenth. Five on Pantip (wrong row scope, 259
@@ -407,16 +456,14 @@ committed this session, having lived only in the working tree until now.
 NEXT: **P1.7 (Persona Lab UI)**. The captures that stood in front of it are done; both questions
 they were bought to answer came back, and the answers are above.
 
-Open, and an architect's call rather than a task: **`tiktok-search-vi-VN-2026-09-13.capture.json`
-holds two creators' contact email addresses and a phone number**, inside `signature` — the profile
-bio, which is content and which the P1.5 note explicitly warned against over-redacting, having
-already destroyed one author's bio that way. They are self-published business contact details on a
-public profile, and the repository is public. Three options, none obviously right: leave them,
-because the field is the item and a bio is what its author chose to publish; redact contact shapes
-in `signature` only, and accept a denylist on a field that *is* read; or stop storing `signature`
-at all. Nothing is blocked either way — this is the first instance of "our own rule about not
-over-redacting a read field" colliding with "somebody else's personal data in a public repo", and
-it wants a decision before there are ten fixtures rather than three.
+Closed since: **the two creators' contact details in `tiktok-search-vi-VN-2026-09-13.capture.json`
+are gone.** The question assumed the bio was a field we read and that shape redaction would catch a
+contact detail in it; both were false. `parse.ts` reads `uniqueId` and nothing else, and shape
+redaction caught two of the four details — it missed an address written in Mathematical Bold and a
+number written `0844.ll.OO.ll`. Half a browser minute buys the bio back if P1.8 turns out to want
+it; a stranger's address in a public git history cannot be taken back at any price. `signature` is
+on `REDACTED_KEYS`, the fixture is re-scrubbed, and the two tests that asserted the opposite are
+**inverted with the reasoning attached** rather than deleted. Written up as Q9.
 
 And **the Phase 0 gate** (see below), whose fourth question — P1.0 measured the signal stack and it
 does not match ADR-0015's ordering — is still open. Gate question 1 (`Viewpoint`'s shape) is now
@@ -427,9 +474,9 @@ truncate *each other* — a Postgres advisory lock in `@samsara/db/testing` seri
 processes. They still truncate the same database `pnpm dev` drains, which remains an architect's
 call: harmless while the dev data is disposable, and not the day it is not. The lock makes the
 suite correct; it does not make the choice of database correct.
-Resolved since: `@samsara/sources` now has six recorded fixtures across four sources.
-`pantip.topic` and `maps.search`-that-resolves remain unrecorded; `pantip.topic` is the one with
-real selector risk left, since it shares a parser with the two boards that have now been measured.
+Resolved since: `@samsara/sources` now has seven recorded fixtures across four sources, and
+`pantip.topic` — the one with real selector risk left — is one of them. `maps.search`-that-resolves
+remains unrecorded and is the last surface never measured.
 Still unresolved: the `CaptureArchive` decision (no Supabase credentials), with
 `FilesystemCaptureArchive` an explicit stand-in that does not survive an Actions runner.
 Branch: main

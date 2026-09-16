@@ -161,6 +161,24 @@ describe("the contact rules", () => {
     expect(redactContacts(prize, BASE_REDACTIONS)).toBe(prize)
   })
 
+  it("does not read a count as a phone number", () => {
+    // The false positive the first `pantip.topic` capture produced, and the reason
+    // the rule now asks how a run is written and not only how long it is. The text
+    // is Pantip's "N comments deleted" marker; the number is a count, it is page
+    // furniture, and the floor-only rule replaced it with `[redacted-phone]`.
+    const deleted = "123456789 คห. ถูกลบ"
+    expect(redactContacts(deleted, BASE_REDACTIONS)).toBe(deleted)
+  })
+
+  it("still sees a number a person wrote, in each of the ways they write one", () => {
+    // The other side of the clause above. Every one of these has a `+`, a trunk
+    // zero, or a separator inside the run, which is what "written for a human to
+    // dial" looks like and what a resource id does not have.
+    for (const written of ["0912 345 678", "+84 912 345 678", "090-123-4567", "0912345678"]) {
+      expect(redactContacts(`ติดต่อ ${written}`, BASE_REDACTIONS)).toBe("ติดต่อ [redacted-phone]")
+    }
+  })
+
   it("does not read a resource id as a phone number, which is why prose is named", () => {
     // Measured, not imagined: the one TikTok fixture holds 273 ten-digit ids. This is
     // what the field list is buying, and asserting it here means the cost of widening

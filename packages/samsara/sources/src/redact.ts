@@ -90,11 +90,31 @@ export const BASE_REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
  * which field is being scrubbed. That is knowledge an adapter has and this file does
  * not, so this list is exported rather than merged into `BASE_REDACTIONS`.
  *
- * Nine digits is the floor, and it was chosen by measurement rather than taste. The
- * false positive that decided it was `10.000.000` — a prize in dong, written with
- * stops, in a challenge description. Eight digits. A mobile number in any country
- * this project reads is nine or more, so the threshold separates them without
- * needing to know which locale it is looking at.
+ * Two conditions, both set by a false positive rather than by taste.
+ *
+ * **Nine digits is the floor.** The run that decided it was `10.000.000` — a prize
+ * in dong, written with stops, in a challenge description. Eight digits. A mobile
+ * number in any country this project reads is nine or more, so the threshold
+ * separates them without knowing which locale it is looking at.
+ *
+ * **And the run has to be written the way a person writes a number**, rather than
+ * the way a machine writes an id: a `+`, a leading trunk zero, or a group separator
+ * somewhere inside the run. That clause was added after the first `pantip.topic`
+ * capture, where the floor alone was not enough — the rule ate the count in
+ * `123456789 คห. ถูกลบ`, "N comments deleted", which is page furniture rather than
+ * anybody's phone number but was content as far as the redaction could tell. The
+ * lookahead is anchored to a digit (`\d{0,13}[\s.-]\d`) so that the space *after* a
+ * bare run does not satisfy it, which was the first attempt and silently did nothing.
+ *
+ * It also fixed two hits nobody had noticed: a bare ten-digit resource id and a Unix
+ * timestamp, both of which the floor-only rule would have redacted had either landed
+ * in a prose field. Measured after the change: zero hits across every prose string in
+ * the committed corpus.
+ *
+ * What it costs is a number written bare, without separators and not starting with
+ * zero. In the locales this project reads, a mobile number starts with a trunk zero
+ * or a country code, so the gap is narrow — but it is a gap, and it is the price of
+ * not eating counts.
  *
  * Both patterns replace the whole match and use no capture group, which is what lets
  * `redactContacts` apply them to a folded copy and splice the result back by offset.
@@ -112,7 +132,10 @@ export function redactShapes(
 
 export const CONTACT_SHAPES: ReadonlyArray<readonly [RegExp, string]> = [
   [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[redacted-email]"],
-  [/(?<!\d)(?:\+\d{1,3}[\s.-]?)?\d(?:[\s.-]?\d){8,13}(?!\d)/g, "[redacted-phone]"],
+  [
+    /(?<!\d)(?=\+|0|\d{0,13}[\s.-]\d)(?:\+\d{1,3}[\s.-]?)?\d(?:[\s.-]?\d){8,13}(?!\d)/g,
+    "[redacted-phone]",
+  ],
 ]
 
 /**
