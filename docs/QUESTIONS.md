@@ -235,3 +235,66 @@ after it comes due. That is survivable by construction: the chart's x-axis is th
 the run actually happened, not the time it was scheduled for, so a late day is drawn
 late rather than drawn wrong. It does mean the seven days will not be seven neat
 24-hour spacings, and the `meanRankShift` column is the place that would show it.
+
+## Q13 — a persona with no identity, and the number we are about to read off it  [OPEN]
+
+Raised 2026-09-17 (Claude Code), out of reading 54 upstream commits in
+`solari-sdk/solari-cookbook` against our own kernel.
+
+There are two ways to create a persona in this repo and they do not produce the same
+thing. `createPersona()` in `@samsara/personas` allocates a sticky proxy key and warms
+a profile. `POST /lab/personas` builds the row itself and writes `solariProfileId:
+null, proxySession: null`, never calling it. The Lab route is the one a human uses, so
+it is the one that made the two personas in the drift experiment now running.
+
+**What that means for the week in flight.** Experiment `f60fb262` compares two
+cookie-less, profile-less browsers on rotating residential IPs, differing in exactly
+three things: proxy country, locale and timezone. The country signal is real —
+`proxy: { country }` does pin egress to `sg` and `us`. But there is no accumulated
+identity on either side, and an anonymous browser is the case a ranked surface
+personalises *least*. Day 0's 60.0% is therefore the no-identity baseline, not a
+measurement of the persona system, and the 60% gate says "stop and redesign adapters"
+— which would be the wrong fix for a number produced this way. The week is worth
+finishing (about 1.5 minutes) precisely because a baseline is worth having; what it
+must not do is answer the gate on its own.
+
+**The question for the architect** is not whether to fix the two paths — one of them
+produces a half-persona and that is a defect either way — but whether Phase 1's
+acceptance number is allowed to come from viewpoint-only personas, or whether it has
+to come from a second week run with warmed profiles and sticky egress. They measure
+different claims. The first is "does a Singaporean Thai-locale browser see different
+results from a New York English-locale one". The second is "does this system's notion
+of an identity hold up over a week", which is the thing Phase 3 is built on.
+
+### Three SDK facts the cookbook established, and what we do with them
+
+1. **Sticky egress lapses on a clock, not on completion.** `proxy: { session,
+   sessionDuration }` takes 1 to 30 minutes, default 10. `create.ts` said the key
+   exists "so one identity keeps one egress address across sessions"; across sessions
+   a day apart that is false, and the docstring is now corrected. Nothing in the SDK
+   offers day-to-day IP stability. If a persona's continuity has to survive a week,
+   it survives in the *profile*, not the address — which makes the null
+   `solariProfileId` above the more serious half of this entry.
+
+2. **A self-built context does not inherit the pool's timezone pin.**
+   `browser.proxy?.timezoneId` carries the timezone the egress IP implies. We override
+   it with the persona's own timezone on purpose (ADR-0015: a viewpoint is declared,
+   not derived), so this is not a bug to fix — but we can now *read* both and notice
+   when they disagree. A persona whose `Intl` timezone contradicts its egress IP is a
+   self-inconsistent fingerprint, and right now nothing would tell us. Cheap: one
+   comparison at launch, logged once.
+
+3. **A profile only restores if its state reaches the context you build.**
+   `launch({ profileId })` delivers to `session.storageState` and stops; upstream shipped
+   three runs printing "visit #1" while saving v2, v3 and v4. `solari.ts` already does
+   this correctly — but only when a viewpoint is present, because the context is built
+   `vp ? … : undefined` and otherwise `newPage()` falls back to the anonymous pool
+   context. Every call site passes a viewpoint today, so it is unreachable; it is one
+   call site away from being a silent profile loss, and the failure mode is a session
+   that opens, loads and looks fine.
+
+Upstream is fetched as a read-only `upstream` remote and deliberately not merged: it is
+a cookbook of standalone examples, not a tree we share. The rest of what landed there
+(Ruby and Python quickstarts, EU consent evidence, a Playwright-suite runner, raw CDP on
+Workers, a security posture review) is not ours to use. `browser-login-handoff-ts`
+becomes relevant the day we build a logged-in persona tier.

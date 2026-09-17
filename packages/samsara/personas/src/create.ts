@@ -51,7 +51,18 @@ export interface CreatePersonaInput {
 }
 
 /**
- * A sticky proxy key, so one identity keeps one egress address across sessions.
+ * A sticky proxy key, so one identity keeps one egress address *within* a flow.
+ *
+ * **Not across days, and this comment used to claim otherwise.** The provider's
+ * `session` pin lapses on a clock: `sessionDuration` is 1 to 30 minutes, default 10,
+ * and reusing the key on a later run lands the same address only while the pin is
+ * still alive. A persona harvesting once a day gets a different residential IP every
+ * day no matter what this key says. What the key actually buys is that a multi-step
+ * flow does not change address halfway through, which is what gets challenged as a
+ * session hijack — real, and much smaller than "one identity, one address".
+ *
+ * The consequence is worth stating where somebody will read it: **a persona's
+ * continuity across a week lives in its profile, not its address.** See Q13.
  *
  * Random rather than derived from the persona id, for two reasons. It is handed to
  * a third party, and an id that round-trips through a vendor is an id that can be
