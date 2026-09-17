@@ -1,9 +1,14 @@
 # STATUS
 
-Phase: 1 — in progress. Phase 0 is **complete, pending the gate** (below; the gate is a human
-review and does not block buildable work).
-Last completed: **P1.8 — the drift experiment, and the difference between a zero and a gap**.
-761 tests across the repo, seam allowances **0 of 5** across 148 files.
+Phase: 2 — in progress. Phase 1's acceptance week is **still draining** (six of seven days queued,
+day 0 at 60.0%), and Phase 0 is **complete, pending the gate** (below; the gate is a human review
+and does not block buildable work).
+Last completed: **P2.1 — the LLM interface, and the model it deliberately did not choose**.
+813 tests across the repo, seam allowances **0 of 5** across 162 files. The count is measured
+rather than carried forward, and the basis is written down here so the next session does not have
+to re-derive it: **788 passing under `turbo run test` plus 25 under `test:tools`, with one live
+test skipped.** That makes the pre-P2.1 total 762 against the 761 recorded last session — a
+one-test drift nobody can now account for, which is exactly why the basis is stated.
 
 **Thirteen billed sessions, 4.41 minutes of 4,000.** P1.8 spent one proving the schedule against
 local Postgres (0.10068, one `youtube.search` run, 20 items, day 0 of a three-day experiment at a
@@ -15,6 +20,89 @@ Pantip sessions was waste and is counted as such**: the first run was piped to `
 not stop the capture — it had already opened the browser and billed — and it was then re-run to see
 the head of the output. The pipe cost 0.4584 minutes and produced nothing. Reading a recorder's
 output through `tail` is not free, because the spend happens before the bytes reach the pipe.
+
+## P2.1 — the LLM interface, and the model it deliberately did not choose
+
+`@samsara/llm` is real: `complete(prompt, schema)` over OpenRouter, metered on both token
+meters, logging one `llm.call` event per attempt, 51 tests, **zero tokens spent**. The package
+opens no network connection in its own test suite, for the same reason the kernel's does not —
+a path you can only exercise by paying for it is a path nobody exercises.
+
+**The task description is out of date and was not followed.** PLAN §P2.1 says "Anthropic +
+Gemini implementations"; ADR-0012 supersedes that and says OpenRouter "becomes its default and,
+for now, only implementation". One route is built. Writing two SDK adapters against a decision
+that removed them would have been work performed in order to be deleted. PLAN is amended in
+place rather than left to contradict its own ADR table.
+
+**The bake-off is an instrument, not an answer, and this is the deviation worth overruling if
+it is wrong.** ADR-0012 gives P2.1 the job of picking the extraction model "by measurement"
+against Phase 2's quality bar — 66% of the top 30 verified. That bar cannot be measured yet: it
+needs the extraction prompt and the fifty hand-labelled items, and both are P2.2's and belong to
+the pack, not the engine. So `compare.ts` is built and was not run. It takes candidates, a
+prompt, a schema, cases and optional per-case graders, shuffles from a recorded seed as P1.0's
+signal matrix did, and reports schema-valid rate, tokens, latency percentiles and — only when a
+rate is supplied with the date it was read — dollars. `LLM_MODEL_EXTRACT` stays empty and a call
+to an unset task refuses by name. **The debt is explicit: P2.2 owes a comparison run before it
+sets that variable**, and running it then costs nothing on the meter that is scarce, because
+refine replays stored raw items and opens no browsers (§8).
+
+Four things were found by building it, and three of them are about cost rather than quality.
+
+**Every attempt has to meter itself, and the obvious implementation gets this backwards.** The
+tidy version wraps the retry loop in `BudgetGuard.spend` and records once. But ADR-0012 requires
+a schema-invalid response to be *retryable*, so the characteristic failure of a cheap model is
+three complete round trips that each burn input and output tokens and return nothing. Metering
+only the attempt that succeeded would report that model as the cheapest in the comparison while
+it was quietly spending triple — the harness would recommend the worst candidate, with numbers.
+So the check and the record sit *inside* the attempt, in a `finally`, and the comparison totals
+are aggregated from `llm.call` events rather than from the returned value, because a returned
+`Completion` cannot see the attempts that failed. `spend` is also single-meter and the LLM has
+two, priced an order of magnitude apart, so the two-meter check-and-record is written out.
+
+**A truncated answer is `config`, not `upstream`, and that one word saves two thirds of the
+spend.** `finish_reason: "length"` means the JSON was cut mid-object. It parses as invalid, so
+the natural classification is the retryable one — and the identical request is then cut in the
+identical position, twice more. It is our request that is wrong, not the provider's answer, so
+it is `config`, which the retry policy does not retry, and the message names `maxOutputTokens`
+because raising it or batching fewer items is the only thing that fixes it.
+
+**"Characters ÷ 4" is the wrong token estimate for the text this system actually harvests, and
+wrong in the dangerous direction.** The guard's pre-check is only exact if someone estimates the
+input up front. The standard ratio comes from English prose in a BPE vocabulary; Thai and other
+unsegmented scripts land near one token per character. Feeding 4:1 into a pre-check on
+native-language content would wave through roughly four times the input it believed it was
+approving — the precise failure the pre-check exists to prevent, arriving silently. The estimate
+counts ASCII at 4:1 and everything else at 1:1. It is a floor for safety; the number recorded
+after the call is the provider's own, and when a provider returns no usage block the call is
+recorded from the estimate and flagged `metered: false`, because a missing receipt is not a free
+call.
+
+**The free-tier rule is now mechanical.** ADR-0012 says `:free` routes are fine for harvested
+public content and not for anything derived from a user's private data, and that the config
+"must not quietly send the latter to a free tier". `complete` takes a `sensitivity` that
+defaults to `private` and refuses a `:free` model. The high-volume public path therefore has to
+opt in at its call site — one word a reviewer can see. A default of `public` would be convenient
+exactly once and would then apply itself to every call written afterwards.
+
+Smaller, and worth knowing before P2.2 writes a prompt: `definePrompt` derives a **fingerprint**
+from the text alongside the pack's declared `version`. Nothing forces a bump — the engine cannot
+know whether an edit was meaningful — but two rows claiming version `3` with different
+fingerprints are now a bug with a receipt, where before they were two identical-looking rows
+that came from different prompts. `render` throws on a variable the template does not use, which
+is the quiet bug: passing `items` to a template reading `{{item}}` sends a prompt with no data
+in it and gets back a confident, empty answer, on every batch, until somebody reads the output.
+
+`strict: false` on the json_schema block is deliberate and is the one place a reader may expect
+more: strict structured output needs every property required and `additionalProperties: false`
+throughout, which a Zod schema with an optional field does not produce. Conforming one means
+rewriting optionals as required-and-nullable — changing what the model is asked for, behind the
+caller's back, in a package that must hold no opinion about a pack's schema. The guarantee comes
+from the Zod validation above, which ADR-0012 requires on every response regardless.
+
+**Not done, and not pretended otherwise:** no live call has been made, no model has been chosen,
+`compare.ts` has never seen a real provider, and the `json`-vs-`schema` fallback is written
+against the documented wire format rather than against a route that refused one. The first real
+OpenRouter call happens in P2.2.
 
 ## P1.8 — the drift experiment, and the difference between a zero and a gap
 

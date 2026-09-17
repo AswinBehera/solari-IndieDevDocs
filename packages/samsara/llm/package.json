@@ -4,10 +4,17 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./openrouter": "./src/openrouter.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@samsara/core": "workspace:*",
+    "@samsara/kernel": "workspace:*",
+    "openai": "^7.15.0",
+    "zod": "^4.6.1"
   }
 }

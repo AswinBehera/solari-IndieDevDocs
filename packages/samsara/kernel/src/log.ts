@@ -130,6 +130,31 @@ export type KernelEvent = Base &
         purpose: SessionPurpose | null
       }
     | {
+        event: "llm.call"
+        /** The engine task, e.g. `extract`. Never a model preference in code. */
+        task: string
+        /** The routed model id, which is config (ADR-0012) and therefore worth logging. */
+        model: string
+        /** Identity of the prompt, never its text. Both halves stamp Evidence rows. */
+        promptId: string
+        promptVersion: string
+        /** Which pack's prompt this was, when the caller said. */
+        domainId: string | null
+        attempt: number
+        inputTokens: number
+        outputTokens: number
+        /**
+         * False when the provider returned no usage block and these numbers are our
+         * own estimate. A meter fed by an estimate is still a meter, but a reader
+         * comparing two models' costs needs to know which of them was measured.
+         */
+        metered: boolean
+        durationMs: number
+        /** `ok`, `invalid` (spent tokens, unusable answer), or `failed`. */
+        outcome: string
+        kind: FailureKind | null
+      }
+    | {
         event: "attempt.retry"
         purpose: SessionPurpose
         attempt: number
