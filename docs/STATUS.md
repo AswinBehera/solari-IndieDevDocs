@@ -109,10 +109,11 @@ days 1–2 as `pending`, and `meanOverlap: null`. Day 1's two jobs reached the r
 logged the refusal without opening a browser. The stop path is the only part of this feature that
 has been proved on real infrastructure end to end.
 
-**What P1.8 has not produced is the acceptance number.** The instrument exists; the week has not
-run. With the cron commented out (P1.7, and still waiting on a `DATABASE_URL` secret) nothing
-drains the queue, so a seven-day experiment's days come due and stay due, and the plot honestly
-shows six `missing` points and no line. Phase 1's acceptance — "Bangkok street food", th top 20
+**What P1.8 has not produced is the acceptance number.** The instrument exists; one day of seven
+has run. Until 2026-09-16 nothing drained the queue at all — not because the cron was off, as this
+file said for four days, but because it was failing on a `DATABASE_URL` that did not exist (see the
+correction below). A seven-day experiment's days therefore came due and stayed due, and the plot
+honestly showed `missing` points and no line. Phase 1's acceptance — "Bangkok street food", th top 20
 under 40% URL overlap with the us persona's, no captcha loops in the recordings — is therefore
 still unmeasured, and so is the 60% gate. That is a scheduling dependency, not missing code: the
 first thing that turns it into a number is a runner that wakes up for seven days.
@@ -649,11 +650,12 @@ allows of five**. A third finding fell out of the live run — `Asia/Ho_Chi_Minh
 viewpoint check was reporting a false negative. Before that, **P0.7** (the seam check),
 **P0.6** (dev ergonomics) and **P0.5** (the queue and the two runtimes); all three were
 committed this session, having lived only in the working tree until now.
-NEXT: **wait for days 1 to 6, and set the two Actions secrets so something wakes up for them.**
-The week is running. Supabase (`ap-southeast-1`) exists, nine migrations are applied, the two
-personas are seeded — `sg`/`th-TH`/`Asia/Bangkok` and `us`/`en-US`/`America/New_York`, PLAN's
-option (c) — and experiment `f60fb262` queued fourteen `harvest.run` jobs on "Bangkok street food"
-against `youtube.search`, one pair a day, `recording: true` on all fourteen.
+NEXT: **wait.** The week is running and there is nothing left to do to it. Supabase
+(`ap-southeast-1`) exists, nine migrations are applied, the two personas are seeded —
+`sg`/`th-TH`/`Asia/Bangkok` and `us`/`en-US`/`America/New_York`, PLAN's option (c) — and experiment
+`f60fb262` queued fourteen `harvest.run` jobs on "Bangkok street food" against `youtube.search`,
+one pair a day, `recording: true` on all fourteen. Both repository secrets are set, the schedule is
+`*/15`, and scheduled drains have been green since 2026-09-16 17:47 after 22 consecutive failures.
 
 **Day 0 came in at 60.0%** — twelve of twenty URLs shared, mean rank shift 5.2, two `ok` sessions
 with recordings, 0.2388 billed minutes. That is exactly the gate: Phase 1 wants the week under 40%
@@ -661,11 +663,11 @@ and says "stop and redesign adapters" above 60%. One day is not the series, and 
 wrote down applies — with `country` held at `sg` rather than `th`, a high number cannot distinguish
 a surface that barely personalises from one that keys on an IP neither persona has.
 
-**One blocker, and it is not code.** `DATABASE_URL` and `SOLARI_API_KEY` are not set as repository
-secrets, so the restored `*/15` schedule fails on every tick and days 1 to 6 will come due and stay
-due — the exact `missing`-points rendering the chart was built to be honest about. Day 0 was drained
-by hand from this machine, which does not scale to six more days. Until the secrets exist the week
-is a queue nobody is reading.
+**What to watch, and it is not the code.** GitHub drops scheduled runs on a quiet repository: three
+ticks landed in the nine hours after the fix, not the thirty-six a `*/15` cron implies. A day can
+start hours after it comes due, which the chart draws honestly because its x-axis is the time the
+run happened. If a day goes `missing` rather than late, the cause is almost certainly a dropped
+schedule and the fix is a `workflow_dispatch`, not a change to anything here.
 
 **Single source, on purpose.** The acceptance criterion says "across adapters" and an experiment
 carries one `sourceId`; `youtube.search` is the only adapter this phase has run end to end against
@@ -1245,3 +1247,13 @@ no deployed database. Twenty-one consecutive red runs is not a signal, it is wal
 `schedule:` trigger is commented out and `workflow_dispatch` is left alone. **Restoring those two
 lines belongs in the same commit that sets the `DATABASE_URL` secret**; until then a dispatch still
 fails loudly, which is the correct answer to a human who pressed the button.
+
+> **Corrected 2026-09-17.** Two of those sentences were false and stayed false for four days.
+> Commenting the trigger out was `4e95b89`, and `4e95b89` was never pushed — Actions reads the
+> workflow from the default branch *on the remote*, so a local commit that stops a cron stops
+> nothing. The remote kept the `*/5` and kept failing: **22 scheduled runs, 22 failures, from
+> 2026-09-13 09:43 to 2026-09-16 16:59.** It was not thousands only because GitHub drops scheduled
+> runs on a repository with no recent activity, which is the part worth keeping: a broken cron on an
+> idle repo neither works nor announces itself, and this document recorded it as switched off while
+> it was quietly red. Fixed in `e4c34a0`, which shipped the stop and the restart together, at
+> `*/15`, with both secrets set.

@@ -160,9 +160,9 @@ Raised 2026-09-16 (Claude Code), out of P1.8.
 
 Phase 1's acceptance criterion is a seven-day measurement, and there is nothing in
 this system that stays awake for seven days. The worker is a GitHub Actions workflow
-whose schedule has been commented out since P1.7, because it needs `DATABASE_URL`,
-because there is no hosted Postgres, because ADR-0013's Supabase project does not
-exist yet. An experiment therefore queues fourteen jobs that come due and stay due.
+whose schedule has been commented out since P1.7 [**not true — see the correction in
+the answer below**], because it needs `DATABASE_URL`, because there is no hosted
+Postgres, because ADR-0013's Supabase project does not exist yet. An experiment therefore queues fourteen jobs that come due and stay due.
 
 The instrument is finished and honest about this — six `missing` points and no line —
 so the question is not what to build, it is which of three things to spend:
@@ -215,6 +215,23 @@ lives on `sessions.recording_ref`, one row per session, and a flag on the experi
 would be a second place for the same fact to be wrong. Day 0's two sessions both came
 back with a `recording_ref`.
 
-**What is still open is not a question, it is a secret.** The `*/15` schedule fails on
-every tick until `DATABASE_URL` and `SOLARI_API_KEY` exist as repository secrets. Day 0
-was drained by hand. Days 1 to 6 have no such fallback.
+**Both secrets were set on 2026-09-16 and the schedule is green** — three scheduled
+drains succeeded overnight, after 22 consecutive failures. Day 0 was drained by hand;
+days 1 to 6 are the queue's own problem now, which is the point.
+
+**And the premise above was wrong.** The schedule was never commented out where it
+mattered. `4e95b89` commented it out locally and was never pushed, so the remote kept
+the `*/5` from `3ee2a66` and failed every tick it was not dropped for — 22 runs between
+2026-09-13 and 2026-09-16, all red, while three documents said the trigger was off. The
+lesson is not about YAML: **a fact about deployed behaviour cannot be established by
+reading the working tree**, and every one of those documents was written by reading the
+working tree. `git show origin/main:<path>` is the cheap version of asking the question
+properly.
+
+**One live caveat.** GitHub is dropping most ticks — three scheduled runs in the nine
+hours after the fix, not the thirty-six a `*/15` cron implies, because dropping is what
+it does on a repository with little recent activity. Day 1 can therefore start hours
+after it comes due. That is survivable by construction: the chart's x-axis is the time
+the run actually happened, not the time it was scheduled for, so a late day is drawn
+late rather than drawn wrong. It does mean the seven days will not be seven neat
+24-hour spacings, and the `meanRankShift` column is the place that would show it.

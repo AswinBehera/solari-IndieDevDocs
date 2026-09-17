@@ -7,12 +7,23 @@
 #                       delayed under load and is dropped entirely on a repository
 #                       with no recent activity. Everything here assumes that.
 #
-#                       **Restored 2026-09-16, in the commit that set the secret**,
-#                       as this file said it had to be. It had been commented out
-#                       since P1.7 because there was no database to drain and every
-#                       tick failed on the runner's refusal to start without one —
-#                       a red mark every five minutes is one nobody reads on the day
-#                       it means something. Supabase (ap-southeast-1) exists now.
+#                       **Green from 2026-09-16, in the commit that set the secret.**
+#                       Worth recording what was true before that, because the docs
+#                       had it wrong for a day and the way they were wrong is the
+#                       point. `4e95b89` commented this schedule out on 2026-09-16 —
+#                       and was never pushed. Actions reads the workflow from the
+#                       default branch on the remote, so stopping the cron in a local
+#                       commit stopped nothing: the remote kept the `*/5` from
+#                       `3ee2a66` (2026-09-12) and every tick failed on the runner's
+#                       refusal to start without `DATABASE_URL`. **22 scheduled runs,
+#                       22 failures, 2026-09-13 09:43 through 2026-09-16 16:59** —
+#                       not thousands, because GitHub drops scheduled runs on a
+#                       repository with no recent activity, which is the quiet part:
+#                       a broken cron on an idle repo neither works nor announces
+#                       itself. The fix and the un-fix shipped together in `e4c34a0`.
+#                       Supabase (ap-southeast-1) and both secrets exist now, and a
+#                       `workflow_dispatch` drained clean (`claimed: 0`, nothing yet
+#                       due) before day 1 came due.
 #
 #                       **Fifteen minutes, not five.** The floor is for foreground
 #                       work, and foreground work does not come through here: a
