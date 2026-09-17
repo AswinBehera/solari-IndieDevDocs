@@ -225,7 +225,20 @@ importers:
 
   packages/samsara/probe: {}
 
-  packages/samsara/refine: {}
+  packages/samsara/refine:
+    dependencies:
+      '@samsara/core':
+        specifier: workspace:*
+        version: link:../core
+      '@samsara/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@samsara/llm':
+        specifier: workspace:*
+        version: link:../llm
+      zod:
+        specifier: ^4.6.1
+        version: 4.6.1
 
   packages/samsara/sources:
     dependencies:
@@ -299,7 +312,26 @@ importers:
         specifier: ^4.23.13
         version: 4.23.13
 
-  packages/travel/pack: {}
+  packages/travel/pack:
+    dependencies:
+      '@dt/core':
+        specifier: workspace:*
+        version: link:../core
+      '@samsara/core':
+        specifier: workspace:*
+        version: link:../../samsara/core
+      '@samsara/kernel':
+        specifier: workspace:*
+        version: link:../../samsara/kernel
+      '@samsara/llm':
+        specifier: workspace:*
+        version: link:../../samsara/llm
+      '@samsara/refine':
+        specifier: workspace:*
+        version: link:../../samsara/refine
+      zod:
+        specifier: ^4.6.1
+        version: 4.6.1
 
   packages/travel/ui: {}
 

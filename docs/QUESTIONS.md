@@ -298,3 +298,38 @@ a cookbook of standalone examples, not a tree we share. The rest of what landed 
 (Ruby and Python quickstarts, EU consent evidence, a Playwright-suite runner, raw CDP on
 Workers, a security posture review) is not ours to use. `browser-login-handoff-ts`
 becomes relevant the day we build a logged-in persona tier.
+
+## Q14 — a topic capture returns other threads' sidebars as items  [OPEN]
+
+Raised 2026-09-17 (Claude Code), out of the P2.2 golden corpus harvest.
+
+`parsePantip` on a `pantip.topic` capture returns the posts in the thread *and* the
+"related topics" teasers Pantip renders beside them. It is not wrong to: they are
+items, with their own urls and their own titles, and nothing in `ItemDraft` says an
+item has to belong to the page it was found on. But their text is tag-list
+boilerplate rather than prose, and they belong to threads nobody asked for.
+
+Measured, not estimated: filtering the corpus on whether the item's own url contains
+the topic id being harvested dropped it from 60 items to 36. Over a third of what
+twelve topic captures returned was other people's sidebars. Two of the survivors of
+an earlier pass — `pt-43696090-3` and `-4` as they then were — were teasers from
+topics 44221084 and 39734763, which had nothing to do with the thread.
+
+The filter lives in `tools/harvest-golden.ts`, which is the wrong place for it. A
+harvest tool putting it there keeps the golden set clean and leaves the production
+path ingesting sidebars into `RawItem` for P2.3 to geocode.
+
+**Options I see:**
+
+a. `parsePantip` drops nodes whose canonical topic url is not the captured topic.
+   Cheapest, and it makes the parser's output mean "this thread", which is what
+   every caller so far has assumed. Costs the one case where a related topic is
+   genuinely the answer — but that case is a query, not a parse.
+b. Keep returning them and add a field to `ItemDraft` saying which container the
+   item came from, so the caller can decide. Honest, and it widens a type in the
+   kernel for one source's layout quirk.
+c. Leave it, and require every caller to filter. This is today's behaviour and it
+   is only survivable because today there is one caller.
+
+My lean is (a), and it wants the architect's word because it changes what a parser
+returns and there are fixtures asserting the current counts.

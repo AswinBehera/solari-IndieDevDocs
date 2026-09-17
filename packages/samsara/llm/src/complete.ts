@@ -81,6 +81,24 @@ export interface CompleteOptions {
   sensitivity?: Sensitivity
   /** Overrides the configured default. A route that rejects `schema` wants `json`. */
   format?: ResponseFormat["kind"]
+  /**
+   * The schema the *provider* is asked for, when it differs from the one we
+   * validate against. Defaults to the validation schema, which is the case
+   * everywhere except one.
+   *
+   * That one is P2.2's extract stage, and the asymmetry it needs is worth
+   * stating. It asks for twenty items in a call (§8) and validates each returned
+   * mention separately, so that one malformed mention costs one mention rather
+   * than a batch of twenty — which means the schema it hands to `complete` has
+   * `unknown` where a mention goes. Handing that to the provider as well would
+   * throw away the only part of the schema worth constraining: the model would
+   * be told the envelope and left to guess the contents, and structured output
+   * would be doing nothing for the field that actually varies.
+   *
+   * So: strict on the wire, lenient on the way in. The two schemas must describe
+   * the same shape — nothing checks that they do, and nothing can.
+   */
+  wireSchema?: z.ZodType<unknown>
   /** Which pack's work this is. Logged, never interpreted. */
   domainId?: string
   attempts?: number
@@ -151,7 +169,7 @@ export class LlmClient {
     const estimatedInput = estimatePromptTokens(rendered)
     const maxOutputTokens = opts.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS
     const scope = opts.scope ?? {}
-    const format = this.formatFor(opts.format ?? this.config.format, schema)
+    const format = this.formatFor(opts.format ?? this.config.format, opts.wireSchema ?? schema)
 
     let attemptsUsed = 0
 

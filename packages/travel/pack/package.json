@@ -8,6 +8,14 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dt/core": "workspace:*",
+    "@samsara/core": "workspace:*",
+    "@samsara/kernel": "workspace:*",
+    "@samsara/llm": "workspace:*",
+    "@samsara/refine": "workspace:*",
+    "zod": "^4.6.1"
   }
 }

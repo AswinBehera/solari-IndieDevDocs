@@ -306,6 +306,51 @@ describe("observedPaths", () => {
   })
 })
 
+describe("the login bundle", () => {
+  /**
+   * P2.2's first Thai harvest, in one test. Three queries came back with items,
+   * tiles and bodies all zero and `refusedBy: null` — an honest empty, according
+   * to the capture, for a search page that was never served. The state was not
+   * null, so the existing clause did not fire; it held TikTok's app-context
+   * scopes and no item scope. The two text checks in `inpage.ts` did not fire
+   * either, and could not have: they are English, and the viewpoint was `th-TH`.
+   */
+  const LOGIN_ASSET = "https://www.tiktok.com/obj/tiktok_web_login_static/webapp/main.js"
+
+  it("refuses when nothing rendered, nothing answered, and the assets are the login bundle", async () => {
+    const { page } = fakePage({ state: { "webapp.app-context": { region: "TH" } }, tiles: 0 }, [
+      response(LOGIN_ASSET, 200, {}),
+    ])
+    const capture = await captureTikTok(context(page), "ร้านเด็ด เยาวราช", "search", NO_SETTLE)
+
+    // The state strategy did read something, which is exactly why the older
+    // `state === null` clause could not catch this.
+    expect(capture.payload.strategies.state).toBe(true)
+    expect(capture.refusedBy).toBe("login-wall")
+  })
+
+  it("does not refuse a page that rendered tiles, however its assets were served", async () => {
+    const { page } = fakePage({ state: { "webapp.app-context": {} }, tiles: 12 }, [
+      response(LOGIN_ASSET, 200, {}),
+    ])
+    const capture = await captureTikTok(context(page), "x", "search", NO_SETTLE)
+
+    expect(capture.refusedBy).toBeUndefined()
+  })
+
+  it("does not refuse when the search api answered, however its assets were served", async () => {
+    const { page } = fakePage({ state: null, tiles: 0 }, [
+      response(LOGIN_ASSET, 200, {}),
+      response("https://www.tiktok.com/api/search/general/?q=x", 200, {
+        data: [{ item: { id: "123", desc: "x", stats: { playCount: 5 } } }],
+      }),
+    ])
+    const capture = await captureTikTok(context(page), "x", "search", NO_SETTLE)
+
+    expect(capture.refusedBy).toBeUndefined()
+  })
+})
+
 describe("state that is not state", () => {
   /**
    * The live case, in one line. TikTok's state lives in a `<script>` whose `id`

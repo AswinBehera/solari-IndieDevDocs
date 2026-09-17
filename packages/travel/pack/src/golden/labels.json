@@ -1,0 +1,270 @@
+{
+  "pt-43696090-0": {
+    "places": [["น้ำตกซับพลู"], ["ร้านไก่ย่างตาแป๊ะ สาขา 2"], ["สะพานพ่อขุนผาเมือง"], ["ร้านซับสโมสร"]],
+    "note": "excludes บ้านไร่คุณนงลักษณ์ (lodging) and ไก่ย่างวิเชียรบุรี (a dish, not a venue)"
+  },
+  "pt-43696090-1": {
+    "places": [
+      ["น้ำตกตาดใหญ่"],
+      ["อุทยานแห่งชาติภูผาม่าน"],
+      ["น้ำตกตาดทิดมี"],
+      ["น้ำตกตาดฟ้า"],
+      ["Runjuan Namnao Cafe & Camp"],
+      ["ภูผาจิต"]
+    ],
+    "note": "SAMPLED for the audit by seeded draw, not because it is hard. ร้านอาหารตามสั่งริมทาง is an unnamed roadside shop: a generic noun where a name should be",
+    "audit": true
+  },
+  "pt-43696090-2": {
+    "places": [
+      ["น้ำตกพรานบา"],
+      ["ผารอยตีนสัตว์ดึกดำบรรพ์ น้ำหนาว"],
+      ["ร้านซับสโมสร"],
+      ["LittleWinterFarmstay"],
+      ["Blue Lagoon ภูผาม่าน"]
+    ],
+    "note": "excludes บ้านไร่ไออุ่นโฮมสเตย์ and ภูม่านแก้วโฮมสเตย์ (lodging). LittleWinterFarmstay counts: the writer goes there for coffee, and the prompt's rules are about what the place is used as"
+  },
+  "pt-43696090-3": {
+    "places": [["ผาม่านฝัน"], ["หนองสมอ ภูผาม่าน"]],
+    "note": "two viewpoints named in a short reply; the rest of it is the writer's route and the weather. เพชรบูรณ์ and ขอนแก่น are provinces"
+  },
+  "pt-43696090-4": {
+    "places": [],
+    "note": "an opinion about travelling in the rainy season; names nowhere"
+  },
+  "pt-43696090-5": {
+    "places": [],
+    "note": "SAMPLED for the audit by seeded draw, not because it is hard. thanks the reviewer in generic nouns: น้ำตกแต่ละที่, ที่พัก. ไก่ย่างวิเชียร is a dish",
+    "audit": true
+  },
+  "pt-43696090-6": {
+    "places": [],
+    "audit": true,
+    "note": "HARD NEGATIVE. Names ถ้ำนาคราช and อช.ภูผาม่าน, but as อยากไป ... เสียดาย ช่วงนี้ปิด -- wants to go, it is closed. The prompt disqualifies a place the writer has not been to, so an extractor that returns these two is wrong in the way that matters"
+  },
+  "pt-43933591-0": {
+    "places": [["พิพิธภัณฑสถานแห่งชาติอุบลราชธานี"]],
+    "note": "a museum write-up; the rooms and artefacts inside it are not places"
+  },
+  "pt-43933591-1": {
+    "places": [
+      ["น้ำตกสร้อยสวรรค์"],
+      ["วนอุทยานน้ำตกผาหลวง"],
+      ["ร้านหอมดิน"],
+      ["ร้านความทรงจำ คาเฟ่"],
+      ["วัดป่าภูปัง"],
+      ["สามพันโบก"]
+    ],
+    "note": "excludes โรงแรมทอแสง เฮอริเทจ โขงเจียม (lodging) and แก่งพิศมัย (rapids seen as the view from ร้านหอมดิน, not somewhere the writer went)"
+  },
+  "pt-43933591-2": {
+    "places": [["อุทยานแห่งชาติผาแต้ม"], ["เสาเฉลียง"], ["วนอุทยานน้ำตกผาหลวง"]],
+    "audit": true,
+    "note": "AUDIT: เสาเฉลียง is a named rock formation inside ผาแต้ม. I counted it because it has its own name and the writer detours for it, but excluded the ผาขาม and ผาแต้ม rock-painting groups as stops along one walk. That line is a judgement call"
+  },
+  "pt-43933591-3": {
+    "places": [["วัดพระธาตุหนองบัว"], ["วัดศรีนวลแสงสว่างอารมณ์"], ["ร้านส้มตำจินดา"]],
+    "note": "excludes พระธาตุเจดีย์ศรีมหาโพธิ์ and ธรรมาสน์สิงห์เทินบุษบก (the chedi and the pulpit inside those two temples) and บ้านชีทวน (a village)"
+  },
+  "pt-43933591-4": {
+    "places": [
+      ["เขื่อนสิรินธน", "เขื่อนสิรินธร"],
+      ["วัดสิรินธรวรารามภูพร้าว", "วัดภูพร้าว", "วัดเรืองแสง"],
+      ["ร้านแพลำโขง"]
+    ],
+    "note": "excludes ทอแสง เฮอริเทจ โขงเจียม (lodging) and ด่านช่องเม็ก (a border post visible from the viewpoint)"
+  },
+  "pt-43933591-5": {
+    "places": [["ร้านข้าวต้มสันติโภชนา"]],
+    "audit": true,
+    "note": "AUDIT: excludes โรงแรมเซ็นทารา อุบล (lodging), เขมราฐ (a town) and ถนนคนเดิน -- the walking street is the thing the writer most enjoyed, but it is named here only by the generic noun"
+  },
+  "pt-43933591-6": {
+    "places": [["วัดโขงเจียม"]],
+    "note": "จุดชมวิวแม่น้ำสองสี is the viewpoint inside that temple, described by what it is rather than named"
+  },
+  "pt-43933591-7": {
+    "places": [],
+    "audit": true,
+    "note": "AUDIT: names ผาแต้ม, but as a reader summarising what the review covered -- no visit of their own. I read that as not a recommendation; a reasonable labeller could disagree"
+  },
+  "pt-44225687-0": {
+    "places": [["ต้าเจียห่าว"]],
+    "note": "excludes กาแฟเซเว่น (a chain, and named as the breakfast this replaced) and ถนนท่าปรุง / มหาชัย (a road and a town)"
+  },
+  "pt-44225687-1": {
+    "places": [],
+    "note": "ข้าวต้มกุ๊ยซอย 8 is a dish and a soi, and the writer says มีให้เลือกหลายร้าน -- several shops, none named"
+  },
+  "pt-44226724-0": {
+    "places": [],
+    "audit": true,
+    "note": "AUDIT, and the best negative in the set: a full restaurant review, five dishes deep, where the poster elides the name as ร้าน ดี.... on purpose. แหลมแท่น and บางแสน are localities, MK is a chain the writer is going to tomorrow. An extractor that wants a place here has nowhere honest to get one"
+  },
+  "pt-44226724-1": {
+    "places": [],
+    "note": "a compliment to the poster; names nowhere"
+  },
+  "pt-44226724-2": {
+    "places": [],
+    "note": "The kite hotel is a hotel and is used as a direction marker rather than visited; ทางด่วนบูรพา and สาย 7 are roads"
+  },
+  "pt-44226724-3": {
+    "places": [],
+    "note": "a complaint about which threads Pantip promotes"
+  },
+  "pt-44226724-4": {
+    "places": [],
+    "note": "payment methods and a traffic warning"
+  },
+  "pt-44226724-5": {
+    "places": [],
+    "audit": true,
+    "note": "AUDIT: ร้านโรจน์ is named, and the writer ate there for years -- but ร้านหายไปแล้ว, it is gone, and they are asking whether it closed or moved. The prompt disqualifies a place that no longer exists, so this is a negative by a rule rather than by absence"
+  },
+  "pt-44226724-6": {
+    "places": [],
+    "duplicate": "pt-44226724-7",
+    "note": "Pantip's own deleted-comment notice. It passed the 100-character floor in corpus.mts because the notice is long; kept, because the extractor will meet it in production too"
+  },
+  "pt-44226724-7": {
+    "places": [],
+    "duplicate": "pt-44226724-6",
+    "note": "the same deleted-comment notice, verbatim"
+  },
+  "pt-44227552-0": {
+    "places": [],
+    "note": "a TNN news piece on how Google Maps computes busy times. Long, fluent, on the subject of restaurants, and names not one -- every ร้าน in it is the generic noun. The failure mode this item tests is an extractor that pattern-matches topic instead of reading"
+  },
+  "pt-44227552-1": {
+    "places": [],
+    "note": "a comment on why Google Maps leads the category"
+  },
+  "pt-44227552-2": {
+    "places": [],
+    "note": "a comment about commute notifications"
+  },
+  "pt-44227552-3": {
+    "places": [],
+    "note": "a comment about GPS and red roads"
+  },
+  "pt-44227665-0": {
+    "places": [
+      ["ตลาดบ้านฟ้า เลอ มาร์เช่"],
+      ["ออริจินอลหมี่ไก่ฉีก"],
+      ["Alert Spaghetti"],
+      ["ร้านก๋วยเตี๋ยวแห้ง ต้นตำรับ"],
+      ["ชูใจกะเพราขั้นเทพ"],
+      ["เย็นตาโฟบ้านฟ้า"],
+      ["ร้านยำขนมจีนมหาเฮง"],
+      ["ร้านเหนกไก่ย่างบางตาล สาขา 2"],
+      ["อีสานเด้อ เฉินเดือน"],
+      ["ร้านก๋วยจั๊บญวนอุบล"],
+      ["ราดหน้านัดบ้านฟ้า"],
+      ["ร้านกระเพาะปลาแท้คุณหญิง"],
+      ["ร้านข้าวโพดต้มป้านก"]
+    ],
+    "audit": true,
+    "note": "AUDIT: the densest item in the set. Two judgement calls. ร้านเหนกไก่ย่างบางตาล สาขา 2 is counted because it is a named branch, which the prompt separates from a chain in general. ร้านก๋วยจั๊บญวนอุบล is counted as a stall name, but it reads equally as the noun phrase this Vietnamese-kuay-jap-Ubon shop, and under the generic-noun rule it would be excluded. Alert Spaghetti is the only item in the corpus with a genuine romanName"
+  },
+  "pt-44227665-1": {
+    "places": [
+      ["ตลาดรินทร์ทอง"],
+      ["ตลาดคูคต"],
+      ["ตลาดนานาเจริญ"],
+      ["ตลาดสะพานแดงมาร์เก็ต"],
+      ["ตลาดวัดธรรมะสุขใจ"],
+      ["ตลาดสิริทรัพย์"],
+      ["ตลาด K Avenue"],
+      ["ตลาด NN Avenue"],
+      ["ตลาดโรงสีรังสิต"],
+      ["ตลาดร้อยปีรัตนโกสินทร์"],
+      ["ตลาดดีดีมาร์เช่"],
+      ["ตลาดลานดิน"],
+      ["ตลาดประตูกรุงเทพ"],
+      ["ตลาดกลางลาดสวาย"],
+      ["ตลาดชัชวาล คลอง 7"],
+      ["ตลาดโอโซน"],
+      ["ตลาดบ้านฟ้าเลอมาร์เช่"]
+    ],
+    "note": "a bare list of every market the writer has walked in Pathum Thani, with no prose around any of them. Excludes ตลาด Vista Space, which they say is still being built -- a place that does not exist yet. The hard part here is the quote: seventeen mentions have to draw their evidence from a list with no sentences in it"
+  },
+  "pt-44227665-2": {
+    "places": [],
+    "note": "a correction that the market is at Khlong 6-7 rather than Khlong 4. Refers to it only as ตลาดนี้"
+  },
+  "pt-44228852-0": {
+    "places": [["Dairy Home Farm Shop เขาใหญ่", "Dairy Home"]],
+    "note": "the item calls it both Dairy Home and Dairy Home Farm Shop เขาใหญ่; the prompt says the same place twice is one mention. เขาใหญ่ on its own is the area, Grass Fed Milk is a product. The Pantip CR footer and the redacted score line are boilerplate the parser leaves in -- an extractor should find nothing in them"
+  },
+  "pt-44229467-0": {
+    "places": [],
+    "note": "why rice-and-curry shops charge more per extra dish; ร้านข้าวราดแกง throughout, never one shop"
+  },
+  "pt-44229467-1": {
+    "places": [],
+    "note": "a reply about serving curry in a separate bowl"
+  },
+  "pt-44229467-2": {
+    "places": [],
+    "note": "a reply doing the arithmetic"
+  },
+  "pt-44229467-3": {
+    "places": [],
+    "note": "a reply about paying more for variety"
+  },
+  "pt-44229467-4": {
+    "places": [],
+    "note": "a reply about ordering two dishes then a third"
+  },
+  "pt-44229467-5": {
+    "places": [],
+    "note": "a reply agreeing"
+  },
+  "pt-44229478-0": {
+    "places": [["ยุ้งข้าว เขาใหญ่"]],
+    "note": "a southern-food review with a full bill. Everything else named is a dish: ใบเหลียงผัดไข่, แกงคั่วหอยขม, สะตอผัดกุ้งหมูสับ, น้ำอัญชันมะนาว. Good priceHint material -- the item gives per-dish baht and a 817 total"
+  },
+  "pt-44229478-1": {
+    "places": [],
+    "note": "dishes the commenter always orders, plus ระนอง, ภูเก็ต, สุราษฎร์ and เขาใหญ่ -- provinces and an area. ร้านอาหาร is the bare noun heading a list of dishes"
+  },
+  "pt-44230055-0": {
+    "places": [["ตลาด อ.ต.ก."]],
+    "note": "a Ch7 segment promo. ร้านเด็ด is the generic noun the whole post is built around; the market is the one thing named"
+  },
+  "pt-44230398-0": {
+    "places": [["KUSA Japanese Restaurant"]],
+    "audit": true,
+    "note": "AUDIT: the item is Thai but writes the name in Latin, so under the localName rule the local name is KUSA Japanese Restaurant and romanName is the same string rather than null -- the one item in the corpus where those two fields collide. ย่านวัดเกตุ is a neighbourhood and เชียงใหม่ a province"
+  },
+  "pt-44230439-0": {
+    "places": [],
+    "note": "whether you may run a restaurant out of a condo. TAXBugnoms is the creator whose clip it discusses, not a place"
+  },
+  "pt-44230439-1": {
+    "places": [],
+    "note": "a reply listing the agencies that would turn up: ตำรวจ, สาธารณสุข, สรรพากร, กรมพัฒนาธุรกิจการค้า. Organisations, not destinations"
+  },
+  "pt-44230439-2": {
+    "places": [],
+    "note": "a reply on residential versus commercial zoning"
+  },
+  "pt-44230439-3": {
+    "places": [],
+    "note": "a rider describing an unnamed kitchen in someone's garage"
+  },
+  "pt-44230439-4": {
+    "places": [],
+    "note": "a reply on what a condo committee might tolerate"
+  },
+  "pt-44230439-5": {
+    "places": [],
+    "note": "a reply on fees and complaints"
+  },
+  "pt-44230439-6": {
+    "places": [],
+    "note": "a reply on app orders and tax"
+  }
+}

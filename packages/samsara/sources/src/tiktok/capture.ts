@@ -328,9 +328,19 @@ export async function captureTikTok(
     payload,
   }
 
-  const refusedBy = refusal({ ...read, state }, intercepted.length)
+  const refusedBy = refusal({ ...read, state }, intercepted.length, payload.observedPaths)
   return refusedBy ? { ...capture, refusedBy } : capture
 }
+
+/**
+ * TikTok serves the logged-out shell from a separate asset bundle, and the bundle
+ * name is in every request path it makes. That is a structural signal and, unlike
+ * the two text ones in `inpage.ts`, a language-independent one — which matters
+ * here more than anywhere, because this project never browses in English. A
+ * `th-TH` viewpoint is served a Thai login wall, `/log in to continue/i` does not
+ * match it, and the capture records an honest empty for a page it never read.
+ */
+const LOGIN_BUNDLE = "tiktok_web_login_static"
 
 /**
  * What counts as a refusal here, and what does not.
@@ -354,13 +364,26 @@ export async function captureTikTok(
  * would report "TikTok has nothing about this" when the truth is "we cannot read
  * what TikTok sent".
  */
-function refusal(read: TikTokPageRead, bodies: number): string | undefined {
+function refusal(
+  read: TikTokPageRead,
+  bodies: number,
+  paths: readonly string[],
+): string | undefined {
   if (read.wall === "captcha") return "captcha"
   if (read.wall === "region") return "region-block"
   if (read.wall === "login") return "login-wall"
   if (!read.href.includes("tiktok.com")) return `redirected to ${hostOf(read.href)}`
   if (read.state === null && bodies === 0) {
     return `no state and no item api response (title: ${read.title || "none"})`
+  }
+  // Nothing rendered, nothing answered, and every asset came from the login
+  // bundle. Each clause alone is survivable — a genuine empty result has no tiles,
+  // and the search endpoint can lose a race — but together they mean the search
+  // page was never served. Without this, P2.2's first Thai harvest recorded three
+  // queries as honest zeroes with `refusedBy: null`, which would have gone into
+  // the corpus as "TikTok has nothing about Yaowarat street food".
+  if (bodies === 0 && read.tiles === 0 && paths.some((p) => p.includes(LOGIN_BUNDLE))) {
+    return "login-wall"
   }
   return undefined
 }

@@ -3,14 +3,22 @@
 Phase: 2 — in progress. Phase 1's acceptance week is **still draining** (six of seven days queued,
 day 0 at 60.0%), and Phase 0 is **complete, pending the gate** (below; the gate is a human review
 and does not block buildable work).
-Last completed: **P2.1 — the LLM interface, and the model it deliberately did not choose**.
-813 tests across the repo, seam allowances **0 of 5** across 162 files. The count is measured
+Last completed: **P2.2 — the extract stage, and fifty items somebody had to read**.
+859 tests across the repo, seam allowances **0 of 5** across 166 files. The count is measured
 rather than carried forward, and the basis is written down here so the next session does not have
-to re-derive it: **788 passing under `turbo run test` plus 25 under `test:tools`, with one live
-test skipped.** That makes the pre-P2.1 total 762 against the 761 recorded last session — a
-one-test drift nobody can now account for, which is exactly why the basis is stated.
+to re-derive it: **834 passing under `turbo run test` plus 25 under `test:tools`, with one live
+test skipped.** P2.2's 46 are 19 in `@samsara/refine`, 24 in `@dt/travel-pack` and 3 in
+`@samsara/sources` for the TikTok login wall below.
 
-**Thirteen billed sessions, 4.41 minutes of 4,000.** P1.8 spent one proving the schedule against
+**Sixteen billed sessions, about 7.8 minutes of 4,000.** P2.2 spent three of them harvesting the
+golden corpus — roughly 3.4 minutes, and that figure is softer than the ones below it: it is
+wall-clock measured by the harvest script across launch and dispose, not a number read back off
+the meter, and it is recorded that way rather than given a false fifth decimal place. The three
+were one listing pass that also carried the TikTok queries, one that returned zero prose items
+because it skipped the topic chaining, and one that worked. The middle one is waste and is
+counted as such, for the same reason the `tail` session below is.
+
+P1.8 spent one proving the schedule against
 local Postgres (0.10068, one `youtube.search` run, 20 items, day 0 of a three-day experiment at a
 one-minute interval), then two more on the real thing: **day 0 of the acceptance week, on hosted
 Postgres, 0.2388 minutes, 60.0% overlap.** Six days of it are still queued. Seven for P1.6.1 below, three for P1.6.2, and two of those
@@ -20,6 +28,105 @@ Pantip sessions was waste and is counted as such**: the first run was piped to `
 not stop the capture — it had already opened the browser and billed — and it was then re-run to see
 the head of the output. The pipe cost 0.4584 minutes and produced nothing. Reading a recorder's
 output through `tail` is not free, because the spend happens before the bytes reach the pipe.
+
+## P2.2 — the extract stage, and fifty items somebody had to read
+
+`@samsara/refine` has its extract stage and `@dt/travel-pack` has the schema, the prompt and a
+golden set: 19 tests in the engine, 24 in the pack, and the `DomainPack` contract from section
+2.5 is now a thing two packages agree about rather than a paragraph. The engine batches
+`RawItem`s, renders them, calls `complete()` with the pack's prompt and `mentionSchema`, and
+returns mentions keyed back to the items they came from. It knows nothing about places, which
+`check:seam` confirms across 166 files at 0 allowances of 5.
+
+**The five real items are the whole reason this task produced anything worth reading.** The
+plan's shape for P2.2 is engine, schema, prompt, golden set — all of which can be built, tested
+and made green against a fake client that returns whatever the test hands it. One smoke run
+against one real model, five real Thai items and about a third of a cent found three defects
+that no fake could have found, because in each case the fake's answer was the test's own answer.
+
+**The first version of the item header was ambiguous, and the failure was silent.** `renderItem`
+packed the reference, source and language onto one line — `--- 1 maps.reviews th` — and the
+first real model to see it answered with `"ref": "maps.reviews th"` on all five items. From the
+engine's side that is indistinguishable from an invented reference, so the run reported `calls:
+1`, `failures: []`, `invalid: 0` and `mentions: 0`: a clean, green, entirely wrong result. The
+ref now gets its own labelled line and the envelope instruction says to copy the value on it and
+nothing else from the header. A fake client echoes the ref the test gave it and would have
+passed either version forever.
+
+**A word count is not a bound in a language without spaces.** The quote was capped at fifteen
+words by §8 and by the schema's docstring, and Thai does not put spaces between words. The smoke
+run obeyed that cap while returning a quote stitched from two halves of a sentence — the exact
+thing the rule forbids — because a limit that cannot be counted cannot be violated either. The
+cap is now 200 characters in the prompt and `max(200)` in the schema, deliberately the same
+number, so the instructions and the validator refuse the same thing instead of two adjacent
+things.
+
+**The dangerous failure was not an invented place but a generic noun in place of a name.** The
+run returned `ร้านกาแฟ` ("coffee shop"), `คาเฟ่` ("café") and `สาขานี้` ("this branch") as three
+of four mentions. Each passes the "could someone go to this at an address" test the prompt was
+built around, and each is worthless: it cannot be geocoded, cannot be deduped, and would resolve
+to whichever café the geocoder preferred. The prompt now names those three strings and says that
+an item which never names the place yields no mention rather than the noun.
+
+**The golden set is 50 Thai items, and 32 of them name nowhere.** That ratio is the task's main
+judgement call. The plan asks for "50 hand-labelled Thai items, target 80% place-name recall",
+and recall alone is a target a model can hit by answering every item with something. A food
+board is mostly people talking, so the negatives are the honest majority and they are also where
+the measurement lives: 18 items carry 70 places between them, and `inventedOnNegatives` is
+reported separately from precision because a model can be precise on the items that do name
+somewhere and still answer every negative with `คาเฟ่`.
+
+The negatives that are hard rather than empty are the ones worth having. A 2.5k-character news
+article about how Google Maps computes busy times — fluent, on-topic, naming no restaurant. A
+five-dish review whose author elides the shop name as `ร้าน ดี....` on purpose. A shop the
+writer ate at for years and is now asking what happened to, which the prompt disqualifies as a
+place that no longer exists. A comment naming two real attractions the writer wants to see and
+has not been to. Each is a sentence in the prompt's disqualification list, met in the wild.
+
+**I wrote the prompt and the answer key both, and ten items are flagged so that loop can be
+broken.** Eight are the judgement calls I know I made — whether a named rock formation inside a
+national park is its own place, whether a farmstay the writer drives to for coffee counts when
+lodging does not, whether a stall called `ร้านก๋วยจั๊บญวนอุบล` is named or merely described —
+and each says in its note what is being asked. Two were drawn from the rest by a seeded sample,
+so the audit is not only the questions I already knew to ask. **This is the open ask of the next
+human session**, and it is small: read ten items, agree or disagree with ten labels.
+
+Two invariants keep the key from rotting, asserted in `golden.test.ts` rather than trusted.
+Every label has to name something the item actually says — at least one accepted spelling must
+appear verbatim — which caught the one name I had normalised from memory: the source misspells
+the Sirindhorn dam as `เขื่อนสิรินธน`, and both spellings now count, because a model that
+silently corrects it has helped P2.3 rather than hurt it. And the counts — 50 items, 18
+place-bearing, 70 places, 10 flagged — are written as assertions, so re-running the harvest
+without revisiting the labels fails loudly instead of quietly changing what every score means.
+
+**The corpus is checked in and the 2.9MB it came from is not.** `tools/harvest-golden.ts`
+rebuilds it from Pantip in one session, which is what makes that a trade rather than a loss: the
+provenance is a program you can read. It takes its output path as an argument with no default,
+because a second harvest does not refresh the golden set, it invalidates a key that is written
+by hand against specific text.
+
+**A refusal recorded as an honest zero is worse than a refusal.** The first Thai harvest sent
+three TikTok queries and got three captures with no tiles, no intercepted bodies and
+`refusedBy: null` — which would have entered the corpus as "TikTok has nothing to say about
+Yaowarat street food". TikTok serves its logged-out shell from a bundle whose name is in every
+request path it makes, and that signal is structural rather than textual, which matters here
+more than anywhere: this project never browses in English, a `th-TH` viewpoint gets a Thai login
+wall, and `/log in to continue/i` does not match it. `capture.ts` now refuses on the
+conjunction — nothing rendered, nothing answered, every asset from the login bundle — and the
+three captures were deleted rather than kept, because a fixture asserting `refusedBy: null` on a
+page that was never served is a trap for whoever reads it next. Nothing here works around the
+wall; the refusal is the measurement.
+
+**The debt P2.1 recorded is now unblocked and still unpaid.** `LLM_MODEL_EXTRACT` is still
+empty and `compare()` has still not been run. It could not be before today, because its quality
+bar needed the golden set; the instrument and the answer key now both exist, and the bake-off is
+the first thing P2.3 should not start without. It costs nothing on the meter that is scarce —
+refine replays stored items and opens no browsers — and something on the meter that is not.
+
+One question came out of the harvest and is open: `Q14`, a `pantip.topic` capture returns other
+threads' "related topics" teasers as items. Measured at over a third of what twelve topic
+captures returned. It is filtered in the harvest tool, which is the wrong place for it, and the
+right fix changes what a parser returns.
 
 ## P2.1 — the LLM interface, and the model it deliberately did not choose
 
