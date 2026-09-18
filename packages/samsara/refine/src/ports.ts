@@ -86,3 +86,64 @@ export interface MentionSink {
     packVersion: string,
   ): Promise<Set<string>>
 }
+
+/**
+ * The bound on a mention list read.
+ *
+ * A hundred, like `ITEM_LIST_LIMIT`, and for the same reason: this is read by a
+ * lab screen a person scrolls, and the honest failure of an unbounded list is not
+ * a slow query but a page that renders eleven thousand rows and stops responding.
+ */
+export const MENTION_LIST_LIMIT = 100
+
+export interface MentionFilter {
+  domainId?: string
+  packVersion?: string
+  resolution?: ResolutionState
+  /** One item's mentions, for the "why did it say that" view. */
+  rawItemId?: string
+  limit?: number
+}
+
+/**
+ * A mention as a reader gets it back: the stored row, plus the item it came from.
+ *
+ * The join is not a convenience. A mention on its own is a name and a confidence
+ * with no way to check either — the whole question a reviewer asks is "is that
+ * really what the post said", and answering it needs the source, the URL and the
+ * language the item was written in. Returning them together is what makes one
+ * request enough to render a row, rather than one request plus N.
+ *
+ * `payload` stays `unknown` here exactly as it is in `MentionRow`. The engine
+ * stores what the pack validated and hands it back unread; giving this type a
+ * travel shape is the seam breaking in the place it is least likely to be noticed.
+ */
+export interface MentionRecord {
+  id: string
+  rawItemId: string
+  domainId: string
+  packVersion: string
+  payload: unknown
+  /** Set once the resolve stage (P2.3) has pointed it at an entity. */
+  entityId: string | null
+  resolution: ResolutionState
+  confidence: number
+  createdAt: Date
+  item: {
+    sourceId: string
+    url: string
+    title: string | null
+    languageGuess: string | null
+  }
+}
+
+/**
+ * The read side, separate from the sink because the callers are.
+ *
+ * The worker writes and never reads back; the API reads and must never write.
+ * Two interfaces rather than one is what lets the API hold an implementation
+ * that has no `insertMany` on it at all.
+ */
+export interface MentionStore {
+  list(filter: MentionFilter): Promise<MentionRecord[]>
+}

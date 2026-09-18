@@ -167,3 +167,77 @@ export interface DriftSeries {
   }
   points: DriftPoint[]
 }
+
+/**
+ * A Mention as `/lab/mentions` returns it (P2.2).
+ *
+ * **`payload` is `unknown` all the way to the browser, and that is the seam
+ * working.** The engine stored whatever the pack's `mentionSchema` validated and
+ * hands it back unread; `apps/api` passes it through without looking. This app is
+ * allowed to know it is a place — it is the travel app — so the narrowing happens
+ * here, in `asPlaceMention` below, and nowhere upstream of here.
+ *
+ * Restated rather than imported from `@dt/travel-pack` for the reason at the top
+ * of this file, and more sharply than usual: that package depends on
+ * `@samsara/refine`, which depends on `drizzle-orm`. Importing a type from it to
+ * render a name would put a database driver in the bundler's graph.
+ */
+export type ResolutionState = "pending" | "resolved" | "unresolvable"
+
+export const RESOLUTION_STATES: readonly ResolutionState[] = [
+  "pending",
+  "resolved",
+  "unresolvable",
+] as const
+
+export interface Mention {
+  id: string
+  rawItemId: string
+  domainId: string
+  packVersion: string
+  payload: unknown
+  entityId: string | null
+  resolution: ResolutionState
+  confidence: number
+  createdAt: string
+  item: {
+    sourceId: string
+    url: string
+    title: string | null
+    languageGuess: string | null
+  }
+}
+
+/** `@dt/travel-pack`'s `placeMention`, restated. See `asPlaceMention`. */
+export interface PlaceMention {
+  localName: string
+  romanName: string | null
+  dish: string | null
+  category: string
+  priceHint: string | null
+  quote: string
+  sentiment: "positive" | "mixed" | "negative"
+  creatorReads: "local" | "visitor" | "unknown"
+}
+
+/**
+ * Narrow a mention payload to a place, or don't.
+ *
+ * Returns `null` rather than throwing, and the caller renders the raw JSON when
+ * it does. That is not defensive habit — it is the only honest way to read this
+ * column. `mentions.payload` is `jsonb` written by whichever pack version was
+ * running at the time, so a row extracted before a schema change genuinely does
+ * not have today's shape, and a cast would render it as a card with `undefined`
+ * where the name goes. A row this function refuses is a row worth seeing.
+ *
+ * Only the fields this screen shows are checked. A stricter check here would be
+ * a second copy of `placeMention` that can disagree with the first; the pack
+ * already validated the payload before it was stored, and re-validating it in a
+ * browser would not make that more true.
+ */
+export function asPlaceMention(payload: unknown): PlaceMention | null {
+  if (typeof payload !== "object" || payload === null) return null
+  const p = payload as Record<string, unknown>
+  if (typeof p.localName !== "string" || typeof p.quote !== "string") return null
+  return p as unknown as PlaceMention
+}

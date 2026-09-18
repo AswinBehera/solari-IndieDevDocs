@@ -22,6 +22,7 @@
     "@samsara/harvest": "workspace:*",
     "@samsara/kernel": "workspace:*",
     "@samsara/personas": "workspace:*",
+    "@samsara/refine": "workspace:*",
     "hono": "^4.9.10",
     "jose": "^6.1.0",
     "zod": "^4.6.1"

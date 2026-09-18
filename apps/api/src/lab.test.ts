@@ -6,6 +6,7 @@ import {
   MemoryRawItemStore,
 } from "@samsara/harvest/store"
 import { MemoryPersonaStore } from "@samsara/personas/store"
+import { MemoryMentionStore } from "@samsara/refine"
 import { beforeEach, describe, expect, it } from "vitest"
 import { createApp } from "./app.js"
 import type { Verifier } from "./auth.js"
@@ -54,13 +55,16 @@ let personas: MemoryPersonaStore
 let runs: MemoryHarvestRunStore
 let items: MemoryRawItemStore
 let experiments: MemoryDriftExperimentStore
+let mentions: MemoryMentionStore
 
 const build = (withLab = true) =>
   createApp({
     jobs: () => jobs,
     verifier,
     dispatcher: noopDispatcher,
-    ...(withLab ? { lab: { stores: () => ({ personas, runs, items, experiments }) } } : {}),
+    ...(withLab
+      ? { lab: { stores: () => ({ personas, runs, items, experiments, mentions }) } }
+      : {}),
   })
 
 const persona = (id: string, over: Partial<Parameters<MemoryPersonaStore["insert"]>[0]> = {}) => ({
@@ -121,6 +125,7 @@ beforeEach(() => {
   runs = new MemoryHarvestRunStore()
   items = new MemoryRawItemStore()
   experiments = new MemoryDriftExperimentStore()
+  mentions = new MemoryMentionStore()
 })
 
 describe("the Lab's surface exists only where it is configured", () => {
@@ -241,6 +246,68 @@ describe("one run's items", () => {
     const body = (await res.json()) as { items: { text: string; truncated: boolean }[] }
     expect(body.items[0]?.truncated).toBe(true)
     expect(body.items[0]?.text.length).toBeLessThan(1200)
+  })
+})
+
+describe("what the extractor found", () => {
+  const mention = (over: Partial<Parameters<MemoryMentionStore["add"]>[0]> = {}) => ({
+    id: "m1",
+    rawItemId: "i1",
+    domainId: "travel",
+    packVersion: "1",
+    payload: { localName: "ร้านหอมดิน", quote: "อร่อยมาก" },
+    entityId: null,
+    resolution: "pending" as const,
+    confidence: 0.9,
+    createdAt: at("2026-09-18T10:00:00.000Z"),
+    item: {
+      sourceId: "pantip.topic",
+      url: "https://pantip.com/topic/1",
+      title: "t",
+      languageGuess: "th",
+    },
+    ...over,
+  })
+
+  it("hands the payload back exactly as it was stored", async () => {
+    mentions.add(mention())
+    const res = await build().request("/lab/mentions", { headers: AUTH })
+    const body = (await res.json()) as { mentions: { payload: unknown }[] }
+    // The API is below the seam and has no idea what a `localName` is. If this
+    // ever starts reshaping the payload, the pack and the screen have acquired a
+    // third opinion about the schema, sitting between them where neither can see it.
+    expect(body.mentions[0]?.payload).toEqual({ localName: "ร้านหอมดิน", quote: "อร่อยมาก" })
+  })
+
+  it("carries the item each claim came from, so a claim can be checked", async () => {
+    mentions.add(mention())
+    const res = await build().request("/lab/mentions", { headers: AUTH })
+    const body = (await res.json()) as { mentions: { item: { url: string } }[] }
+    expect(body.mentions[0]?.item.url).toBe("https://pantip.com/topic/1")
+  })
+
+  it("filters by resolution", async () => {
+    mentions.add(mention(), mention({ id: "m2", resolution: "resolved", entityId: "e1" }))
+    const res = await build().request("/lab/mentions?resolution=resolved", { headers: AUTH })
+    const body = (await res.json()) as { mentions: { id: string }[] }
+    expect(body.mentions.map((m) => m.id)).toEqual(["m2"])
+  })
+
+  it("refuses a resolution the engine does not have, and names the ones it does", async () => {
+    const res = await build().request("/lab/mentions?resolution=maybe", { headers: AUTH })
+    expect(res.status).toBe(400)
+    // The message is the point: a lab screen's caller is a URL bar, and "400" on
+    // its own does not tell an operator what to type instead.
+    expect((await res.json()) as { error: string }).toMatchObject({
+      error: expect.stringContaining("unresolvable"),
+    })
+  })
+
+  it("bounds the list rather than trusting the query string", async () => {
+    mentions.add(...Array.from({ length: 5 }, (_, i) => mention({ id: `m${i}` })))
+    const res = await build().request("/lab/mentions?limit=1000000", { headers: AUTH })
+    const body = (await res.json()) as { mentions: unknown[] }
+    expect(body.mentions).toHaveLength(5)
   })
 })
 

@@ -1,6 +1,13 @@
 import { useQuery } from "@tanstack/react-query"
 import { api } from "../api"
-import type { DriftExperiment, DriftSeries, Harvest, Persona } from "./types"
+import type {
+  DriftExperiment,
+  DriftSeries,
+  Harvest,
+  Mention,
+  Persona,
+  ResolutionState,
+} from "./types"
 
 /**
  * Query keys in one file, because two components read the same personas.
@@ -20,6 +27,7 @@ export const labKeys = {
   // row in the list and the `state` the series header reads, and one invalidation
   // that covers both is one fewer way for the two to disagree on screen.
   driftList: ["lab", "drift"] as const,
+  mentions: (filter: MentionFilter) => ["lab", "mentions", filter] as const,
   drift: (experimentId: string | null, k: number | null) =>
     ["lab", "drift", experimentId, k] as const,
 }
@@ -108,5 +116,40 @@ export function useDriftSeries(experimentId: string | null, k: number | null) {
       if (series.experiment.state === "stopped" || series.summary.complete) return false
       return Math.max(MIN_POLL_MS, series.experiment.intervalMinutes * 60_000)
     },
+  })
+}
+
+export interface MentionFilter {
+  domainId?: string
+  resolution?: ResolutionState
+  rawItemId?: string
+  limit?: number
+}
+
+/**
+ * What the extract stage claimed about the corpus, newest first.
+ *
+ * No `refetchInterval`, unlike `useHarvests` and `useDriftSeries`. Extraction is
+ * not something this screen is waiting on: it runs in the worker over items that
+ * were harvested hours ago, and a reviewer reading a quote against its source is
+ * the slowest actor in the loop. A poll here would spend the ADR-0016 ceiling to
+ * re-render a list nobody asked to move.
+ *
+ * The whole filter is the query key, so two different filters are two caches
+ * rather than one that thrashes.
+ */
+export function useMentions(filter: MentionFilter) {
+  return useQuery({
+    queryKey: labKeys.mentions(filter),
+    queryFn: () => {
+      const params = new URLSearchParams()
+      if (filter.domainId) params.set("domainId", filter.domainId)
+      if (filter.resolution) params.set("resolution", filter.resolution)
+      if (filter.rawItemId) params.set("rawItemId", filter.rawItemId)
+      if (filter.limit !== undefined) params.set("limit", String(filter.limit))
+      const q = params.toString()
+      return api<{ mentions: Mention[] }>(`/lab/mentions${q ? `?${q}` : ""}`)
+    },
+    select: (data) => data.mentions,
   })
 }

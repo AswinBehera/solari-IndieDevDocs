@@ -1,4 +1,4 @@
-import { countryCode, locale, personaTier } from "@samsara/core"
+import { countryCode, locale, personaTier, resolutionState } from "@samsara/core"
 // Subpath imports, never the barrels, for the reason `app.ts` gives about
 // `@samsara/kernel/jobs`: this app is compiled against the Workers runtime, and
 // `@samsara/harvest`'s barrel reaches `run.ts`, `@samsara/sources` and Playwright,
@@ -9,6 +9,7 @@ import { overlapAt } from "@samsara/harvest/overlap"
 import type { HarvestRunRecord, RawItemRow } from "@samsara/harvest/ports"
 import type { JobStore } from "@samsara/kernel/jobs"
 import type { PersonaRecord, PersonaStore } from "@samsara/personas/store"
+import type { MentionFilter, MentionRecord } from "@samsara/refine/ports"
 import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { z } from "zod"
@@ -60,6 +61,18 @@ export interface LabStores {
   runs: HarvestRunStoreReader & DriftRunReaderSlice
   items: RawItemStoreReader & DriftItemReaderSlice
   experiments: DriftExperimentStoreWriter
+  mentions: MentionStoreReader
+}
+
+/**
+ * The read half of `MentionStore`, which is all of it today.
+ *
+ * Declared here anyway rather than importing the port directly, so that the day
+ * the port grows a write method this surface does not silently acquire it. The
+ * worker writes mentions; the API looks at them.
+ */
+export interface MentionStoreReader {
+  list(filter: MentionFilter): Promise<MentionRecord[]>
 }
 
 export interface LabDeps {
@@ -178,6 +191,28 @@ const runView = (r: HarvestRunRecord) => ({
  */
 const TEXT_PREVIEW = 400
 
+/**
+ * A mention as the Lab renders it.
+ *
+ * `payload` goes out untouched. The engine stored what the pack validated, and
+ * this file has no schema for it and wants none — reaching into it to pull out a
+ * `localName` would put travel vocabulary in the one layer that is supposed to
+ * carry none, and would break the day a second pack stores a different shape. The
+ * client knows which pack it asked about and parses accordingly.
+ */
+const mentionView = (m: MentionRecord) => ({
+  id: m.id,
+  rawItemId: m.rawItemId,
+  domainId: m.domainId,
+  packVersion: m.packVersion,
+  payload: m.payload,
+  entityId: m.entityId,
+  resolution: m.resolution,
+  confidence: m.confidence,
+  createdAt: m.createdAt.toISOString(),
+  item: m.item,
+})
+
 const itemView = (item: RawItemRow) => ({
   id: item.id,
   rank: item.rank,
@@ -254,6 +289,45 @@ export function labRoutes(deps: LabDeps) {
     if (!run) throw new HTTPException(404, { message: "no such harvest run" })
     const items = await stores.items.listByRun(id, clampK(c.req.query("limit")))
     return c.json({ harvest: runView(run), items: items.map(itemView) })
+  })
+
+  /**
+   * What the extractor claimed, and the post it claimed it from.
+   *
+   * This is the screen the Phase 2 gate is written against — "quality review of
+   * the top 30, and if more than a third are wrong, fix extract before Phase 3" —
+   * so the thing it must make easy is *disagreeing* with a row. Hence the item's
+   * URL and source on every mention rather than behind a click: a reviewer who has
+   * to navigate to check a name will check the first five and trust the rest.
+   *
+   * Filters are all optional and all narrowing. No date range: the list is newest
+   * first and bounded, and a reviewer who needs an older window wants a different
+   * screen rather than a longer one.
+   */
+  lab.get("/mentions", async (c) => {
+    const domainId = c.req.query("domainId")
+    const packVersion = c.req.query("packVersion")
+    const rawItemId = c.req.query("rawItemId")
+    // Validated against the enum `@samsara/core` already owns rather than a list
+    // written here, so a fourth resolution state cannot be accepted by the
+    // database and rejected by the screen that reads it.
+    const raw = c.req.query("resolution")
+    const parsed = raw === undefined ? undefined : resolutionState.safeParse(raw)
+    if (parsed && !parsed.success) {
+      throw new HTTPException(400, {
+        message: `resolution must be one of ${resolutionState.options.join(", ")}`,
+      })
+    }
+    const resolution = parsed?.data
+    const limit = Number(c.req.query("limit"))
+    const rows = await deps.stores(c.env).mentions.list({
+      ...(domainId ? { domainId } : {}),
+      ...(packVersion ? { packVersion } : {}),
+      ...(rawItemId ? { rawItemId } : {}),
+      ...(resolution ? { resolution } : {}),
+      ...(Number.isFinite(limit) ? { limit } : {}),
+    })
+    return c.json({ mentions: rows.map(mentionView) })
   })
 
   /**

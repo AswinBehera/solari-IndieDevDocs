@@ -8,6 +8,7 @@ import {
 } from "@samsara/harvest/postgres"
 import { PostgresJobStore } from "@samsara/kernel/postgres"
 import { PostgresPersonaStore } from "@samsara/personas/postgres"
+import { PostgresMentionStore } from "@samsara/refine/postgres"
 import { createApp } from "./app.js"
 import { devVerifier, supabaseVerifier, type Verifier } from "./auth.js"
 import { githubDispatcher, noopDispatcher } from "./dispatch.js"
@@ -45,7 +46,7 @@ export default {
           const e = bindings as Env
           return new PostgresJobStore(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
         },
-        // The Lab's four stores over one connection. Same per-request rule as
+        // The Lab's five stores over one connection. Same per-request rule as
         // `jobs` above and for the same reason: Hyperdrive hands out a pooled
         // connection per request, and holding one across requests in a long-lived
         // isolate is how a pool is exhausted by an API that looks idle.
@@ -58,6 +59,9 @@ export default {
               runs: new PostgresHarvestRunStore(db),
               items: new PostgresRawItemStore(db),
               experiments: new PostgresDriftExperimentStore(db),
+              // The read side only. `PostgresMentionSink` is not built here:
+              // the worker writes mentions, the API must never be able to.
+              mentions: new PostgresMentionStore(db),
             }
           },
         },

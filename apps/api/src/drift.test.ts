@@ -6,6 +6,7 @@ import {
 } from "@samsara/harvest/store"
 import type { EnqueueInput } from "@samsara/kernel/jobs"
 import { MemoryPersonaStore } from "@samsara/personas/store"
+import { MemoryMentionStore } from "@samsara/refine"
 import { beforeEach, describe, expect, it } from "vitest"
 import { createApp } from "./app.js"
 import type { Verifier } from "./auth.js"
@@ -38,6 +39,7 @@ let personas: MemoryPersonaStore
 let runs: MemoryHarvestRunStore
 let items: MemoryRawItemStore
 let experiments: MemoryDriftExperimentStore
+let mentions: MemoryMentionStore
 let enqueued: EnqueueInput[]
 let now: Date
 
@@ -67,7 +69,7 @@ const build = () =>
     verifier,
     dispatcher: noopDispatcher,
     lab: {
-      stores: () => ({ personas, runs, items, experiments }),
+      stores: () => ({ personas, runs, items, experiments, mentions }),
       newId: () => `exp-${++nextId}`,
       clock: () => now,
     },
@@ -152,6 +154,7 @@ beforeEach(async () => {
   runs = new MemoryHarvestRunStore()
   items = new MemoryRawItemStore()
   experiments = new MemoryDriftExperimentStore()
+  mentions = new MemoryMentionStore()
   enqueued = []
   nextId = 0
   now = START

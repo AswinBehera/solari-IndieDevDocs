@@ -6,6 +6,7 @@ import {
 } from "@samsara/harvest/store"
 import type { EnqueueInput, EnqueueResult, JobStore, StoredJobEvent } from "@samsara/kernel/jobs"
 import { MemoryPersonaStore } from "@samsara/personas/store"
+import { MemoryMentionStore } from "@samsara/refine"
 import { describe, expect, it } from "vitest"
 import { createApp } from "./app.js"
 import type { Verifier } from "./auth.js"
@@ -77,6 +78,7 @@ const personas = new MemoryPersonaStore()
 const runs = new MemoryHarvestRunStore()
 const items = new MemoryRawItemStore()
 const experiments = new MemoryDriftExperimentStore()
+const mentions = new MemoryMentionStore()
 
 const capturedAt = new Date("2026-09-16T10:00:00.000Z")
 const labRun = (
@@ -128,7 +130,7 @@ const app = createApp({
   jobs: () => store,
   verifier,
   dispatcher: noopDispatcher,
-  lab: { stores: () => ({ personas, runs, items, experiments }) },
+  lab: { stores: () => ({ personas, runs, items, experiments, mentions }) },
 })
 
 /**
