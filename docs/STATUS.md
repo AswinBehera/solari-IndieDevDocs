@@ -143,11 +143,40 @@ three captures were deleted rather than kept, because a fixture asserting `refus
 page that was never served is a trap for whoever reads it next. Nothing here works around the
 wall; the refusal is the measurement.
 
-**The debt P2.1 recorded is now unblocked and still unpaid.** `LLM_MODEL_EXTRACT` is still
-empty and `compare()` has still not been run. It could not be before today, because its quality
-bar needed the golden set; the instrument and the answer key now both exist, and the bake-off is
-the first thing P2.3 should not start without. It costs nothing on the meter that is scarce —
-refine replays stored items and opens no browsers — and something on the meter that is not.
+**The debt P2.1 recorded is paid.** `tools/bake-off.ts` ran five routes against the 50
+hand-labelled items on 18 September 2026 for $0.16 all in, and `LLM_MODEL_EXTRACT` is now
+`deepseek/deepseek-v4-flash`.
+
+| model | recall | precision | invented | cost | time |
+| --- | --- | --- | --- | --- | --- |
+| `deepseek/deepseek-v4-flash` | 86.5% | 88.9% | 3 | $0.0092 | 763s |
+| `anthropic/claude-haiku-4.5` (reference) | 86.5% | 92.8% | 1 | $0.1028 | 85s |
+| `qwen/qwen3-30b-a3b-instruct-2507` | 78.4% | 69.0% | 5 | $0.0235 | 2236s |
+| `qwen/qwen3.7-flash` | 73.0% | 80.6% | 2 | $0.0159 | 1315s |
+| `google/gemini-2.5-flash-lite` | 71.6% | 76.8% | 6 | $0.0076 | 49s |
+
+Recall is read against the 19 place-bearing items and their 74 places; `invented` counts names
+returned for the 31 items that name nowhere. **DeepSeek is the only candidate clearing the 80%
+bar, and it ties the frontier reference on recall exactly** — 64 of 74, both — at a ninth of the
+price. What the cheap route gives up is the other two columns: three invented names against one,
+and four points of precision. That is the trade, stated rather than discovered later.
+
+Two things worth keeping. **Cost did not track the rate card.** DeepSeek's per-token rates are
+three times `qwen3.7-flash`'s and it cost 42% less, because it answered in 7 calls where qwen
+took 17 and `qwen3-30b` took 25 — the qwen routes kept truncating at the 8,000-token output cap,
+failing as `config`, and paying again for each half of a bisected batch. The bill is set by how
+many times a batch has to be re-asked, not by the price per token. **And speed is not on the
+same axis as quality**: `gemini-2.5-flash-lite` finished in 49 seconds, fifteen times faster
+than the winner for nearly the same money, and bought it by naming six things that were not
+there.
+
+`gpt-5-nano` was measured and excluded, and is kept in the output under `excluded` because "we
+tried it and it was bad" is a finding: 1984s, $0.0822 against a $0.0081 estimate — ten times
+over, all of it reasoning billed as output tokens — at 16.2% recall.
+
+One thing the run found that is not about models: a request hit the 240s deadline once on the
+winning route and was retried successfully, so roughly a third of DeepSeek's wall clock was dead
+waiting. That deadline exists only inside the tool. `Q16` is the engine-level question.
 
 One question came out of the harvest and is open: `Q14`, a `pantip.topic` capture returns other
 threads' "related topics" teasers as items. Measured at over a third of what twelve topic
