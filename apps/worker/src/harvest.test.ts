@@ -9,8 +9,10 @@ import {
   type BrowserLauncher,
   BudgetGuard,
   DEFAULT_CEILINGS,
+  type JobStore,
   Kernel,
   MemoryCounterStore,
+  MemoryJobStore,
   MemoryLogger,
   MemorySessionStore,
   SessionRegistry,
@@ -21,6 +23,7 @@ import { describe, expect, it } from "vitest"
 import type { JobContext } from "./handlers.js"
 import { createHarvestHandler } from "./harvest.js"
 import { createPackRegistry } from "./packs.js"
+import { refineJobKey } from "./refine.js"
 
 /**
  * The handler's own job, which is smaller than it looks: validate a payload that
@@ -93,6 +96,8 @@ async function harness(
     health?: PersonaRecord["health"]
     experiment?: "running" | "stopped"
     sourceThrows?: string
+    /** Makes the follow-on enqueue fail, which must not fail the harvest. */
+    queueThrows?: boolean
   } = {},
 ) {
   const logger = new MemoryLogger()
@@ -138,6 +143,15 @@ async function harness(
     startedAt: new Date("2026-09-12T00:00:00Z"),
     state: behaviour.experiment ?? "running",
   })
+  const jobs = new MemoryJobStore()
+  const queue: Pick<JobStore, "enqueue"> = behaviour.queueThrows
+    ? {
+        async enqueue() {
+          throw new Error("queue is unreachable")
+        },
+      }
+    : jobs
+
   const handler = createHarvestHandler({
     sources: new Map([
       [
@@ -152,6 +166,7 @@ async function harness(
     items,
     archive: new MemoryCaptureArchive(),
     experiments,
+    queue,
   })
 
   const notes: string[] = []
@@ -166,7 +181,7 @@ async function harness(
     },
   })
 
-  return { handler, ctx, runs, items, personas, experiments, notes, fake }
+  return { handler, ctx, runs, items, personas, experiments, notes, fake, jobs }
 }
 
 const PAYLOAD = { personaId: "p1", sourceId: "fake.source", query: "xin chào", domainId: "atlas" }
@@ -287,5 +302,72 @@ describe("what reaches jobs.last_error", () => {
     // `record-capture.ts` had already paid for the same lesson once.
     const h = await harness({ sourceThrows: "results is not defined" })
     await expect(h.handler(h.ctx(PAYLOAD))).rejects.toThrow("results is not defined")
+  })
+})
+
+describe("the chaining into extraction (P2.6)", () => {
+  // A harvest that found items queues the job that reads them. The alternative
+  // was a scan for unextracted runs, which would have made "did this get
+  // extracted" a question with a different answer every time it was asked.
+  const TRAVEL = { ...PAYLOAD, domainId: "travel" }
+
+  it("queues one refine.extract carrying the run it just wrote", async () => {
+    const h = await harness()
+    await h.handler(h.ctx(TRAVEL))
+
+    const queued = [...h.jobs.rows.values()].filter((r) => r.type === "refine.extract")
+    expect(queued).toHaveLength(1)
+    const [runId] = [...h.runs.runs.keys()]
+    expect(queued[0]?.payload).toEqual({ domainId: "travel", harvestRunId: runId })
+    expect(queued[0]?.domainId).toBe("travel")
+  })
+
+  it("keys the job on the pack version, so a bumped prompt is not locked out", async () => {
+    // `jobs.idempotency_key` is a permanent unique index — it collides against
+    // succeeded rows too. Without the version in the key a run could be extracted
+    // exactly once ever, and the one recovery `pack.version` exists to provide
+    // would be the one the queue forbids.
+    const h = await harness()
+    await h.handler(h.ctx(TRAVEL))
+
+    const [job] = [...h.jobs.rows.values()].filter((r) => r.type === "refine.extract")
+    const version = createPackRegistry().require("travel").version
+    const [runId] = [...h.runs.runs.keys()]
+    expect(job?.idempotencyKey).toBe(refineJobKey("travel", version, runId as string))
+    expect(job?.idempotencyKey).toContain(`:${version}:`)
+  })
+
+  it("does not queue anything for a domain with no pack", async () => {
+    // Harvesting a domain nobody wrote a pack for is the seam working, not a gap:
+    // the engine stamps `domainId` and has no opinion about packs. It still says
+    // so, because the other reading is a runner that shipped without its pack.
+    const h = await harness()
+    await h.handler(h.ctx(PAYLOAD))
+
+    expect([...h.jobs.rows.values()].filter((r) => r.type === "refine.extract")).toHaveLength(0)
+    expect(h.notes.join(" ")).toContain("no pack registered for atlas")
+  })
+
+  it("does not queue an extraction of nothing", async () => {
+    // A blocked harvest is not a failed job — it succeeds with an outcome and zero
+    // items, which is the case this branch exists for. Queueing here would spend a
+    // model call to discover the wall that the harvest already reported.
+    const h = await harness({ sourceThrows: "blocked" })
+    await expect(h.handler(h.ctx(TRAVEL))).resolves.toBeUndefined()
+
+    expect(h.items.items).toHaveLength(0)
+    expect([...h.jobs.rows.values()].filter((r) => r.type === "refine.extract")).toHaveLength(0)
+  })
+
+  it("survives a queue that is unreachable, because the harvest has already been paid for", async () => {
+    // The opposite of the rule everywhere else in this handler. Failing here would
+    // put the harvest back in the queue and re-spend a browser session to repair a
+    // failed INSERT — and the gap is recoverable from the runs table anyway.
+    const h = await harness({ queueThrows: true })
+    await expect(h.handler(h.ctx(TRAVEL))).resolves.toBeUndefined()
+
+    expect(h.notes.join(" ")).toContain("backfill can recover it")
+    // The harvest itself still landed, which is the whole point of not throwing.
+    expect(h.items.items.length).toBeGreaterThan(0)
   })
 })

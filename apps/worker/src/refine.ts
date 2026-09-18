@@ -27,6 +27,24 @@ import type { JobHandler } from "./handlers.js"
  * changed prompt asks for its corpus back.
  */
 
+/**
+ * The idempotency key for one run's extraction, and the pack version is in it
+ * deliberately.
+ *
+ * `jobs.idempotency_key` is a permanent unique index: it collides against
+ * succeeded and dead rows, not only queued ones. So `refine.extract:<runId>`
+ * would mean a run can be extracted exactly once *ever*, and a corrected prompt
+ * could never ask for its corpus back through the queue — the one recovery the
+ * pack version exists to provide would be the one the queue forbids.
+ *
+ * Keying on the version instead makes the queue agree with `extract()`, which
+ * already skips on `(domainId, packVersion, rawItemId)`. Bump `pack.version` and
+ * both the job and the mentions want doing again, in the same breath, without
+ * anything else in the system having to know that rule.
+ */
+export const refineJobKey = (domainId: string, packVersion: string, harvestRunId: string): string =>
+  `refine.extract:${domainId}:${packVersion}:${harvestRunId}`
+
 export interface RefinePayload {
   domainId: string
   harvestRunId: string

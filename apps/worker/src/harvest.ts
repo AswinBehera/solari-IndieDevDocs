@@ -7,9 +7,11 @@ import type {
   RawItemStore,
 } from "@samsara/harvest"
 import { runHarvest } from "@samsara/harvest"
+import type { JobStore } from "@samsara/kernel"
 import type { PersonaStore } from "@samsara/personas"
 import type { SourceAdapter } from "@samsara/sources"
 import type { JobHandler } from "./handlers.js"
+import { refineJobKey } from "./refine.js"
 
 /**
  * The `harvest.run` job type: one identity, one source, one question.
@@ -121,6 +123,16 @@ export interface HarvestHandlerDeps {
    * time, before a browser opens.
    */
   experiments?: Pick<DriftExperimentStore, "byId">
+  /**
+   * Where the follow-on `refine.extract` job goes (P2.6).
+   *
+   * Required, unlike the two optional deps above, because the failure it prevents
+   * is silent. A harvest that does not chain still succeeds, still writes its
+   * items and still reports a green run — the only symptom is that `/lab/mentions`
+   * stays empty for reasons nothing says out loud. A missing optional dep would
+   * produce exactly that; a missing required one does not compile.
+   */
+  queue: Pick<JobStore, "enqueue">
 }
 
 export function createHarvestHandler(deps: HarvestHandlerDeps): JobHandler {
@@ -212,5 +224,58 @@ export function createHarvestHandler(deps: HarvestHandlerDeps): JobHandler {
     await ctx.heartbeat(
       `${report.outcome}: ${report.itemCount} item(s), ${report.minutes.toFixed(2)} min`,
     )
+
+    // P2.6's chaining, and it happens *after* the report above on purpose: the
+    // harvest is finished and has said so by this point, and nothing below is
+    // allowed to change that.
+    if (report.itemCount === 0) return
+
+    // `get`, not `require`. A domain can be harvested without being extractable —
+    // the engine stamps `domainId` on rows and has no opinion about packs, which
+    // is the seam working rather than a gap in it. Said out loud regardless,
+    // because the other thing this looks like is a runner that shipped without
+    // its pack, and those two must not be indistinguishable in the log.
+    const pack = ctx.packs.get(input.domainId)
+    if (!pack) {
+      await ctx.heartbeat(
+        `no pack registered for ${input.domainId}: ${report.itemCount} item(s) harvested, none queued for extraction`,
+      )
+      return
+    }
+
+    try {
+      const { deduped } = await deps.queue.enqueue({
+        type: "refine.extract",
+        domainId: input.domainId,
+        idempotencyKey: refineJobKey(input.domainId, pack.version, report.runId),
+        payload: { domainId: input.domainId, harvestRunId: report.runId },
+      })
+      await ctx.heartbeat(
+        deduped
+          ? `extraction of run ${report.runId} was already queued`
+          : `queued extraction of run ${report.runId}`,
+      )
+    } catch (error) {
+      // Deliberately not fatal, which is the opposite of the rule everywhere else
+      // in this file. Failing here would put the *harvest* back in the queue, and
+      // a harvest costs a browser session and real provider minutes; re-spending
+      // them to repair a failed INSERT is a worse outcome than the gap it repairs.
+      //
+      // The gap is recoverable by other means, which is the only reason swallowing
+      // it is honest: `tools/backfill-refine.ts` enqueues from the runs table, so
+      // anything missed here is reachable without anyone knowing it was missed.
+      //
+      // Recorded as a heartbeat rather than a kernel event, and not because a
+      // kernel event would be wrong — because `KernelEvent` is a closed union
+      // whose closedness is ADR-0014's actual defence, so widening it is a
+      // reviewed diff in `log.ts` and not something a catch block helps itself to.
+      // The note is the better home regardless: heartbeats land in `job_events`
+      // (ADR-0016), which outlives a workflow log and can be queried. The error's
+      // class only, never its message, which may carry a connection string.
+      const kind = error instanceof Error ? error.name : "unknown"
+      await ctx.heartbeat(
+        `could not queue extraction of run ${report.runId} (${kind}); backfill can recover it`,
+      )
+    }
   }
 }

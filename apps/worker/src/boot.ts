@@ -89,6 +89,11 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
   // The registry is in `sources.ts`, where a test can reach it. See that file.
   const sources = sourceRegistry()
 
+  // Hoisted out of the `return` below because `harvest.run` now enqueues into it:
+  // a harvest that found items queues the `refine.extract` that reads them (P2.6).
+  // One store instance, so the chaining writes to the queue this runner drains.
+  const jobs = new PostgresJobStore(database.db)
+
   handlers.register(
     "harvest.run",
     createHarvestHandler({
@@ -109,6 +114,7 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       // experiment stops anything: its remaining days are already rows in the
       // queue, so there is nothing to cancel — only something to refuse (P1.8).
       experiments: new PostgresDriftExperimentStore(database.db),
+      queue: jobs,
     }),
   )
 
@@ -138,7 +144,7 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
 
   return {
     db: database,
-    jobs: new PostgresJobStore(database.db),
+    jobs,
     kernel,
     registry,
     handlers,

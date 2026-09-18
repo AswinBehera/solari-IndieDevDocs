@@ -7,9 +7,9 @@ Last completed: **P2.2 — the extract stage, and fifty items somebody had to re
 labels it flagged have since been **audited by a human, one item at a time**; four rulings moved,
 four prompt rules changed with them, and the golden set now reads 19 place-bearing items, 74
 places, 31 negatives.
-892 tests across the repo, seam allowances **0 of 5** across 168 files. The count is measured
+897 tests across the repo, seam allowances **0 of 5** across 168 files. The count is measured
 rather than carried forward, and the basis is written down here so the next session does not have
-to re-derive it: **867 passing under `turbo run test` plus 25 under `test:tools`, with one live
+to re-derive it: **872 passing under `turbo run test` plus 25 under `test:tools`, with one live
 test skipped.** P2.2's 47 are 19 in `@samsara/refine`, 25 in `@dt/travel-pack` and 3 in
 `@samsara/sources` for the TikTok login wall below.
 
@@ -220,6 +220,49 @@ is about.
 claim that the runner had no vertical compiled into it. That claim is now made differently: the
 registry holds exactly `["travel"]`, and a second id appearing there without a second pack being
 written is the seam leaking.
+
+## P2.6 (part) — the chaining, and a key that had to carry a version
+
+`harvest.run` now enqueues the `refine.extract` for the run it just wrote. The pipeline feeds
+itself from here, which matters more than it sounds: six days of the acceptance week are still
+queued, and they will now extract themselves instead of needing a sweep after the fact.
+
+**The idempotency key carries the pack version, and that is not decoration.**
+`jobs.idempotency_key` is a permanent unique index — `onConflictDoNothing` collides against
+succeeded and dead rows, not only queued ones. A key of `refine.extract:<runId>` would therefore
+mean a run can be extracted exactly **once, ever**, and the one recovery the pack version exists
+to provide — bump the version, get the corpus re-read under a corrected prompt — would be the one
+thing the queue made impossible. The key is
+`refine.extract:<domainId>:<packVersion>:<runId>`, which makes the queue agree with `extract()`,
+whose per-item skip is already keyed on `(domainId, packVersion, rawItemId)`. Both dedupes then
+release together, and nothing else has to know the rule. Worth carrying forward as a shape:
+**a permanent idempotency key must contain every dimension along which the work can legitimately
+need redoing**, or it is not an idempotency key, it is a lock.
+
+**The chaining is deliberately not fatal, which is the opposite of every other rule in that
+handler.** If the enqueue throws, the harvest still succeeds. The harvest has already bought a
+browser session and real provider minutes; failing the job would put it back in the queue and
+re-spend them to repair a failed INSERT, which costs more than the gap it repairs. Swallowing a
+failure is only honest when the gap is findable afterwards without knowing it happened, so the
+recovery path had to exist before the swallow was allowed: `tools/backfill-refine.ts` reads the
+runs table, not a list of regrets.
+
+**The failure is recorded as a heartbeat, not a kernel event.** Not because a kernel event would
+be the wrong shape, but because `KernelEvent` is a closed union and its closedness *is*
+ADR-0014's defence — widening it is a reviewed diff in `log.ts`, not something a catch block
+helps itself to. The heartbeat is the better home regardless: it lands in `job_events`, which
+outlives a workflow log and can be queried. Only the error's class, never its message, which can
+carry a connection string.
+
+**The backfill tool refuses rather than truncating, for the second time this phase.**
+`HarvestRunStore.list` is bounded at `RUN_LIST_LIMIT` and takes no cursor, so a sweep that got
+back exactly fifty rows cannot tell a complete answer from a clipped one. It exits non-zero and
+says a paged read is the fix. This is the same defect as the handler's `ITEM_LIST_LIMIT` refusal
+and it is now the phase's recurring shape: **a bounded read that returns its bound is
+indistinguishable from a complete one, and the caller is the only place that can notice.**
+
+Not yet run against hosted data. It queues spend, so it takes `--commit` and a human, and prints
+the item count and the estimated cost either way.
 
 ## P2.1 — the LLM interface, and the model it deliberately did not choose
 
