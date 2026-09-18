@@ -371,3 +371,63 @@ c. Widen `sentiment` or add a value to `creatorReads`. Cheapest in tokens and th
 My lean is (a) until P2.3 reports how often geocoding fails on places that turn out
 to be closed — that measurement would tell us whether (b) pays for itself, and it is
 free to collect.
+
+## Q16 — an LLM call has no deadline, so slow and hung are the same state  [OPEN]
+
+Raised 2026-09-18 (Claude Code), out of the first run of `tools/bake-off.ts`.
+
+`CompleteOptions.signal` is optional (`complete.ts:105`), nothing supplies a default,
+and `extract()` has no `signal` in it at all — the word does not appear in the file.
+So a batch call goes out with no deadline on it. The first bake-off run sat on one
+open socket to `qwen3-235b-a22b-2507` for seven and a half minutes and was killed,
+and the point is not the seven minutes: it is that **there was no way to tell a slow
+route from a dead one**, then or ever. A request that cannot time out has no failure
+mode short of the process being killed by hand.
+
+The bake-off now installs its own deadlines, because a measuring tool that can hang
+measures nothing. That fixes the tool and not the cause.
+
+In production the cause is worse than it is in a tool. ADR-0014 gives the worker
+`WORKER_BUDGET_MS=240000` and a `WORKER_LEASE_MS=300000` lease, both sized so a
+cancelled run has time to close browser sessions and hand its claims back. A provider
+that accepts a connection and then stops answering spends the entire budget waiting,
+returns nothing, closes nothing, and the lease expires rather than being released —
+the one path those two numbers were chosen to prevent.
+
+It is also invisible. `llm.call` is logged per attempt, so a call that never returns
+never logs, and the run's own telemetry shows a gap rather than a failure.
+
+**Options I see:**
+
+a. Adopt `withDeadline` in `complete()`, overridable per call, and have `extract()`
+   pass one derived from the remaining worker budget. Fixes the cause at the layer
+   that owns the request — and it is a smaller change than it first looks, because
+   **the kernel already has this**. `kernel/src/deadline.ts` exports `withDeadline`
+   and a `DEFAULT_DEADLINE_MS` table, it is written against precisely this bug — "the
+   provider's `timeoutMs` is a **rolling idle window**, not a deadline: it resets on
+   every use" — and harvest already runs on it. `@samsara/llm` is simply not in the
+   list of files that import it. There is even a number already: `complete()` passes
+   `purpose: "agent"` to its retry logger, and `deadlineFor("agent")` is 4 minutes.
+b. Default in `createOpenRouterClient` only. Cheapest change, one place. Wrong layer:
+   it is the port that would own the policy, so the fake client and any second
+   provider would each have to remember it, which is how the seam grows holes.
+c. Leave it to the caller and document it. What we have now. It has already produced
+   one silent hang in the only two real runs this repo has done.
+
+My lean is (a), taking `deadlineFor("agent")`'s existing 4 minutes rather than
+inventing a number, and having `extract()` shrink it as the worker budget runs down
+so the last call in a run cannot outlive the run.
+
+Two things need ruling at the same time:
+
+- **A timeout classifies as `internal`.** `classify()` calls anything it cannot
+  positively identify the provider's fault `internal`, and an `AbortError` carries no
+  `status` and no code in `TRANSPORT_CODES`. `internal` is retried, so a dead route
+  would be retried rather than abandoned. `upstream` is the honest class for "we gave
+  up waiting on them", and it is retryable too — so the fix is the retry *budget*,
+  not the label.
+- **`withDeadline`'s own docstring says the timeout stops the waiting, not the work.**
+  It takes an `onTimeout` for exactly that reason, and for a browser that is a
+  force-close. The LLM equivalent is aborting the request so the socket closes; if it
+  is left to garbage collection, a timed-out call keeps streaming tokens we are still
+  billed for and the meter under-reads.
