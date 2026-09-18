@@ -100,6 +100,9 @@ importers:
       '@dt/db':
         specifier: workspace:*
         version: link:../../packages/travel/db
+      '@dt/travel-pack':
+        specifier: workspace:*
+        version: link:../../packages/travel/pack
       '@samsara/core':
         specifier: workspace:*
         version: link:../../packages/samsara/core
@@ -109,6 +112,9 @@ importers:
       '@samsara/kernel':
         specifier: workspace:*
         version: link:../../packages/samsara/kernel
+      '@samsara/llm':
+        specifier: workspace:*
+        version: link:../../packages/samsara/llm
       '@samsara/personas':
         specifier: workspace:*
         version: link:../../packages/samsara/personas
@@ -125,6 +131,9 @@ importers:
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
+      zod:
+        specifier: ^4.6.1
+        version: 4.6.1
 
   packages/samsara/core:
     dependencies:

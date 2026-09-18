@@ -183,14 +183,16 @@ describe("the drain loop", () => {
 })
 
 describe("the pack registry", () => {
-  it("has zero packs registered in Phase 0", () => {
-    // Not a placeholder assertion. It is the claim that the runner has no vertical
-    // compiled into it, which is the property P2.8 exists to try to break.
-    expect(createPackRegistry().size).toBe(0)
+  it("holds exactly the packs that were written, and no more", () => {
+    // Until P2.2 this asserted zero, which was the claim that the runner had no
+    // vertical compiled into it. One pack exists now, so the assertion that still
+    // means something is the count: a second id appearing here without a second
+    // pack being written is the seam leaking, which is what P2.8 tries to break.
+    expect(createPackRegistry().ids()).toEqual(["travel"])
   })
 
   it("names what is registered when a job asks for a pack that is not", () => {
     const packs = createPackRegistry()
-    expect(() => packs.require("travel")).toThrow(/registered: none/)
+    expect(() => packs.require("atlas")).toThrow(/registered: travel/)
   })
 })

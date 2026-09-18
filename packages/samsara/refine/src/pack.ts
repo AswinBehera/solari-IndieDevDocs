@@ -105,7 +105,16 @@ export class PackRegistry {
     return this.packs.size
   }
 
-  register(pack: DomainPack<never>): void {
+  /**
+   * Generic in the mention type rather than taking `DomainPack<never>`, which is
+   * what this said until the first real pack was registered and could not be:
+   * `never` is assignable *to* everything, not *from* it, so the parameter
+   * accepted only a pack whose mentions were impossible. The registry genuinely
+   * does not care what shape a mention is — that is the point of the seam — so it
+   * takes any pack and widens at the map, where `DomainPack<unknown>` is the
+   * honest type for a value the runner will look up by a string.
+   */
+  register<TMention>(pack: DomainPack<TMention>): void {
     if (this.packs.has(pack.id)) {
       throw new Error(`domain pack already registered: ${pack.id}`)
     }

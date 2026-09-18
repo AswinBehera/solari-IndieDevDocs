@@ -7,9 +7,9 @@ Last completed: **P2.2 — the extract stage, and fifty items somebody had to re
 labels it flagged have since been **audited by a human, one item at a time**; four rulings moved,
 four prompt rules changed with them, and the golden set now reads 19 place-bearing items, 74
 places, 31 negatives.
-860 tests across the repo, seam allowances **0 of 5** across 166 files. The count is measured
+892 tests across the repo, seam allowances **0 of 5** across 168 files. The count is measured
 rather than carried forward, and the basis is written down here so the next session does not have
-to re-derive it: **835 passing under `turbo run test` plus 25 under `test:tools`, with one live
+to re-derive it: **867 passing under `turbo run test` plus 25 under `test:tools`, with one live
 test skipped.** P2.2's 47 are 19 in `@samsara/refine`, 25 in `@dt/travel-pack` and 3 in
 `@samsara/sources` for the TikTok login wall below.
 
@@ -182,6 +182,44 @@ One question came out of the harvest and is open: `Q14`, a `pantip.topic` captur
 threads' "related topics" teasers as items. Measured at over a third of what twelve topic
 captures returned. It is filtered in the harvest tool, which is the wrong place for it, and the
 right fix changes what a parser returns.
+
+## P2.2 addendum — the handler, and a type that had never been used
+
+The extract stage could not run outside a test until `refine.extract` existed, so P2.2 closed
+with mentions that could be written and read and nothing that wrote them. The handler is 90 lines
+and most of them are refusals.
+
+**Registering the first pack found a bug in the registry's signature.** `PackRegistry.register`
+took a `DomainPack<never>`, which had typechecked since P0.5 for the reason that it had never
+been called: `never` is assignable *to* every type and *from* none, so the parameter accepted
+only a pack whose mentions were impossible. An empty registry cannot tell you that. It is now
+generic in the mention type and widens at the map, which is what the class docstring always said
+it did. Worth remembering as a shape rather than an incident — a contract with no caller is not
+a tested contract, and the cheapest moment to discover that is the first call.
+
+**Four refusals, and one of them is not obvious.** No provider key, an unregistered domain, and a
+run belonging to another domain are all straightforward. The fourth is that `listByRun` is
+bounded by `ITEM_LIST_LIMIT`, a bound written for a Lab screen a person scrolls, and a run with
+more items than that must be refused rather than partially extracted — because the skip query is
+keyed per item, so extracting the first hundred would leave the run reading as done and the
+remainder unreachable by a retry. The dangerous part of a truncation is not the truncation, it is
+that it looks like success afterwards.
+
+**The handler fails the job when `extract()` reports failures.** That function deliberately
+swallows call failures into an ordinary-looking report, which is right for a comparison harness
+and wrong for a queue — the bake-off lost a whole measurement to exactly that. Throwing is what
+puts the items back in reach of a retry.
+
+**Its tests use a made-up pack, not the travel one.** The handler is the domain-agnostic half, so
+exercising it through `travelPack` would assert the travel prompt on the way past and make a
+generic handler depend on the vertical being present. The fake pack is `atlas` with Vietnamese
+items, the engine's fixture convention, which is deliberately not the language the first vertical
+is about.
+
+**Two P0.5 assertions retired.** `runner.test.ts` asserted the registry held zero packs — the
+claim that the runner had no vertical compiled into it. That claim is now made differently: the
+registry holds exactly `["travel"]`, and a second id appearing there without a second pack being
+written is the seam leaking.
 
 ## P2.1 — the LLM interface, and the model it deliberately did not choose
 

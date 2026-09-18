@@ -15,7 +15,7 @@ import type { PackRegistry } from "@samsara/refine"
 export interface JobContext {
   job: ClaimedJob
   kernel: Kernel
-  /** Zero packs registered in Phase 0. See `packs.ts`. */
+  /** One pack since P2.2, still registered in one line. See `packs.ts`. */
   packs: PackRegistry
   logger: Logger
   /** Aborted on SIGTERM. Pass it to every await that can take one. */

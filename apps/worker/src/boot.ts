@@ -14,11 +14,15 @@ import {
   PostgresSessionStore,
 } from "@samsara/kernel/postgres"
 import { createSolariBrowserLauncher, solariCredentials } from "@samsara/kernel/solari"
+import { LlmClient, loadLlmConfig } from "@samsara/llm"
+import { createOpenRouterClient } from "@samsara/llm/openrouter"
 import { PostgresPersonaStore } from "@samsara/personas/postgres"
+import { PostgresMentionSink } from "@samsara/refine/postgres"
 import { HandlerRegistry, noopHandler } from "./handlers.js"
 import { createHarvestHandler } from "./harvest.js"
 import { createPackRegistry } from "./packs.js"
 import { createKeepaliveHandler } from "./personas.js"
+import { createRefineHandler } from "./refine.js"
 import { sourceRegistry } from "./sources.js"
 
 /**
@@ -105,6 +109,30 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       // experiment stops anything: its remaining days are already rows in the
       // queue, so there is nothing to cancel — only something to refuse (P1.8).
       experiments: new PostgresDriftExperimentStore(database.db),
+    }),
+  )
+
+  // Optional for the same reason the browser launcher is, and built here rather
+  // than inside the handler so a boot with a malformed `LLM_RESPONSE_FORMAT` fails
+  // at startup instead of on the first claimed job. `loadLlmConfig` throws on a
+  // missing key; absent here means the handler refuses by name.
+  const llmConfig = env.OPENROUTER_API_KEY ? loadLlmConfig(env) : undefined
+  const llm = llmConfig
+    ? new LlmClient({
+        chat: createOpenRouterClient(llmConfig),
+        config: llmConfig,
+        budget: guard,
+        logger,
+      })
+    : undefined
+
+  handlers.register(
+    "refine.extract",
+    createRefineHandler({
+      runs: new PostgresHarvestRunStore(database.db),
+      items: new PostgresRawItemStore(database.db),
+      sink: new PostgresMentionSink(database.db),
+      ...(llm ? { llm } : {}),
     }),
   )
 
