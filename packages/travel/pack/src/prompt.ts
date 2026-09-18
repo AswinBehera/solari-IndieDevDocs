@@ -58,15 +58,20 @@ export const placeExtractPrompt = definePrompt({
 
 A place qualifies only if someone could travel to it today and find it at an address: a named restaurant, stall, café, bar, market, temple, park, shop or venue. These do not qualify, no matter how often they are mentioned:
 - a dish, drink or ingredient on its own
-- a district, neighbourhood, city, province or country
+- a district, neighbourhood, city, province, country, or a road named to say where something else is. An address is not a destination.
 - a chain discussed in general rather than one named branch
-- a hotel, an airline, a tour operator or anything that is a booking rather than a destination
-- a place the writer says they have not been to, or that no longer exists
+- a hotel, an airline, a tour operator or anything that is a booking rather than a destination. Judge by use: a farmstay the writer drives to for coffee is a place; the same farmstay they sleep in is a booking.
+- a place the item says is not open now — closed, moved, or not built yet. The item may name it and praise it; if it is not there, it is not a mention.
+- a place named in order to describe something else, rather than pointed at. "nature spots such as X" names X as an example of a category; "I used to buy coffee at X" names X as the habit being replaced. Neither is a recommendation of X.
 - a generic word for a venue where its name should be. "ร้าน", "ร้านกาแฟ", "คาเฟ่", "สาขานี้", "the shop", "this branch" are not names. If the item never names the place, return no mention for it rather than the noun.
 
+The one exception to that last rule: a generic word counts as a name when the item also names the locality and that locality has only one of the thing. "the walking street" in a post that says the town is the town's walking street. "the old restaurant" in a town with many old restaurants is not, however much detail the item gives about the meal.
+
+Whether the writer went is not part of this. A place they only want to visit still qualifies; say so in "sentiment" and "creatorReads" instead.
+
 Rules that matter more than they look:
-- "localName" is the name in the script the source wrote it in. If the item is in Thai, this is Thai. Never romanise it here.
-- "romanName" is null unless the item itself gives a Latin-script name. Do not transliterate to fill the field.
+- "localName" is the name in the script the source wrote it in. If the item is in Thai, this is Thai. Never romanise it here. Where the item writes the name more than one way, use the fullest form it gives.
+- "romanName" is null unless the item itself gives a Latin-script name. Do not transliterate to fill the field, and do not repeat "localName" into it when the name was already Latin.
 - "dish" is what this place is known for according to this item, and is null if the item does not say.
 - "quote" is one unbroken run of characters copied from the item, in the item's own language, at most 200 characters. Never translate it, never tidy it, never join two parts of the item that were not next to each other. If the item is in more than one language, quote the language the writer wrote in.
 - "priceHint" is however the item expressed the price, in its own words, including a vague one. Null if the item gives none.

@@ -19,26 +19,46 @@ import labels from "./labels.json" with { type: "json" }
  * is shown. Labelling the full item and grading against a truncated one would
  * score a model down for a place it was never given.
  *
- * **Why two thirds of it is negatives.** 18 items name a place and 32 name none.
+ * **Why two thirds of it is negatives.** 19 items name a place and 31 name none.
  * That is not a sampling accident — it is the ratio a food board actually has,
  * and the failure this prompt is written against is invention, not omission. An
  * extractor that returns something for every item scores well on recall and is
  * useless, because P2.3 then geocodes the noise. The negatives include the cases
  * that are hard rather than empty: a 2.5k-character news article about how Google
  * Maps computes busy times, which is fluent, on-topic and names no restaurant; a
- * full five-dish review whose author elides the shop name as `ร้าน ดี....` on
- * purpose; a shop the writer ate at for years and is now asking where it went,
- * which the prompt disqualifies as a place that no longer exists; and a comment
- * naming two real attractions the writer wants to visit and has not.
+ * shop the writer ate at for years and is now asking where it went; and a full
+ * five-dish review whose author elides the shop name as `ร้าน ดี....` on purpose,
+ * winking at readers who already know it. That last one is the best negative in
+ * the set, because everything except the name is there.
  *
- * **Who wrote the key.** I did, and I also wrote the prompt it grades — so the
- * set can only be as honest as that loop allows. Ten of the fifty are flagged
- * `audit`: eight are the judgement calls I know I made, stated in their notes so
- * they can be disagreed with, and two were drawn at random from the rest so the
- * audit is not only the questions I already knew to ask. The labels follow the
- * prompt's definition of a place rather than a general one, which is the only
- * fair way to grade it: lodging is out because the prompt puts it out, so a
- * farmstay is absent — but a farmstay the writer drives to for coffee is in.
+ * **Who wrote the key, and who checked it.** I wrote both the key and the prompt
+ * it grades, so the set could only ever be as honest as that loop allows. Ten of
+ * the fifty are flagged `audit` and all ten were put to a human one at a time:
+ * eight judgement calls I knew I had made, and two drawn at random so the audit
+ * was not only the questions I already knew to ask. Their notes say which way
+ * each went and why, and `golden.test.ts` asserts that every one of them records
+ * a resolution, so reverting a ruling fails a test instead of only changing a
+ * JSON file nobody rereads.
+ *
+ * Four of the ten moved. The prompt used to disqualify a place the writer had
+ * not been to; that was struck, because `sentiment` and `creatorReads` already
+ * carry it and striking it cost no information. The mirror case survived for
+ * exactly that reason: nothing in the schema can say a place is *gone*, so a
+ * closed shop would be emitted looking like somewhere you can walk into tonight.
+ * A generic noun now counts where the item names the locality and the locality
+ * has only one of the thing — a town's walking street does, `ร้านเก่าแก่` in
+ * Bangsaen does not. And a place named to describe something else, as in "nature
+ * spots such as X", is not a mention of X.
+ *
+ * The audit also found two names the key was grading too narrowly, neither by
+ * any test: a shop the item spells two ways, and one whose title uses a short
+ * form. Both were found while writing the questions, which is an argument for
+ * the audit over and above the answers it produced.
+ *
+ * The labels follow the prompt's definition of a place rather than a general
+ * one, which is the only fair way to grade it: lodging is out because the prompt
+ * puts it out, so a farmstay is absent — but a farmstay the writer drives to for
+ * coffee is in.
  */
 
 export type GoldenItem = {

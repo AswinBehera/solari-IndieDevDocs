@@ -333,3 +333,41 @@ c. Leave it, and require every caller to filter. This is today's behaviour and i
 
 My lean is (a), and it wants the architect's word because it changes what a parser
 returns and there are fixtures asserting the current counts.
+
+## Q15 — a mention cannot say the place is closed  [OPEN]
+
+Raised 2026-09-18 (Claude Code), out of the human audit of the P2.2 golden set.
+
+`pt-44226724-5` is a comment about `ร้านโรจน์` in Bangsaen: the writer lived there,
+ate there repeatedly, names a dish, and rates it the best of anywhere. Then
+`ร้านหายไปแล้ว` — it is gone, and they are asking whether it closed or moved.
+
+Everything `mentionSchema` wants is in that item except one thing it has no field
+for. `sentiment` is about the food, `creatorReads` is about the writer, and neither
+can carry "this place is not there any more". The audit ruled the mention out for
+that reason, and the asymmetry is deliberate: the same audit *struck* the rule
+disqualifying a place the writer had not visited, because there `sentiment` and
+`creatorReads` still carried the fact. Here nothing does, so counting it would emit
+`ร้านโรจน์` indistinguishable from a shop you can walk into tonight, and P2.3 would
+either fail to geocode it or resolve it to a stale entry with nobody in it.
+
+That is the right call for the golden set and a silent one for production. The
+extractor now drops closed places on the floor, so the pack cannot tell a user "this
+was recommended but has since shut", which is a thing a traveller wants to know, and
+it cannot feed P2.3 the fact that a geocode failure was *expected*.
+
+It is one item in fifty, which is why it did not force a schema change today.
+
+**Options I see:**
+
+a. Leave it. The prompt's rule is stated, the behaviour is documented here, and the
+   case is rare enough that paying an output field on every mention to carry it is a
+   bad trade against §8's token budget.
+b. Add a nullable `stillOpen: boolean | null` to `mentionSchema`. Fixes the cause,
+   and costs a field on every mention in every call for a case that is 2% of items.
+c. Widen `sentiment` or add a value to `creatorReads`. Cheapest in tokens and the
+   worst of the three: it overloads a field whose meaning `scores.local` depends on.
+
+My lean is (a) until P2.3 reports how often geocoding fails on places that turn out
+to be closed — that measurement would tell us whether (b) pays for itself, and it is
+free to collect.

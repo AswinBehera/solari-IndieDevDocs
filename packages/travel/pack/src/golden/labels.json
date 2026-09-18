@@ -10,20 +10,20 @@
       ["น้ำตกตาดทิดมี"],
       ["น้ำตกตาดฟ้า"],
       ["Runjuan Namnao Cafe & Camp"],
-      ["ภูผาจิต"]
+      ["ภูผาจิต"],
+      ["บ้านไร่อคิณ"]
     ],
-    "note": "SAMPLED for the audit by seeded draw, not because it is hard. ร้านอาหารตามสั่งริมทาง is an unnamed roadside shop: a generic noun where a name should be",
-    "audit": true
+    "note": "Reviewed in the P2.2 audit. ร้านอาหารตามสั่งริมทาง is an unnamed roadside shop: a generic noun where a name should be. บ้านไร่อคิณ is a private campsite and counts, because the writer drives there for the sunset rather than to sleep -- the audit settled that the prompt's lodging rule is about function, not building type, and the same reading is what keeps LittleWinterFarmstay in pt-43696090-2 and keeps every place the writer checked in to out"
   },
   "pt-43696090-2": {
     "places": [
       ["น้ำตกพรานบา"],
-      ["ผารอยตีนสัตว์ดึกดำบรรพ์ น้ำหนาว"],
+      ["ผารอยตีนสัตว์ดึกดำบรรพ์ น้ำหนาว", "ผารอยตีนสัตว์ดึกดำบรรพ์อาร์โคซอร์"],
       ["ร้านซับสโมสร"],
       ["LittleWinterFarmstay"],
-      ["Blue Lagoon ภูผาม่าน"]
+      ["Blue Lagoon ภูผาม่าน", "Blue Lagoon", "สระมรกต"]
     ],
-    "note": "excludes บ้านไร่ไออุ่นโฮมสเตย์ and ภูม่านแก้วโฮมสเตย์ (lodging). LittleWinterFarmstay counts: the writer goes there for coffee, and the prompt's rules are about what the place is used as"
+    "note": "excludes บ้านไร่ไออุ่นโฮมสเตย์ and ภูม่านแก้วโฮมสเตย์ (lodging). LittleWinterFarmstay counts: the writer goes there for coffee, and the prompt's rules are about what the place is used as. Aliases the item states out loud are accepted: Blue Lagoon หรือ สระมรกต, and ผารอยตีนสัตว์ดึกดำบรรพ์ น้ำหนาว หรืออีกชื่อหนึ่งคือ ผารอยตีนสัตว์ดึกดำบรรพ์อาร์โคซอร์"
   },
   "pt-43696090-3": {
     "places": [["ผาม่านฝัน"], ["หนองสมอ ภูผาม่าน"]],
@@ -35,13 +35,12 @@
   },
   "pt-43696090-5": {
     "places": [],
-    "note": "SAMPLED for the audit by seeded draw, not because it is hard. thanks the reviewer in generic nouns: น้ำตกแต่ละที่, ที่พัก. ไก่ย่างวิเชียร is a dish",
-    "audit": true
+    "note": "Reviewed in the P2.2 audit and confirmed. thanks the reviewer in generic nouns: น้ำตกแต่ละที่, ที่พัก. ไก่ย่างวิเชียร is a dish"
   },
   "pt-43696090-6": {
-    "places": [],
+    "places": [["ถ้ำนาคราช"], ["อุทยานแห่งชาติภูผาม่าน", "อช.ภูผาม่าน"]],
     "audit": true,
-    "note": "HARD NEGATIVE. Names ถ้ำนาคราช and อช.ภูผาม่าน, but as อยากไป ... เสียดาย ช่วงนี้ปิด -- wants to go, it is closed. The prompt disqualifies a place the writer has not been to, so an extractor that returns these two is wrong in the way that matters"
+    "note": "AUDIT, resolved: the writer names both as อยากไป ... เสียดาย ช่วงนี้ปิด -- wants to go, it is closed just now -- and the only place they did visit is เพชรบูรณ์, a province. I had labelled this a negative on the prompt's a-place-the-writer-has-not-been-to rule; the audit overruled that, on the grounds that a named, specific, geocodable attraction is worth resolving whether or not the person mentioning it got there. อช.ภูผาม่าน is the abbreviation the item uses and the full form is accepted beside it. What the writer has and has not done is carried by sentiment and creatorReads, not by whether the place exists in the output"
   },
   "pt-43933591-0": {
     "places": [["พิพิธภัณฑสถานแห่งชาติอุบลราชธานี"]],
@@ -61,11 +60,15 @@
   "pt-43933591-2": {
     "places": [["อุทยานแห่งชาติผาแต้ม"], ["เสาเฉลียง"], ["วนอุทยานน้ำตกผาหลวง"]],
     "audit": true,
-    "note": "AUDIT: เสาเฉลียง is a named rock formation inside ผาแต้ม. I counted it because it has its own name and the writer detours for it, but excluded the ผาขาม and ผาแต้ม rock-painting groups as stops along one walk. That line is a judgement call"
+    "note": "AUDIT, resolved: a named landmark the writer makes a separate detour to counts; numbered stops along one signposted walk do not. So เสาเฉลียง is in -- ขอแวะชม ... ไฮไลต์ของที่นี่, a detour to a highlight -- and the two rock-painting groups, จุดภาพเขียนสีกลุ่มที่ 1 ผาขาม and กลุ่มที่ 2 ผาแต้ม, are out: 500m apart on the same trail, neither with its own arrival or map link. The second of them would also collide with the park's own name"
   },
   "pt-43933591-3": {
-    "places": [["วัดพระธาตุหนองบัว"], ["วัดศรีนวลแสงสว่างอารมณ์"], ["ร้านส้มตำจินดา"]],
-    "note": "excludes พระธาตุเจดีย์ศรีมหาโพธิ์ and ธรรมาสน์สิงห์เทินบุษบก (the chedi and the pulpit inside those two temples) and บ้านชีทวน (a village)"
+    "places": [
+      ["วัดพระธาตุหนองบัว", "พระธาตุหนองบัว", "เจดีย์ศรีมหาโพธิ์"],
+      ["วัดศรีนวลแสงสว่างอารมณ์"],
+      ["ร้านส้มตำจินดา"]
+    ],
+    "note": "excludes พระธาตุเจดีย์ศรีมหาโพธิ์ and ธรรมาสน์สิงห์เทินบุษบก (the chedi and the pulpit inside those two temples) and บ้านชีทวน (a village). Aliases the item states out loud are accepted: เจดีย์ศรีมหาโพธิ์ หรือที่ชาวอุบลเรียกกันว่า พระธาตุหนองบัว"
   },
   "pt-43933591-4": {
     "places": [
@@ -76,9 +79,9 @@
     "note": "excludes ทอแสง เฮอริเทจ โขงเจียม (lodging) and ด่านช่องเม็ก (a border post visible from the viewpoint)"
   },
   "pt-43933591-5": {
-    "places": [["ร้านข้าวต้มสันติโภชนา"]],
+    "places": [["ร้านข้าวต้มสันติโภชนา"], ["ถนนคนเดินเขมราฐ", "ถนนคนเดิน"]],
     "audit": true,
-    "note": "AUDIT: excludes โรงแรมเซ็นทารา อุบล (lodging), เขมราฐ (a town) and ถนนคนเดิน -- the walking street is the thing the writer most enjoyed, but it is named here only by the generic noun"
+    "note": "AUDIT, resolved: a generic noun counts as a name when the item names the locality it is in. The writer walks ถนนคนเดิน and says เขมราฐ เป็นเมืองเล็กๆ one sentence earlier, and Khemarat has one walking street -- so it resolves, and both the joined spelling and the bare noun are accepted because the item never writes the joined one. Still excludes โรงแรมเซ็นทารา อุบล: named, map-linked, and slept in, which is lodging used as lodging. เขมราฐ itself stays out as a town rather than a place you arrive at"
   },
   "pt-43933591-6": {
     "places": [["วัดโขงเจียม"]],
@@ -87,11 +90,12 @@
   "pt-43933591-7": {
     "places": [],
     "audit": true,
-    "note": "AUDIT: names ผาแต้ม, but as a reader summarising what the review covered -- no visit of their own. I read that as not a recommendation; a reasonable labeller could disagree"
+    "note": "AUDIT, resolved: naming a place in order to describe something else is not a mention. The comment's subject is the review, not Pha Taem -- ที่เที่ยวธรรมชาติอย่างผาแต้ม cites it as an instance of a class, the way อย่าง does. Note that the reason is NOT that the writer has not been there; audit 1 removed that rule. สกายวอร์ค is out separately, as a generic noun whose locality this item never names -- only the thread does"
   },
   "pt-44225687-0": {
-    "places": [["ต้าเจียห่าว"]],
-    "note": "excludes กาแฟเซเว่น (a chain, and named as the breakfast this replaced) and ถนนท่าปรุง / มหาชัย (a road and a town)"
+    "places": [["ต้าเจียห่าว", "ต้าเจียฮ่าว"]],
+    "note": "SAMPLED for the audit: the thread was drawn first, then an item within it. AUDIT, resolved: a road or town named to locate something else is an address, not a destination -- so ถนนท่าปรุง and มหาชัย are out, as เขมราฐ is in pt-43933591-5. The line against audit 3's walking street is whether the street is the destination or the directions. Also excludes กาแฟเซเว่น, a chain named to describe the breakfast this replaced. The item spells the shop both ต้าเจียห่าว and ต้าเจียฮ่าว; both count",
+    "audit": true
   },
   "pt-44225687-1": {
     "places": [],
@@ -100,7 +104,7 @@
   "pt-44226724-0": {
     "places": [],
     "audit": true,
-    "note": "AUDIT, and the best negative in the set: a full restaurant review, five dishes deep, where the poster elides the name as ร้าน ดี.... on purpose. แหลมแท่น and บางแสน are localities, MK is a chain the writer is going to tomorrow. An extractor that wants a place here has nowhere honest to get one"
+    "note": "AUDIT, resolved, and the best negative in the set: a full restaurant review, five dishes deep, where the poster elides the name as ร้าน ดี.... on purpose, winking at readers who already know it. It is the limit of audit 3's generic-noun rule, which counts only where generic plus locality resolves to exactly one place: Khemarat has one walking street, บางแสน has dozens of old seafood shops, so ร้านเก่าแก่ บางแสน names nothing. แหลมแท่น and บางแสน are localities; MK is an unbranched chain the writer is going to tomorrow. An extractor that wants a place here has nowhere honest to get one"
   },
   "pt-44226724-1": {
     "places": [],
@@ -121,7 +125,7 @@
   "pt-44226724-5": {
     "places": [],
     "audit": true,
-    "note": "AUDIT: ร้านโรจน์ is named, and the writer ate there for years -- but ร้านหายไปแล้ว, it is gone, and they are asking whether it closed or moved. The prompt disqualifies a place that no longer exists, so this is a negative by a rule rather than by absence"
+    "note": "AUDIT, resolved: ร้านโรจน์ is named, the writer ate there for years, named a dish and likes it best of anywhere -- but ร้านหายไปแล้ว, and they are asking whether it closed or moved. It stays out, and the asymmetry with audit 1 is the reason why: there, striking the has-not-been-to rule cost nothing because sentiment and creatorReads still carried the fact. Nothing in the schema can say a place is gone, so counting it would emit ร้านโรจน์ looking exactly like a shop you can walk into tonight"
   },
   "pt-44226724-6": {
     "places": [],
@@ -166,7 +170,7 @@
       ["ร้านข้าวโพดต้มป้านก"]
     ],
     "audit": true,
-    "note": "AUDIT: the densest item in the set. Two judgement calls. ร้านเหนกไก่ย่างบางตาล สาขา 2 is counted because it is a named branch, which the prompt separates from a chain in general. ร้านก๋วยจั๊บญวนอุบล is counted as a stall name, but it reads equally as the noun phrase this Vietnamese-kuay-jap-Ubon shop, and under the generic-noun rule it would be excluded. Alert Spaghetti is the only item in the corpus with a genuine romanName"
+    "note": "AUDIT, resolved: the densest item in the set, a market and the twelve named stalls in it -- the same landmark-inside-a-place split audit 2 kept. ร้านเหนกไก่ย่างบางตาล สาขา 2 counts because the branch is stated, which is what separates it from a bare chain like MK. ร้านก๋วยจั๊บญวนอุบล counts too, though it reads equally as the noun phrase this Ubon-style Vietnamese-kuay-jap shop: in a list where every stall is introduced the same way, that introduction is a name. The rule does not travel -- it holds inside a round-up of named stalls, not in prose where ร้านก๋วยเตี๋ยวเนื้อ is just a noodle shop. Alert Spaghetti is the only item in the corpus with a genuine romanName"
   },
   "pt-44227665-1": {
     "places": [
@@ -188,7 +192,7 @@
       ["ตลาดโอโซน"],
       ["ตลาดบ้านฟ้าเลอมาร์เช่"]
     ],
-    "note": "a bare list of every market the writer has walked in Pathum Thani, with no prose around any of them. Excludes ตลาด Vista Space, which they say is still being built -- a place that does not exist yet. The hard part here is the quote: seventeen mentions have to draw their evidence from a list with no sentences in it"
+    "note": "a bare list of every market the writer has walked in Pathum Thani, with no prose around any of them. AUDIT-adjacent, resolved with audit 7: excludes ตลาด Vista Space, รอเค้าสร้างให้เสร็จก่อน -- still being built. Gone, moved and not-built-yet are one clause, because the schema has no field for any of them and all three would be emitted looking like somewhere you can go tonight. The hard part here is the quote: seventeen mentions have to draw their evidence from a list with no sentences in it"
   },
   "pt-44227665-2": {
     "places": [],
@@ -235,9 +239,9 @@
     "note": "a Ch7 segment promo. ร้านเด็ด is the generic noun the whole post is built around; the market is the one thing named"
   },
   "pt-44230398-0": {
-    "places": [["KUSA Japanese Restaurant"]],
+    "places": [["KUSA Japanese Restaurant", "KUSA"]],
     "audit": true,
-    "note": "AUDIT: the item is Thai but writes the name in Latin, so under the localName rule the local name is KUSA Japanese Restaurant and romanName is the same string rather than null -- the one item in the corpus where those two fields collide. ย่านวัดเกตุ is a neighbourhood and เชียงใหม่ a province"
+    "note": "AUDIT, resolved: one restaurant. The item writes the name three ways -- KUSA in the title, KUSA Japanese Restaurant in the body, Kusa Japanese Restaurant in Pantip's product field -- and every form the item actually writes is accepted, so a model copying the title is not marked wrong for agreeing with the source. Case folds in normaliseName; the truncation does not, which is why it needed saying. This is also the one item where localName and romanName collide: the source is Thai and the name is Latin, so romanName is null rather than a duplicate. ย่านวัดเกตุ is a neighbourhood and เชียงใหม่ a province, out under the address rule"
   },
   "pt-44230439-0": {
     "places": [],
@@ -265,6 +269,7 @@
   },
   "pt-44230439-6": {
     "places": [],
-    "note": "a reply on app orders and tax"
+    "note": "SAMPLED for the audit: the thread was drawn first, then an item within it, so the two random picks cover threads nobody else was checking. AUDIT, resolved: a negative, and the control the draw existed to provide -- a reply about app orders, condo kitchens and tax that names หลายเจ้า, คอนโด and แอป and nothing else. It is exactly the item a model under recall pressure answers ร้านอาหาร on",
+    "audit": true
   }
 }

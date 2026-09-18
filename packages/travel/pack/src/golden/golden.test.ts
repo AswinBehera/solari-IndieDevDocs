@@ -40,13 +40,13 @@ describe("the corpus", () => {
     expect(Object.keys(goldenLabels).sort()).toEqual([...ids].sort())
   })
 
-  it("is 50 items, 18 of which name somewhere", () => {
+  it("is 50 items, 19 of which name somewhere", () => {
     // Stated as a number so that regenerating the corpus without revisiting the
     // labels fails here instead of silently changing what every score means.
     expect(goldenCorpus).toHaveLength(50)
     const bearing = Object.values(goldenLabels).filter((l) => l.places.length > 0)
-    expect(bearing).toHaveLength(18)
-    expect(bearing.reduce((n, l) => n + l.places.length, 0)).toBe(70)
+    expect(bearing).toHaveLength(19)
+    expect(bearing.reduce((n, l) => n + l.places.length, 0)).toBe(74)
   })
 
   it("holds Thai text long enough to extract from", () => {
@@ -65,7 +65,13 @@ describe("the corpus", () => {
     // loop, and the count is asserted so it cannot quietly become nine.
     const flagged = Object.entries(goldenLabels).filter(([, l]) => l.audit)
     expect(flagged).toHaveLength(10)
-    for (const [, label] of flagged) expect(label.note.length).toBeGreaterThan(40)
+    for (const [, label] of flagged) {
+      expect(label.note.length).toBeGreaterThan(40)
+      // All ten were put to a human one at a time and answered. The note records
+      // which way, so that a later edit quietly reverting a ruling shows up here
+      // rather than only in the diff of a JSON file nobody rereads.
+      expect(label.note).toContain("resolved")
+    }
   })
 })
 
@@ -113,7 +119,7 @@ describe("scoreGolden", () => {
       Object.entries(goldenLabels).map(([id, l]) => [id, l.places.map((g) => mention(g[0] ?? ""))]),
     )
     const score = scoreGolden(perfect)
-    expect(score.matched).toBe(70)
+    expect(score.matched).toBe(74)
     expect(score.recall).toBe(1)
     expect(score.precision).toBe(1)
     expect(score.inventedOnNegatives).toBe(0)
@@ -144,6 +150,22 @@ describe("scoreGolden", () => {
     expect(score.inventedOnNegatives).toBe(2)
     expect(score.matched).toBe(0)
     expect(score.precision).toBe(0)
+  })
+
+  it("accepts every spelling the key lists, not only the canonical one", () => {
+    // The audit turned up two names the key was grading too narrowly — `ต้าเจียฮ่าว`,
+    // which the item switches to halfway through, and bare `KUSA`, which is the
+    // title. Neither is something `normaliseName` folds: one is a substitution and
+    // the other a truncation, and a sweep for either finds mostly `ร้าน` and `ตลาด`,
+    // the generic nouns the prompt exists to reject. So the aliases are written out
+    // by hand, and this asserts each one actually earns the match it was added for.
+    for (const [id, label] of Object.entries(goldenLabels)) {
+      for (const group of label.places) {
+        for (const spelling of group) {
+          expect(scoreGolden(new Map([[id, [mention(spelling)]]])).matched).toBe(1)
+        }
+      }
+    }
   })
 
   it("accepts either spelling where the source misspells the name", () => {

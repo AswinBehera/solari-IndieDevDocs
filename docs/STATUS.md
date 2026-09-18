@@ -3,11 +3,14 @@
 Phase: 2 — in progress. Phase 1's acceptance week is **still draining** (six of seven days queued,
 day 0 at 60.0%), and Phase 0 is **complete, pending the gate** (below; the gate is a human review
 and does not block buildable work).
-Last completed: **P2.2 — the extract stage, and fifty items somebody had to read**.
-859 tests across the repo, seam allowances **0 of 5** across 166 files. The count is measured
+Last completed: **P2.2 — the extract stage, and fifty items somebody had to read**. The ten
+labels it flagged have since been **audited by a human, one item at a time**; four rulings moved,
+four prompt rules changed with them, and the golden set now reads 19 place-bearing items, 74
+places, 31 negatives.
+860 tests across the repo, seam allowances **0 of 5** across 166 files. The count is measured
 rather than carried forward, and the basis is written down here so the next session does not have
-to re-derive it: **834 passing under `turbo run test` plus 25 under `test:tools`, with one live
-test skipped.** P2.2's 46 are 19 in `@samsara/refine`, 24 in `@dt/travel-pack` and 3 in
+to re-derive it: **835 passing under `turbo run test` plus 25 under `test:tools`, with one live
+test skipped.** P2.2's 47 are 19 in `@samsara/refine`, 25 in `@dt/travel-pack` and 3 in
 `@samsara/sources` for the TikTok login wall below.
 
 **Sixteen billed sessions, about 7.8 minutes of 4,000.** P2.2 spent three of them harvesting the
@@ -68,36 +71,59 @@ built around, and each is worthless: it cannot be geocoded, cannot be deduped, a
 to whichever café the geocoder preferred. The prompt now names those three strings and says that
 an item which never names the place yields no mention rather than the noun.
 
-**The golden set is 50 Thai items, and 32 of them name nowhere.** That ratio is the task's main
+**The golden set is 50 Thai items, and 31 of them name nowhere.** That ratio is the task's main
 judgement call. The plan asks for "50 hand-labelled Thai items, target 80% place-name recall",
 and recall alone is a target a model can hit by answering every item with something. A food
 board is mostly people talking, so the negatives are the honest majority and they are also where
-the measurement lives: 18 items carry 70 places between them, and `inventedOnNegatives` is
+the measurement lives: 19 items carry 74 places between them, and `inventedOnNegatives` is
 reported separately from precision because a model can be precise on the items that do name
 somewhere and still answer every negative with `คาเฟ่`.
 
 The negatives that are hard rather than empty are the ones worth having. A 2.5k-character news
 article about how Google Maps computes busy times — fluent, on-topic, naming no restaurant. A
-five-dish review whose author elides the shop name as `ร้าน ดี....` on purpose. A shop the
-writer ate at for years and is now asking what happened to, which the prompt disqualifies as a
-place that no longer exists. A comment naming two real attractions the writer wants to see and
-has not been to. Each is a sentence in the prompt's disqualification list, met in the wild.
+shop the writer ate at for years and is now asking what happened to. And the best of them: a
+five-dish review whose author elides the shop name as `ร้าน ดี....` on purpose, winking at
+readers who already know which Bangsaen restaurant he means. Everything except the name is
+there, which is what makes it hard.
 
-**I wrote the prompt and the answer key both, and ten items are flagged so that loop can be
-broken.** Eight are the judgement calls I know I made — whether a named rock formation inside a
-national park is its own place, whether a farmstay the writer drives to for coffee counts when
-lodging does not, whether a stall called `ร้านก๋วยจั๊บญวนอุบล` is named or merely described —
-and each says in its note what is being asked. Two were drawn from the rest by a seeded sample,
-so the audit is not only the questions I already knew to ask. **This is the open ask of the next
-human session**, and it is small: read ten items, agree or disagree with ten labels.
+**I wrote the prompt and the answer key both. The ten flagged items have now been audited by a
+human, one at a time, and four of them moved.** The rulings, and the rules they set:
+
+- **A place the writer has not been to still counts.** The prompt's disqualification was struck:
+  `sentiment` and `creatorReads` already carry what the writer did or did not do, so removing it
+  from the in-or-out decision cost no information.
+- **A place the item says is gone does not.** The mirror case survived for exactly that reason —
+  nothing in the schema can say a shop has closed, so counting `ร้านโรจน์` would emit it looking
+  like somewhere you can walk into tonight. The clause was widened to cover not-built-yet, which
+  settled `ตลาด Vista Space` the same way.
+- **A generic noun counts when the item names the locality and the locality has only one.** A
+  town's walking street resolves; `ร้านเก่าแก่ บางแสน` does not, because Bangsaen has dozens.
+  The second half of that rule is what keeps the set's best negative negative.
+- **A place named to describe something else is not a mention.** "Nature spots such as
+  `ผาแต้ม`" cites `ผาแต้ม` as an example of a category. The comment's subject is the review.
+
+Six were confirmed as labelled, including both random draws. A named rock formation the writer
+detours to stays in while numbered waypoints on one signposted trail stay out; a stall called
+`ร้านก๋วยจั๊บญวนอุบล` stays in, because in a round-up where every stall is introduced that way,
+the introduction is the name.
+
+**The audit's other product was two defects no test could have caught.** Both surfaced while
+writing the questions rather than from any answer: one shop the item spells two ways
+(`ต้าเจียห่าว`, then `ต้าเจียฮ่าว`), and one whose title gives a short form (`KUSA`) that
+`normaliseName` does not fold. A mechanical sweep for the first found one real case; a
+mechanical sweep for the second returned sixty candidates that were almost entirely `ร้าน`,
+`ตลาด` and `น้ำตก` — in Thai, truncating a name and reducing it to a generic noun are the same
+operation, so the sweep proposes exactly what the prompt exists to reject. What does work is
+looking for the item saying so out loud: `X หรือ Y`, `เรียกกันว่า`. That found four more.
 
 Two invariants keep the key from rotting, asserted in `golden.test.ts` rather than trusted.
 Every label has to name something the item actually says — at least one accepted spelling must
 appear verbatim — which caught the one name I had normalised from memory: the source misspells
 the Sirindhorn dam as `เขื่อนสิรินธน`, and both spellings now count, because a model that
-silently corrects it has helped P2.3 rather than hurt it. And the counts — 50 items, 18
-place-bearing, 70 places, 10 flagged — are written as assertions, so re-running the harvest
-without revisiting the labels fails loudly instead of quietly changing what every score means.
+silently corrects it has helped P2.3 rather than hurt it. And the counts — 50 items, 19
+place-bearing, 74 places, 10 flagged, every flagged note recording a resolution — are written as
+assertions, so re-running the harvest without revisiting the labels, or quietly reverting one of
+the four rulings, fails loudly instead of changing what every score means.
 
 **The corpus is checked in and the 2.9MB it came from is not.** `tools/harvest-golden.ts`
 rebuilds it from Pantip in one session, which is what makes that a trade rather than a loss: the
