@@ -1,13 +1,14 @@
 import type { MeterId } from "@samsara/core"
 import { BudgetGuard, MemoryCounterStore } from "@samsara/kernel"
 import { definePrompt, fakeChatClient, LlmClient, type LlmConfig } from "@samsara/llm"
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 import { z } from "zod"
-import { creatorPack } from "./__fixtures__/creator.js"
+import { creatorPack, creatorRepo } from "./__fixtures__/creator.js"
 import { ENVELOPE_INSTRUCTIONS, extract, ITEMS_VARIABLE } from "./extract.js"
-import { MemoryMentionSink } from "./memory.js"
+import { MemoryMentionSink, MemoryResolutionCache } from "./memory.js"
 import { type DomainPack, PackRegistry } from "./pack.js"
-import type { ExtractItem } from "./ports.js"
+import type { ExtractItem, PendingMention } from "./ports.js"
+import { resolve } from "./resolve.js"
 
 /**
  * P2.8's seam proof, or the half of it that can exist yet.
@@ -18,15 +19,23 @@ import type { ExtractItem } from "./ports.js"
  * the contract is shaped around the first vertical and should be revised now,
  * while there is one consumer, rather than in Phase 3 when there are three.
  *
- * Only the extract stage exists, so only extract is proven here. This file is
- * written to grow: P2.3, P2.4 and P2.5 each add a stage, and each should add its
- * assertions below rather than repeat this setup. That is deliberate — P2.8 as a
- * one-time run would prove the seam on the day it was run and never again, which
- * is the property a convention has and a check does not.
+ * This file is written to grow: P2.3, P2.4 and P2.5 each add a stage, and each
+ * adds its assertions below rather than repeating this setup. That is deliberate
+ * — P2.8 as a one-time run would prove the seam on the day it was run and never
+ * again, which is the property a convention has and a check does not.
  *
  * Result for the extract stage: **zero edits.** The fixture compiled and ran
  * against the engine as it stood. See STATUS for the one bug the *first* pack
  * found, which is the counter-example that makes this result worth stating.
+ *
+ * Result for the resolve stage: **zero edits**, plus one addition to the fixture
+ * (`creatorPack.resolve`), which is the thing P2.8 says is allowed. Worth
+ * recording *what* was at risk, because it was not nothing: the resolve contract
+ * was designed while looking straight at ADR-0017's tiers, and travel's tiers end
+ * in a pair of coordinates. A `geo` field on `Resolution`, a lat/lng on the cache
+ * row, a required `LookupPort` — each would have compiled, each would have been
+ * an invisible assumption that every vertical resolves *places*. A creator
+ * resolves to a channel URL, pays nobody, and has no Tier 2 at all. It runs.
  */
 
 const CEILINGS: Record<MeterId, number> = {
@@ -231,5 +240,183 @@ describe("the registry, holding two mention types at once", () => {
     expect(registry.size).toBe(2)
     expect(registry.require("creator").version).toBe("1")
     expect(registry.require("library").extract.batchBy({} as ExtractItem)).toBe("all")
+  })
+})
+
+/**
+ * Mentions as the resolve stage reads them, built from what extract just wrote.
+ *
+ * A real run reads these back out of Postgres through `PendingMentionReader`;
+ * here the two stages are wired directly, which is the point — the seam claim is
+ * about the contract between pack and engine, not about the store.
+ */
+const pendingFrom = (sink: MemoryMentionSink, items: ExtractItem[]): PendingMention[] =>
+  sink.rows.map((row) => {
+    const item = items.find((candidate) => candidate.id === row.rawItemId)
+    if (!item) throw new Error(`no item for mention ${row.id}`)
+    return {
+      id: row.id,
+      rawItemId: row.rawItemId,
+      domainId: row.domainId,
+      packVersion: row.packVersion,
+      payload: row.payload,
+      item,
+    }
+  })
+
+/** One mention, spelled however the caller likes, with no round trip through a model. */
+const handled = (
+  id: string,
+  mention: Record<string, unknown>,
+  item: ExtractItem,
+): PendingMention => ({
+  id,
+  rawItemId: item.id,
+  domainId: creatorPack.id,
+  packVersion: creatorPack.version,
+  payload: { quote: "kênh này review rất thật", ...mention },
+  item,
+})
+
+describe("a second pack, resolving over the same engine", () => {
+  beforeEach(() => {
+    // The fixture's repo is a module singleton, so that a test can read back what
+    // the stage wrote without the fixture having to hand one out per call.
+    creatorRepo.entities.length = 0
+  })
+
+  it("runs the resolve stage with no engine change at all", async () => {
+    const items = corpus()
+    const sink = new MemoryMentionSink()
+    await extract({
+      pack: creatorPack,
+      llm: llm(fakeChatClient((req) => creatorAnswer(req.user))),
+      items,
+      sink,
+      scope: { purpose: "refine" },
+    })
+
+    const cache = new MemoryResolutionCache()
+    const report = await resolve({ pack: creatorPack, mentions: pendingFrom(sink, items), cache })
+
+    // Five mentions of one handle: the cache's arithmetic is not a travel fact.
+    expect(report).toMatchObject({ mentions: 5, keys: 1, asked: 1, resolved: 1, entities: 1 })
+    expect(report.tiers).toEqual([{ tier: 0, count: 1 }])
+    expect(creatorRepo.entities[0]?.entity).toMatchObject({
+      canonicalHandle: "chi_hai_food",
+      channelUrl: "https://example.invalid/c/chi-hai",
+    })
+    // All five mentions point at the one entity, which is the saving.
+    const pointed = new Set([...cache.mentions.values()].map((m) => m.entityId))
+    expect(cache.mentions.size).toBe(5)
+    expect(pointed).toEqual(new Set([creatorRepo.entities[0]?.id]))
+  })
+
+  it("completes without a LookupPort, because not every vertical buys its answers", async () => {
+    // The sharp one for this stage. Travel's Tier 2 calls a metered geocoder, and
+    // `LookupPort` exists so that meter cannot be bypassed — it would have been
+    // natural to make it a required member of `ResolveCtx`. A creator pack has
+    // nothing to buy. If `lookup` were required, every future vertical would have
+    // had to invent a lookup service it does not use in order to resolve at all.
+    const item = corpus()[0] as ExtractItem
+    const cache = new MemoryResolutionCache()
+
+    const report = await resolve({
+      pack: creatorPack,
+      mentions: [
+        handled(
+          "m1",
+          { handle: "@bep_nha_minh", platform: "youtube", channelUrl: null, postsPerWeek: 2 },
+          item,
+        ),
+      ],
+      cache,
+      // No `lookup`, deliberately.
+    })
+
+    expect(report).toMatchObject({ resolved: 1, deferred: 0 })
+    expect(report.tiers).toEqual([{ tier: 1, count: 1 }])
+  })
+
+  it("keys on what the pack said, which here is a handle and a platform", async () => {
+    // Four spellings and two platforms. A pack chooses its own normalisation, and
+    // the engine has no opinion about what a key looks like — it compares strings.
+    // The platform is part of creator's key because one handle on two platforms is
+    // two creators; travel's key has no such component. Had the engine normalised
+    // anything itself, that difference would be unrepresentable.
+    const item = corpus()[0] as ExtractItem
+    const cache = new MemoryResolutionCache()
+    const spelling = (id: string, handle: string, platform: string) =>
+      handled(id, { handle, platform, channelUrl: null, postsPerWeek: null }, item)
+
+    const report = await resolve({
+      pack: creatorPack,
+      mentions: [
+        spelling("m1", "@chi_hai_food", "youtube"),
+        spelling("m2", "chi_hai_food", "youtube"),
+        spelling("m3", "  @Chi_Hai_Food  ", "youtube"),
+        spelling("m4", "@chi_hai_food", "tiktok"),
+      ],
+      cache,
+    })
+
+    expect(report).toMatchObject({ mentions: 4, keys: 2, asked: 2 })
+    // And the two keys got genuinely different answers, so this is a statement
+    // about the key and not about the resolver ignoring its input.
+    expect(report.tiers).toEqual([
+      { tier: 1, count: 1 },
+      { tier: 3, count: 1 },
+    ])
+    expect(cache.mentions.get("m3")?.state).toBe("resolved")
+    expect(cache.mentions.get("m4")?.state).toBe("unresolvable")
+  })
+
+  it("carries the pack's own tier numbers without interpreting them", async () => {
+    // ADR-0017 numbers travel's tiers 0 to 3 and gives each a meaning. Creator's
+    // tier 3 also means "we could not place this", but on a platform rather than a
+    // map, and its tier 1 is a string template rather than a trigram search over an
+    // OSM extract. `ResolveReport.tiers` is P2.3's acceptance criterion, so this
+    // asserts the criterion is computed from what the pack returned — not from
+    // anything the engine knows about geocoding, which it must not.
+    const item = corpus()[0] as ExtractItem
+    const cache = new MemoryResolutionCache()
+
+    const report = await resolve({
+      pack: creatorPack,
+      mentions: [
+        handled(
+          "m1",
+          {
+            handle: "a",
+            platform: "youtube",
+            channelUrl: "https://example.invalid/c/a",
+            postsPerWeek: null,
+          },
+          item,
+        ),
+        handled(
+          "m2",
+          { handle: "b", platform: "youtube", channelUrl: null, postsPerWeek: null },
+          item,
+        ),
+        handled(
+          "m3",
+          { handle: "c", platform: "forum", channelUrl: null, postsPerWeek: null },
+          item,
+        ),
+      ],
+      cache,
+    })
+
+    expect(report.tiers).toEqual([
+      { tier: 0, count: 1 },
+      { tier: 1, count: 1 },
+      { tier: 3, count: 1 },
+    ])
+    // The unresolvable one still got an entity written, per P2.3: a handle nobody
+    // can place is visible, and absent is indistinguishable from never extracted.
+    expect(report.unresolvable).toBe(1)
+    expect(creatorRepo.entities).toHaveLength(3)
+    expect(creatorRepo.entities[2]?.entity.channelUrl).toBeNull()
   })
 })

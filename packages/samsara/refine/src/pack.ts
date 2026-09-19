@@ -78,13 +78,164 @@ export interface ExtractSpec<TMention> {
 }
 
 /**
- * Widened as far as P2.2 has a caller. `resolve`, `dedupKeys`, `score`, `entity`,
- * `sources` and `queries` arrive in P2.3 to P2.5, each with the stage that calls
- * it. Callers should already type against this name so that the widening is a
- * change in one file rather than in every consumer.
+ * One hosted lookup, and the only way a pack is allowed to make one.
+ *
+ * ADR-0017's Tier 2 is a free-tier hosted service, and §8 puts a ceiling of 800
+ * calls a day on it. That ceiling is decorative the moment a pack can reach
+ * `fetch` itself, so the engine hands the capability down instead: whatever is
+ * behind this has already been wrapped in the budget guard, and a refusal
+ * arrives as a thrown `budget` failure rather than as a silent overspend.
+ *
+ * It is optional on the context on purpose. A pack that finds it absent has not
+ * been granted the tier and must answer `deferred` — not reach around it, and
+ * not report `unresolvable`, which would record "there is no such entity" when
+ * what happened is "nobody let me look".
  */
-export interface DomainPack<TMention = unknown> extends DomainPackIdentity {
+export interface LookupPort {
+  /**
+   * `query` is the pack's text and `near` an optional bias. Both are opaque to
+   * the engine, which counts the call and forwards it.
+   */
+  lookup(
+    query: string,
+    near?: { lat: number; lng: number },
+  ): Promise<{ lat: number; lng: number; ref: string; confidence: number }[]>
+}
+
+/** What the engine gives a pack's resolver, and nothing more. */
+export interface ResolveCtx {
+  /**
+   * The artifact this mention was found in.
+   *
+   * Plan section 2.5 writes the signature as `resolve(m, ctx)` and it would be
+   * easy to read that as "the mention is all a resolver gets". It cannot be:
+   * ADR-0017's Tier 0 — the free, exact, primary path — reads coordinates that
+   * are *already in the harvested artifact*, in map links and captions that no
+   * mention schema quotes. A resolver without the item has no Tier 0, and a
+   * resolver without Tier 0 fails P2.3's acceptance by construction.
+   *
+   * It is `ExtractItem` rather than the row, for the reasons that type already
+   * gives: `rank` is the surface's opinion and `engagement` belongs to scoring,
+   * and a resolver able to reach either would eventually weigh one.
+   */
+  item: ExtractItem
+  /** Absent unless the caller granted the metered tier. See `LookupPort`. */
+  lookup?: LookupPort
+  /** The runner's. A resolver doing network work should pass it on. */
+  signal?: AbortSignal
+}
+
+/**
+ * What one attempt at resolution concluded. Three outcomes, not two.
+ *
+ * The split between `unresolvable` and `deferred` is the load-bearing part, and
+ * it exists because `unresolvable` is terminal. "I looked through every tier and
+ * there is nothing" and "I could not look" are the same event from the outside
+ * and opposite events in a week's time: the first is a fact about a name, the
+ * second is a fact about a Tuesday. Collapsing them means the day a free tier's
+ * daily quota runs out is the day every name still in the queue is permanently
+ * marked as having no answer — and nothing afterwards would ever ask again.
+ */
+export type Resolution<TEntity> =
+  | {
+      outcome: "resolved"
+      entity: TEntity
+      /** Which tier answered, lowest first, as ADR-0017 orders them. */
+      tier: number
+      confidence: number
+    }
+  | {
+      outcome: "unresolvable"
+      /**
+       * Optional, and the reason P2.3's plan entry says unresolved mentions
+       * "still produce an entity, flagged": a name nobody can put on a map is
+       * still a name worth carrying, and dropping it here would make the gap
+       * invisible to the screen whose job is to show it.
+       */
+      entity?: TEntity
+      tier: number
+    }
+  | {
+      outcome: "deferred"
+      /**
+       * A class, never a message. These strings reach a lab screen served out of
+       * a public repository, and a provider's error text can quote a URL or a
+       * key. Same rule as the kernel's closed log union (ADR-0014).
+       */
+      reason: "budget" | "provider" | "cancelled"
+    }
+
+/**
+ * A pack's own table, as the engine is allowed to see it.
+ *
+ * Ownership is inverted exactly as plan section 2.5 says: the engine calls this,
+ * and never imports the table behind it. P2.3 needs one method. `findByKeys` and
+ * `merge` arrive with P2.4, which is the stage that calls them — the same
+ * discipline `ExtractSpec` was written under.
+ */
+export interface EntityRepo<TEntity> {
+  /**
+   * Write the entity and return its id.
+   *
+   * No deduplication is expected here. Two resolutions of two spellings of one
+   * name legitimately produce two rows at this stage; collapsing them is P2.4's
+   * whole job, and a repo that quietly did it early would hide the thing P2.4
+   * is measured on.
+   */
+  upsert(entity: TEntity): Promise<string>
+}
+
+/**
+ * How a pack turns mentions into entities.
+ *
+ * The entity schema and the repo live in here rather than in a sibling `entity`
+ * member, which is a deliberate deviation from the shape plan section 2.5 lists.
+ * They must be present exactly when `resolve` is, and this codebase already has
+ * the argument written down one table over: half a pairing key is worse than
+ * none, which is why `harvest_runs` carries a check constraint rather than two
+ * hopeful nullable columns. Two optional members that must agree is that same
+ * mistake in the type system, where nothing would enforce it.
+ */
+export interface ResolveSpec<TMention, TEntity> {
+  /** What a resolved entity must look like. Checked before the repo sees it. */
+  entitySchema: z.ZodType<TEntity>
+  repo: EntityRepo<TEntity>
+  /**
+   * The cache key: the pack's normalised form of whatever this mention names.
+   *
+   * The engine never builds one, because normalising a name is precisely the
+   * knowledge that makes a pack a pack — case, script, honorifics, the word for
+   * "shop" that half the sources leave off. Two mentions sharing a key are the
+   * same thing as far as the pack is concerned, and the stage will resolve them
+   * once between them.
+   */
+  key(mention: TMention): string
+  resolve(mention: TMention, ctx: ResolveCtx): Promise<Resolution<TEntity>>
+  /**
+   * How many `deferred` attempts a key gets before the stage gives up on it and
+   * writes `unresolvable`. Defaults to `DEFAULT_RESOLVE_ATTEMPTS`.
+   *
+   * Counted per key rather than per mention — see `entityResolution` in
+   * `@samsara/core` for why that division is the one that protects the budget.
+   */
+  maxAttempts?: number
+}
+
+/**
+ * Widened as far as P2.3 has a caller. `dedupKeys`, `score`, `sources` and
+ * `queries` arrive in P2.4 and P2.5, each with the stage that calls it. Callers
+ * should already type against this name so that the widening is a change in one
+ * file rather than in every consumer.
+ *
+ * `resolve` is optional while `extract` is not, and that is not laziness: a pack
+ * part-way through being written is a real state — the creator fixture was one
+ * for a day — and the alternative is forcing every pack to carry stubs for
+ * stages that do not exist yet, which is how a contract stops describing
+ * anything. The stage refuses by name when it is absent, the way `require` does.
+ */
+export interface DomainPack<TMention = unknown, TEntity = unknown> extends DomainPackIdentity {
   extract: ExtractSpec<TMention>
+  resolve?: ResolveSpec<TMention, TEntity>
 }
 
 /**
@@ -114,7 +265,7 @@ export class PackRegistry {
    * takes any pack and widens at the map, where `DomainPack<unknown>` is the
    * honest type for a value the runner will look up by a string.
    */
-  register<TMention>(pack: DomainPack<TMention>): void {
+  register<TMention, TEntity>(pack: DomainPack<TMention, TEntity>): void {
     if (this.packs.has(pack.id)) {
       throw new Error(`domain pack already registered: ${pack.id}`)
     }

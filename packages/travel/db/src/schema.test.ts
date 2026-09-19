@@ -9,6 +9,7 @@ const names = tables.map((t) => getTableName(t)).sort()
 const ENGINE = [
   "budget_counters",
   "drift_experiments",
+  "entity_resolutions",
   "evidence",
   "harvest_runs",
   "job_events",

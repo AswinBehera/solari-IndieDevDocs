@@ -13,5 +13,6 @@ export * from "./extract.js"
 export * from "./memory.js"
 export * from "./pack.js"
 export * from "./ports.js"
+export * from "./resolve.js"
 
 export const PACKAGE = "@samsara/refine" as const

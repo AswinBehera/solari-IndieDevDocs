@@ -64,6 +64,13 @@
       "when": 1789572406379,
       "tag": "0008_add_drift_experiments",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789786775251,
+      "tag": "0009_add_entity_resolutions",
+      "breakpoints": true
     }
   ]
 }

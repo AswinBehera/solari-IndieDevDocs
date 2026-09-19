@@ -1,12 +1,25 @@
 import { randomUUID } from "node:crypto"
-import { harvestRuns, mentions, personas, rawItems, samsaraSchema, sessions } from "@samsara/db"
+import {
+  entityResolutions,
+  harvestRuns,
+  mentions,
+  personas,
+  rawItems,
+  samsaraSchema,
+  sessions,
+} from "@samsara/db"
 import { type DatabaseLock, lockDatabase } from "@samsara/db/testing"
 import { sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import type { MentionRow } from "./ports.js"
-import { PostgresMentionSink, PostgresMentionStore } from "./postgres.js"
+import {
+  PostgresMentionSink,
+  PostgresMentionStore,
+  PostgresPendingMentions,
+  PostgresResolutionCache,
+} from "./postgres.js"
 
 /**
  * The mention stores against a real Postgres.
@@ -72,7 +85,7 @@ describe.runIf(hasDb)("refine, against Postgres", () => {
 
   beforeEach(async () => {
     await d().execute(
-      sql`truncate table mentions, raw_items, harvest_runs, sessions, personas restart identity cascade`,
+      sql`truncate table entity_resolutions, mentions, raw_items, harvest_runs, sessions, personas restart identity cascade`,
     )
     const personaId = randomUUID()
     await d().insert(personas).values({
@@ -236,6 +249,182 @@ describe.runIf(hasDb)("refine, against Postgres", () => {
       // A nonsense limit falls back to the bound rather than throwing: this is a
       // query string, and the caller of a lab screen is a URL bar.
       expect(await store().list({ limit: Number.NaN })).toHaveLength(5)
+    })
+  })
+
+  /**
+   * The resolve stage's cache (P2.3), against a real database.
+   *
+   * Three things here need one and cannot be faked. The **upsert** is a real
+   * conflict on a real unique index, which is what makes two runners working
+   * overlapping pages safe. The **attempt increment** is an expression evaluated
+   * by Postgres rather than a number the caller computed, which is the whole
+   * defence against two readers of the same total writing it back. And `commit`
+   * moves the cache row and the mentions **in one transaction**, which an
+   * in-memory map cannot fail to do and therefore cannot demonstrate.
+   */
+  describe("the resolution cache", () => {
+    const cache = () => new PostgresResolutionCache(d())
+
+    const commit = (over: Partial<Parameters<ReturnType<typeof cache>["commit"]>[0]> = {}) => ({
+      domainId: "atlas",
+      key: "chợ bến thành",
+      mentionIds: [] as string[],
+      state: "pending" as const,
+      entityId: null,
+      tier: null,
+      confidence: null,
+      deferred: false,
+      ...over,
+    })
+
+    it("returns nothing for a key it has never seen, rather than a default", async () => {
+      // "Never asked" and "asked and still pending" differ by an attempt count,
+      // and a caller that had to tell them apart from a zero-valued default
+      // would get it wrong the first time the default changed.
+      expect((await cache().read("atlas", ["chợ bến thành"])).size).toBe(0)
+    })
+
+    it("upserts on (domain, key) rather than inserting a second row", async () => {
+      const entityId = randomUUID()
+      await cache().commit(commit({ deferred: true }))
+      await cache().commit(commit({ state: "resolved", entityId, tier: 1, confidence: 0.8 }))
+
+      const rows = await d().select().from(entityResolutions)
+      expect(rows).toHaveLength(1)
+      const read = (await cache().read("atlas", ["chợ bến thành"])).get("chợ bến thành")
+      expect(read).toMatchObject({ state: "resolved", entityId, tier: 1, confidence: 0.8 })
+    })
+
+    it("increments attempts in the database, and only for a deferral", async () => {
+      // Written as `attempts + 1` in SQL rather than as a number the caller read
+      // and added to. Two runners that both read 0 would both write 1, and the
+      // ceiling the counter protects would never be reached.
+      await cache().commit(commit({ deferred: true }))
+      await cache().commit(commit({ deferred: true }))
+      expect((await cache().read("atlas", ["chợ bến thành"])).get("chợ bến thành")?.attempts).toBe(
+        2,
+      )
+
+      // A commit that looked and found something does not count as an attempt.
+      await cache().commit(commit({ state: "unresolvable", tier: 3 }))
+      expect((await cache().read("atlas", ["chợ bến thành"])).get("chợ bến thành")?.attempts).toBe(
+        2,
+      )
+    })
+
+    it("keeps two domains apart under the same key", async () => {
+      await cache().commit(commit({ state: "resolved", entityId: randomUUID(), tier: 0 }))
+      await cache().commit(commit({ domainId: "cartography", state: "unresolvable", tier: 3 }))
+
+      expect((await cache().read("atlas", ["chợ bến thành"])).get("chợ bến thành")?.state).toBe(
+        "resolved",
+      )
+      expect(
+        (await cache().read("cartography", ["chợ bến thành"])).get("chợ bến thành")?.state,
+      ).toBe("unresolvable")
+    })
+
+    it("moves the mentions with the cache row", async () => {
+      const first = row()
+      const second = row()
+      await sink().insertMany([first, second])
+      const entityId = randomUUID()
+
+      await cache().commit(
+        commit({
+          mentionIds: [first.id, second.id],
+          state: "resolved",
+          entityId,
+          tier: 0,
+          confidence: 0.95,
+        }),
+      )
+
+      const read = await store().list({ domainId: "atlas" })
+      expect(read.every((m) => m.resolution === "resolved")).toBe(true)
+      expect(read.every((m) => m.entityId === entityId)).toBe(true)
+    })
+
+    it("writes no cache row at all when the mention half fails", async () => {
+      // The one that actually demonstrates the transaction, rather than
+      // demonstrating that both halves ran. The cache row is inserted first and
+      // the mentions are updated second, so a malformed mention id fails the
+      // *second* statement — and the row from the first must not survive it.
+      //
+      // It matters because of which way the residue would cut. A cache row
+      // claiming `resolved` that no mention points at is not a stale row that a
+      // later run repairs: it is a permanent cache hit, so every future mention
+      // of that name is silently attached to an entity nothing ever verified,
+      // and the stage never asks the pack about it again.
+      await expect(
+        cache().commit(
+          commit({
+            mentionIds: ["not-a-uuid"],
+            state: "resolved",
+            entityId: randomUUID(),
+            tier: 0,
+            confidence: 0.95,
+          }),
+        ),
+      ).rejects.toThrow()
+
+      expect(await d().select().from(entityResolutions)).toHaveLength(0)
+    })
+  })
+
+  describe("the pending reader", () => {
+    const pending = () => new PostgresPendingMentions(d())
+
+    it("returns the item's full text, which is where Tier 0 looks", async () => {
+      // `MentionStore.list` deliberately does not select `text` — it serves a
+      // screen. A resolver needs the artifact itself, because ADR-0017's Tier 0
+      // reads coordinates out of it. This is the assertion that the two reads
+      // are different reads for a reason and not duplication.
+      await sink().insertMany([row()])
+      const [got] = await pending().pending("atlas")
+      expect(got?.item.text).toBe("xin chào")
+      expect(got?.item.id).toBe(itemId)
+    })
+
+    it("returns only what is still pending, and only this domain", async () => {
+      // No `entityId` here, and it is not an oversight: `MentionRow.entityId` is
+      // the literal `null`, because the extract stage is the only writer of that
+      // type and it has nothing to point at yet. The filter this test is about is
+      // on `resolution` anyway — the resolve stage moves both, together, through
+      // `ResolutionCache.commit`.
+      const done = row({ resolution: "resolved" })
+      const elsewhere = row({ domainId: "cartography" })
+      await sink().insertMany([row(), done, elsewhere])
+
+      const got = await pending().pending("atlas")
+      expect(got).toHaveLength(1)
+      expect(got[0]?.domainId).toBe("atlas")
+    })
+
+    it("is bounded, and hands back the oldest first", async () => {
+      // Oldest first because this is a work queue rather than a view. Newest
+      // first would re-read one page every run while the backlog behind it aged,
+      // which is starvation that looks exactly like progress.
+      //
+      // What the last assertion actually pins is the **tiebreak**: these five
+      // rows are one INSERT and so share a `created_at` to the microsecond,
+      // which is the ordinary case for a batch the extract stage wrote. With the
+      // timestamps equal, only `id` separates them, and without it in the ORDER
+      // BY two reads of one page could return two different pages — so a runner
+      // that took page one, died, and restarted could work the same rows twice
+      // and never reach the rest.
+      await sink().insertMany(Array.from({ length: 5 }, () => row()))
+      expect(await pending().pending("atlas", 2)).toHaveLength(2)
+      expect(await pending().pending("atlas", 1_000_000)).toHaveLength(5)
+
+      const all = await pending().pending("atlas")
+      const oldest = await d()
+        .select({ id: mentions.id })
+        .from(mentions)
+        .orderBy(mentions.createdAt, mentions.id)
+        .limit(1)
+      expect(all[0]?.id).toBe(oldest[0]?.id)
     })
   })
 })

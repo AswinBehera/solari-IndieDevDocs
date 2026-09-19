@@ -52,7 +52,16 @@ export interface MentionRow {
   domainId: string
   packVersion: string
   payload: unknown
-  /** Null until the resolve stage (P2.3) says otherwise. */
+  /**
+   * Always null, and typed as the literal rather than `string | null`.
+   *
+   * This is the shape the *extract* stage inserts, and extraction cannot know
+   * an entity id — the resolve stage does not write `MentionRow`s, it updates
+   * mentions through `ResolutionCache.commit`. P2.3 widened the read side
+   * (`MentionRecord.entityId`) and deliberately left this alone: a write type
+   * that can only express what the writer is allowed to say is worth more than
+   * one that matches the column.
+   */
   entityId: null
   resolution: ResolutionState
   confidence: number
@@ -146,4 +155,102 @@ export interface MentionRecord {
  */
 export interface MentionStore {
   list(filter: MentionFilter): Promise<MentionRecord[]>
+}
+
+/**
+ * A mention the resolve stage has been handed, with the artifact it came from.
+ *
+ * The item is here rather than fetched by the pack because `ResolveCtx` needs
+ * it for Tier 0 and because the join is one query for a page of mentions and N
+ * queries if each resolver does it. It is the same narrow `ExtractItem` the
+ * extractor saw — narrow for the same reasons, which do not stop applying
+ * because a different stage is asking.
+ */
+export interface PendingMention {
+  id: string
+  rawItemId: string
+  domainId: string
+  packVersion: string
+  /** Opaque, exactly as stored. The stage re-validates it against the pack's schema. */
+  payload: unknown
+  item: ExtractItem
+}
+
+/**
+ * The resolve stage's read side: mentions nobody has worked out yet.
+ *
+ * Separate from `MentionStore` even though both read mentions, because they are
+ * read by different callers for different reasons. `MentionStore.list` serves a
+ * lab screen and returns what a person needs to judge a row — the source, the
+ * URL, the title. This returns what a *resolver* needs, which is the item's full
+ * text, because that is where ADR-0017's Tier 0 finds its coordinates. Merging
+ * them would mean the API's reader pulling whole forum threads it never renders.
+ */
+export interface PendingMentionReader {
+  /**
+   * Oldest first, always bounded by `MENTION_LIST_LIMIT`.
+   *
+   * Oldest rather than newest, unlike every other list in the codebase, and the
+   * inversion is deliberate: this is a work queue rather than a view. Newest
+   * first would re-read the same page every run while the backlog behind it
+   * aged, which is starvation dressed as progress.
+   */
+  pending(domainId: string, limit?: number): Promise<PendingMention[]>
+}
+
+/** What the cache knows about one key. */
+export interface CachedResolution {
+  state: ResolutionState
+  entityId: string | null
+  tier: number | null
+  confidence: number | null
+  /** Deferred attempts so far. See `entityResolution` in `@samsara/core`. */
+  attempts: number
+}
+
+/**
+ * One key's outcome, and the mentions that were waiting on it.
+ *
+ * Written as a single call rather than "update the cache, then update the
+ * mentions" because the two halves must not be separable. A runner under
+ * ADR-0014 can be killed between any two statements, and the order that
+ * survives being cut in half is the one where a cache row never claims an
+ * entity that no mention points at, or the reverse. An implementation backed by
+ * a database is expected to do both in one transaction; the in-memory one does
+ * both before it returns.
+ */
+export interface ResolutionCommit {
+  domainId: string
+  key: string
+  /** Every pending mention that shares this key. Often more than one — that is the point. */
+  mentionIds: readonly string[]
+  state: ResolutionState
+  entityId: string | null
+  tier: number | null
+  confidence: number | null
+  /**
+   * Whether this attempt could not look, as opposed to having looked and found
+   * nothing. Only the former is counted, and the store increments rather than
+   * being told a total, so two runners racing the same key cannot both write 1.
+   */
+  deferred: boolean
+}
+
+/**
+ * The resolve stage's one port: what has been worked out about a key, and where
+ * to put what gets worked out next.
+ *
+ * A sink that also reads, like `MentionSink` and for the same reason — the read
+ * exists so the stage does not pay twice for work it has already done, which is
+ * not the API's read side and has no business being reachable from it.
+ */
+export interface ResolutionCache {
+  /**
+   * What is known about these keys. Keys with no row are absent from the map
+   * rather than present with a `pending` value: "never asked" and "asked and
+   * still pending" differ by an attempt count that the caller must not have to
+   * reconstruct from a default.
+   */
+  read(domainId: string, keys: readonly string[]): Promise<Map<string, CachedResolution>>
+  commit(entry: ResolutionCommit): Promise<void>
 }

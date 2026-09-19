@@ -323,6 +323,51 @@ export const evidence = pgTable(
   ],
 )
 
+/**
+ * The resolve stage's cache (P2.3): one row per `(domain_id, key)`, holding what
+ * was learned about a normalised name and how many times we failed to learn it.
+ *
+ * The unique index is load-bearing rather than an optimisation, for the same
+ * reason `budget_counters`' is: two runners resolving overlapping corpora must
+ * increment one row rather than race to create two, and the stage relies on the
+ * insert conflicting instead of checking first.
+ *
+ * `entity_id` is the opaque half of `(domain_id, entity_id)` and carries no
+ * foreign key, by the rule in plan section 3. The engine cannot see the pack's
+ * table and must not learn to.
+ */
+export const entityResolutions = pgTable(
+  "entity_resolutions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    domainId: text("domain_id").notNull(),
+    /** The pack's normalised key. The engine stores it and never builds one. */
+    key: text("key").notNull(),
+    state: resolutionStateEnum("state").notNull().default("pending"),
+    /** Opaque pointer into the pack's own table. No foreign key, by design. */
+    entityId: uuid("entity_id"),
+    /** Which tier answered, as ADR-0017 numbers them. Null until one does. */
+    tier: integer("tier"),
+    confidence: doublePrecision("confidence"),
+    /**
+     * Attempts that could not look — a spent quota, a provider that was down.
+     * An attempt that looked and found nothing writes `unresolvable` and stops,
+     * so this column never counts it. Without that split, the day the geocoder's
+     * free tier runs out would mark every name in the queue permanently
+     * unresolvable, and `unresolvable` is terminal.
+     */
+    attempts: integer("attempts").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("entity_resolutions_domain_key_idx").on(t.domainId, t.key),
+    // The stage's other query: everything this domain has given up on, for the
+    // lab screen that asks what the resolver is missing, and for the `DELETE`
+    // that a genuinely improved resolver uses instead of a version bump.
+    index("entity_resolutions_domain_state_tier_idx").on(t.domainId, t.state, t.tier),
+  ],
+)
+
 export const probeTargets = pgTable(
   "probe_targets",
   {
