@@ -83,24 +83,48 @@ export interface ExtractSpec<TMention> {
  * ADR-0017's Tier 2 is a free-tier hosted service, and §8 puts a ceiling of 800
  * calls a day on it. That ceiling is decorative the moment a pack can reach
  * `fetch` itself, so the engine hands the capability down instead: whatever is
- * behind this has already been wrapped in the budget guard, and a refusal
- * arrives as a thrown `budget` failure rather than as a silent overspend.
+ * behind this has already been wrapped in the budget guard.
  *
  * It is optional on the context on purpose. A pack that finds it absent has not
- * been granted the tier and must answer `deferred` — not reach around it, and
- * not report `unresolvable`, which would record "there is no such entity" when
- * what happened is "nobody let me look".
+ * been granted the tier — it must not reach around it, and it must not report
+ * the mention as `unresolvable` *on the strength of a tier it never ran*.
  */
 export interface LookupPort {
   /**
    * `query` is the pack's text and `near` an optional bias. Both are opaque to
    * the engine, which counts the call and forwards it.
    */
-  lookup(
-    query: string,
-    near?: { lat: number; lng: number },
-  ): Promise<{ lat: number; lng: number; ref: string; confidence: number }[]>
+  lookup(query: string, near?: { lat: number; lng: number }): Promise<LookupResult>
 }
+
+export interface LookupHit {
+  lat: number
+  lng: number
+  /** The provider's own id for this result, for `externalRef`. */
+  ref: string
+  confidence: number
+}
+
+/**
+ * Found nothing, or could not look. Two different things, and this type is the
+ * reason a pack can tell them apart.
+ *
+ * The first draft returned `Promise<LookupHit[]>` and said a refusal would
+ * "arrive as a thrown `budget` failure". Building the first real consumer showed
+ * that for what it was: an empty array is what a geocoder returns when it has
+ * never heard of a place, and it is also what a wrapper returns when the daily
+ * quota is spent, and a pack cannot distinguish them without catching an
+ * exception and inspecting its shape. Getting that wrong is not a small bug —
+ * `unresolvable` is terminal, so the day the quota runs out would be the day
+ * every remaining mention is permanently recorded as having no answer.
+ *
+ * So the refusal is in the return type, and its reasons are spelled exactly like
+ * `Resolution`'s deferral reasons, so a pack forwards one rather than
+ * translating it and inventing a difference on the way.
+ */
+export type LookupResult =
+  | { ok: true; hits: LookupHit[] }
+  | { ok: false; reason: "budget" | "provider" | "cancelled" }
 
 /** What the engine gives a pack's resolver, and nothing more. */
 export interface ResolveCtx {
