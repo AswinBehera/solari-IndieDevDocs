@@ -339,6 +339,9 @@ importers:
       '@dt/core':
         specifier: workspace:*
         version: link:../core
+      '@dt/db':
+        specifier: workspace:*
+        version: link:../db
       '@samsara/core':
         specifier: workspace:*
         version: link:../../samsara/core
@@ -351,9 +354,19 @@ importers:
       '@samsara/refine':
         specifier: workspace:*
         version: link:../../samsara/refine
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@4.20260702.1)(postgres@3.4.9)
       zod:
         specifier: ^4.6.1
         version: 4.6.1
+    devDependencies:
+      '@samsara/db':
+        specifier: workspace:*
+        version: link:../../samsara/db
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
 
   packages/travel/ui: {}
 

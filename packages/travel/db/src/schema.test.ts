@@ -22,7 +22,7 @@ const ENGINE = [
   "seed_plans",
   "sessions",
 ]
-const TRAVEL = ["documents", "places", "postcards", "trips", "users"]
+const TRAVEL = ["documents", "osm_places", "places", "postcards", "trips", "users"]
 
 describe("the composed schema", () => {
   it("is one database: every engine table plus every travel table, declared once", () => {

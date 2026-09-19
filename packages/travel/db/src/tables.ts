@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm"
 import {
   doublePrecision,
   index,
@@ -132,4 +133,67 @@ export const postcards = pgTable(
     ...timestamps,
   },
   (t) => [index("postcards_trip_state_idx").on(t.tripId, t.state)],
+)
+
+/**
+ * The OpenStreetMap named-POI extract, ADR-0017's Tier 1 (P2.3).
+ *
+ * The honest version of the idea ADR-0007 reached for when it named the public
+ * Nominatim server: the same ODbL data, queried from our own copy. Their usage
+ * policy caps scripts running at regular intervals at four requests a minute and
+ * names systematic querying as grounds for a ban — a nightly harvest resolving a
+ * hundred mentions is precisely the pattern it discourages, and we are not
+ * entitled to that server.
+ *
+ * This is a cache of a public dataset and not a table anyone edits. `id` is
+ * OSM's own — `node/123456`, `way/789` — rather than a generated uuid, which is
+ * what makes a refresh an upsert rather than a truncate-and-reload, and what
+ * lets a resolved place's `external_ref` be checked against the extract later.
+ *
+ * It stays small by holding only what resolution needs: named POIs inside one
+ * city's bbox, a coordinate, and a category. Not geometry, not addresses, not
+ * opening hours. ADR-0017 makes the size a measurement to take rather than a
+ * number to assume, because it has to fit inside the free Supabase tier.
+ */
+export const osmPlaces = pgTable(
+  "osm_places",
+  {
+    /** OSM's own identity, `<type>/<id>`. Stable across refreshes. */
+    id: text("id").primaryKey(),
+    /** Which extract this row came from. Matches `places.city`. */
+    city: text("city").notNull(),
+    /** The `name` tag, as OSM holds it — often, in Thailand, already Thai script. */
+    name: text("name").notNull(),
+    /**
+     * The `name:th` tag, when it differs from `name`.
+     *
+     * The reason this tier works for the first vertical at all. A Thai source
+     * writes a shop's name in Thai and nothing else will match it — ADR-0007's
+     * premise was that only Google indexes those, and `name:th` is the
+     * counter-example that makes Tier 1 worth building.
+     */
+    nameLocal: text("name_local"),
+    /** The `name:en` tag. Present far less often than `name:th`. */
+    nameEn: text("name_en"),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    /** Mapped from OSM tags by the loader, so the resolver never reads a raw tag. */
+    category: placeCategoryEnum("category").notNull().default("other"),
+    /** The OSM tag values the category was derived from, kept so a remap is possible. */
+    tags: text("tags").array().notNull().default([]),
+    ...timestamps,
+  },
+  (t) => [
+    /**
+     * Trigram indexes, one per name column, which is what makes this tier a
+     * lookup rather than a scan. `gin_trgm_ops` is an operator class rather
+     * than an index type, so `pg_trgm` must exist before these are built — the
+     * migration creates the extension in the same file, deliberately, because a
+     * migration that assumes an extension is a migration that works on the
+     * machine it was written on.
+     */
+    index("osm_places_name_trgm_idx").using("gin", sql`${t.name} gin_trgm_ops`),
+    index("osm_places_name_local_trgm_idx").using("gin", sql`${t.nameLocal} gin_trgm_ops`),
+    index("osm_places_city_category_idx").on(t.city, t.category),
+  ],
 )

@@ -1,0 +1,197 @@
+import { osmPlaces, schema } from "@dt/db"
+import { type DatabaseLock, lockDatabase } from "@samsara/db/testing"
+import { sql } from "drizzle-orm"
+import { drizzle } from "drizzle-orm/postgres-js"
+import postgres from "postgres"
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { PostgresOsmSearch } from "./postgres.js"
+import { BANGKOK } from "./tier0.js"
+
+/**
+ * Tier 1 against a real Postgres, which is the only place it can be tested.
+ *
+ * Every interesting thing in `PostgresOsmSearch` is something no fake has: the
+ * `pg_trgm` extension, the `%` operator, `similarity()`, `greatest()` over a
+ * cross product of spellings and columns, and whether any of that is valid SQL
+ * at all. A mock would assert the shape of a string we made up.
+ *
+ * The fixtures are real Bangkok POIs with real name tags, including the case the
+ * whole tier exists for: a row whose `name` is Thai and whose `name:en` is a
+ * romanisation nobody would guess from the Thai.
+ *
+ * Runs whenever `DATABASE_URL` is set, and **fails loudly when it is not** unless
+ * `SAMSARA_NO_DB=1` says the omission is deliberate.
+ */
+
+const url = process.env.DATABASE_URL
+const hasDb = typeof url === "string" && url.length > 0
+const optedOut = process.env.SAMSARA_NO_DB === "1"
+
+if (!hasDb && !optedOut) {
+  describe("Tier 1, against Postgres", () => {
+    it("has a database to run against", () => {
+      expect.fail(
+        "DATABASE_URL is not set, so the trigram search would have skipped and this " +
+          "run would have reported green while testing nothing. Run `pnpm db:up` " +
+          "and retry, or set SAMSARA_NO_DB=1 to skip on purpose.",
+      )
+    })
+  })
+}
+
+const client = hasDb ? postgres(url as string, { max: 4, onnotice: () => {} }) : null
+const db = client ? drizzle(client, { schema }) : null
+
+let lock: DatabaseLock | null = null
+
+beforeAll(async () => {
+  if (hasDb) lock = await lockDatabase(url as string)
+})
+
+afterAll(async () => {
+  await client?.end({ timeout: 5 })
+  await lock?.release()
+})
+
+describe.runIf(hasDb)("Tier 1, against Postgres", () => {
+  const d = () => db as NonNullable<typeof db>
+  const osm = () => new PostgresOsmSearch(d())
+
+  beforeEach(async () => {
+    await d().execute(sql`truncate table osm_places restart identity cascade`)
+    await d()
+      .insert(osmPlaces)
+      .values([
+        {
+          id: "node/1",
+          city: "Bangkok",
+          name: "ก๋วยเตี๋ยวเรือทองหล่อ",
+          nameLocal: "ก๋วยเตี๋ยวเรือทองหล่อ",
+          nameEn: "Kuay Teow Reua Thonglor",
+          lat: 13.7263,
+          lng: 100.5148,
+          category: "food",
+        },
+        {
+          id: "node/2",
+          city: "Bangkok",
+          name: "เจ๊โอวข้าวต้มเป็ด",
+          nameLocal: "เจ๊โอวข้าวต้มเป็ด",
+          nameEn: null,
+          lat: 13.7512,
+          lng: 100.5086,
+          category: "food",
+        },
+        {
+          id: "node/3",
+          city: "Bangkok",
+          name: "Wat Pho",
+          nameLocal: "วัดโพธิ์",
+          nameEn: "Wat Pho",
+          lat: 13.7465,
+          lng: 100.4927,
+          category: "temple",
+        },
+        // Same name, different city. The city filter is not decoration: shop
+        // names repeat across Thailand and a match here would be a pin 700km out.
+        {
+          id: "node/4",
+          city: "Chiang Mai",
+          name: "ก๋วยเตี๋ยวเรือทองหล่อ",
+          nameLocal: "ก๋วยเตี๋ยวเรือทองหล่อ",
+          nameEn: null,
+          lat: 18.7883,
+          lng: 98.9853,
+          category: "food",
+        },
+      ])
+  })
+
+  it("matches a Thai name written in Thai", async () => {
+    const [hit] = await osm().search(["ก๋วยเตี๋ยวเรือทองหล่อ"], BANGKOK)
+    expect(hit?.osmId).toBe("node/1")
+    expect(hit?.confidence).toBe(1)
+  })
+
+  it("matches the romanisation against name:en, which is why the tier works", async () => {
+    // ADR-0007's premise was that only Google indexes a Thai shop name. This is
+    // the counter-example: OSM carries the romanisation as a separate tag, and a
+    // mention that arrived only in Latin script still resolves.
+    const [hit] = await osm().search(["Kuay Teow Reua Thonglor"], BANGKOK)
+    expect(hit?.osmId).toBe("node/1")
+  })
+
+  it("tolerates a misspelling, which is the point of trigrams over equality", async () => {
+    const [hit] = await osm().search(["Kuay Tiew Rua Thonglor"], BANGKOK)
+    expect(hit?.osmId).toBe("node/1")
+    expect(hit?.confidence).toBeGreaterThan(0.3)
+    expect(hit?.confidence).toBeLessThan(1)
+  })
+
+  it("scores every spelling against every name column and keeps the best", async () => {
+    // The Thai spelling is a miss for node/3's `name` and an exact hit for its
+    // `name:th`. A query that scored only one column would rank this below noise.
+    const [hit] = await osm().search(["ไม่มีอยู่จริงเลย", "วัดโพธิ์"], BANGKOK)
+    expect(hit?.osmId).toBe("node/3")
+    expect(hit?.confidence).toBe(1)
+  })
+
+  it("never returns another city's rows", async () => {
+    const hits = await osm().search(["ก๋วยเตี๋ยวเรือทองหล่อ"], BANGKOK)
+    expect(hits.map((hit) => hit.osmId)).not.toContain("node/4")
+  })
+
+  it("returns nothing rather than the least-bad row", async () => {
+    // A geocoder answers something for any string; this tier must not. The
+    // resolver's job is to tell "no match" from "could not look", and a
+    // best-effort row here would make that distinction unavailable.
+    expect(await osm().search(["Eiffel Tower"], BANGKOK)).toEqual([])
+  })
+
+  it("ranks better matches first, so the resolver's floor means something", async () => {
+    const hits = await osm().search(["ข้าวต้มเป็ด"], BANGKOK)
+    expect(hits[0]?.osmId).toBe("node/2")
+    for (let i = 1; i < hits.length; i++) {
+      expect(hits[i - 1]?.confidence).toBeGreaterThanOrEqual(hits[i]?.confidence ?? 0)
+    }
+  })
+
+  it("asks nothing at all for an empty list of spellings", async () => {
+    expect(await osm().search([], BANGKOK)).toEqual([])
+    expect(await osm().search(["  "], BANGKOK)).toEqual([])
+  })
+
+  it("writes a predicate the trigram indexes can answer", async () => {
+    // What this can prove and what it cannot, stated plainly.
+    //
+    // It proves the predicate is *index-compatible*: with `enable_seqscan` off,
+    // a bare `name % ?` is answered from the GIN index. That is the property
+    // that breaks silently — wrapping an indexed column in `coalesce` removes
+    // it, and this file's first draft did exactly that.
+    //
+    // It does not prove the planner will choose that path in the real query. On
+    // these four rows it does not: it answers `city = 'Bangkok'` from the btree
+    // and applies the trigram predicates as a filter. Whether that is still the
+    // right plan over a loaded city extract is a measurement to take against
+    // one, not an assertion to make here over four rows.
+    // In a transaction, because `SET LOCAL` applies to one and because the pool
+    // hands out connections per statement — a setting and the `explain` that
+    // depends on it would otherwise run against different backends.
+    const plans = await d().transaction(async (tx) => {
+      await tx.execute(sql`set local enable_seqscan = off`)
+      const explain = async (where: ReturnType<typeof sql>) =>
+        JSON.stringify(await tx.execute(sql`explain select id from osm_places where ${where}`))
+      return {
+        name: await explain(sql`${osmPlaces.name} % 'ทองหล่อ'`),
+        local: await explain(sql`${osmPlaces.nameLocal} % 'ทองหล่อ'`),
+        // The negative case, so the two above are about this predicate rather
+        // than about Postgres naming an index in any plan at all.
+        wrapped: await explain(sql`coalesce(${osmPlaces.name}, '') % 'ทองหล่อ'`),
+      }
+    })
+
+    expect(plans.name).toContain("osm_places_name_trgm_idx")
+    expect(plans.local).toContain("osm_places_name_local_trgm_idx")
+    expect(plans.wrapped).not.toContain("osm_places_name_trgm_idx")
+  })
+})
