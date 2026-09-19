@@ -1,6 +1,8 @@
-import { osmPlaces } from "@dt/db"
+import { osmPlaces, places } from "@dt/db"
+import type { EntityRepo } from "@samsara/refine"
 import { and, desc, eq, sql, type TablesRelationalConfig } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
+import type { PlaceEntity } from "./entity.js"
 import type { OsmSearch } from "./resolve.js"
 import type { City } from "./tier0.js"
 
@@ -127,5 +129,50 @@ export class PostgresOsmSearch implements OsmSearch {
       })
     }
     return out
+  }
+}
+
+/**
+ * `EntityRepo<PlaceEntity>` over the `places` table.
+ *
+ * An insert, not an upsert, despite the port's name. `EntityRepo.upsert` is
+ * explicit that two resolutions of two spellings of one name legitimately
+ * produce two rows here and that collapsing them is P2.4's job — a repo that
+ * deduplicated early would hide exactly what P2.4 is measured on. The name is
+ * the port's; the behaviour is the port's docstring's.
+ *
+ * Four columns are left to their defaults rather than written from the entity:
+ * `scores` is P2.5's, and `first_seen_at`, `last_seen_at` and `evidence_count`
+ * are facts about the corpus. A resolver holding one mention would be setting
+ * them from a sample of one, and "seen once, just now" written confidently is
+ * worse than the default that says the same thing without claiming to know.
+ */
+export class PostgresPlaceRepo implements EntityRepo<PlaceEntity> {
+  constructor(private readonly db: Db) {}
+
+  async upsert(entity: PlaceEntity): Promise<string> {
+    const [row] = await this.db
+      .insert(places)
+      .values({
+        canonicalName: entity.canonicalName,
+        localName: entity.localName,
+        city: entity.city,
+        // Flattened into two columns, because that is what the table has. The
+        // entity carries one nullable pair so that "no coordinate" is a single
+        // state; the pair is null together or set together, and splitting it
+        // here is the only place the two halves could drift apart.
+        lat: entity.geo?.lat ?? null,
+        lng: entity.geo?.lng ?? null,
+        externalRef: entity.externalRef,
+        resolvedTier: entity.resolvedTier,
+        category: entity.category,
+        tags: entity.tags,
+      })
+      .returning({ id: places.id })
+
+    // The insert returns a row or throws; this is for the type, not for a case
+    // that happens.
+    if (!row) throw new Error("places insert returned no row")
+    return row.id
   }
 }

@@ -1,4 +1,5 @@
 import { createDb } from "@dt/db"
+import { PostgresOsmSearch, PostgresPlaceRepo } from "@dt/travel-pack/postgres"
 import { MemoryPacer } from "@samsara/harvest"
 import { FilesystemCaptureArchive } from "@samsara/harvest/node"
 import {
@@ -17,12 +18,17 @@ import { createSolariBrowserLauncher, solariCredentials } from "@samsara/kernel/
 import { LlmClient, loadLlmConfig } from "@samsara/llm"
 import { createOpenRouterClient } from "@samsara/llm/openrouter"
 import { PostgresPersonaStore } from "@samsara/personas/postgres"
-import { PostgresMentionSink } from "@samsara/refine/postgres"
+import {
+  PostgresMentionSink,
+  PostgresPendingMentions,
+  PostgresResolutionCache,
+} from "@samsara/refine/postgres"
 import { HandlerRegistry, noopHandler } from "./handlers.js"
 import { createHarvestHandler } from "./harvest.js"
 import { createPackRegistry } from "./packs.js"
 import { createKeepaliveHandler } from "./personas.js"
 import { createRefineHandler } from "./refine.js"
+import { createResolveHandler } from "./resolve.js"
 import { sourceRegistry } from "./sources.js"
 
 /**
@@ -142,13 +148,39 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
     }),
   )
 
+  /**
+   * The registry, built with what the travel pack needs to resolve.
+   *
+   * `osm` is passed unconditionally rather than behind a flag for whether the
+   * extract has been loaded. An empty `osm_places` returns no candidates, which
+   * is exactly what an absent `osm` means to the resolver — so a flag would be a
+   * second way to say one thing, and the one that can disagree with reality.
+   */
+  const packs = createPackRegistry({
+    travel: {
+      places: new PostgresPlaceRepo(database.db),
+      osm: new PostgresOsmSearch(database.db),
+    },
+  })
+
+  handlers.register(
+    "refine.resolve",
+    createResolveHandler({
+      pending: new PostgresPendingMentions(database.db),
+      cache: new PostgresResolutionCache(database.db),
+      // No `lookup` yet: Tier 2's provider is undecided and needs a key nobody
+      // has created. Tiers 0 and 1 carry the whole corpus until then, which is
+      // what ADR-0017 predicts they should mostly be doing anyway.
+    }),
+  )
+
   return {
     db: database,
     jobs,
     kernel,
     registry,
     handlers,
-    packs: createPackRegistry(),
+    packs,
     logger,
     async close() {
       await database.sql.end({ timeout: 5 })

@@ -1,4 +1,4 @@
-import { travelPack } from "@dt/travel-pack"
+import { createTravelPack, type TravelPackDeps, travelPack } from "@dt/travel-pack"
 import { PackRegistry } from "@samsara/refine"
 
 /**
@@ -14,8 +14,26 @@ import { PackRegistry } from "@samsara/refine"
  * independent registry, and so that registration order is somewhere a reader can
  * see rather than being an import side effect.
  */
-export function createPackRegistry(): PackRegistry {
+export interface PackRegistryDeps {
+  /**
+   * What the travel pack needs to *resolve*, as opposed to extract.
+   *
+   * Optional, and the asymmetry is the point. Extraction needs nothing but a
+   * prompt, so `travelPack` is a constant three call sites already use — the
+   * bake-off, the golden set, and a registry built by a test. Resolution needs a
+   * place to write entities and a database to search, which a process without a
+   * connection does not have.
+   *
+   * Absent, the extract-only pack is registered and a `refine.resolve` job for
+   * this domain fails by name on `has no resolve spec`. That is the right
+   * failure: a runner that silently resolved nothing would report a clean run
+   * over a corpus it never touched.
+   */
+  travel?: TravelPackDeps
+}
+
+export function createPackRegistry(deps: PackRegistryDeps = {}): PackRegistry {
   const registry = new PackRegistry()
-  registry.register(travelPack)
+  registry.register(deps.travel ? createTravelPack(deps.travel) : travelPack)
   return registry
 }
