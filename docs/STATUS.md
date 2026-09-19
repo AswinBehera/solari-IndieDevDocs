@@ -7,9 +7,9 @@ Last completed: **P2.2 — the extract stage, and fifty items somebody had to re
 labels it flagged have since been **audited by a human, one item at a time**; four rulings moved,
 four prompt rules changed with them, and the golden set now reads 19 place-bearing items, 74
 places, 31 negatives.
-897 tests across the repo, seam allowances **0 of 5** across 168 files. The count is measured
+901 tests across the repo, seam allowances **0 of 5** across 170 files. The count is measured
 rather than carried forward, and the basis is written down here so the next session does not have
-to re-derive it: **872 passing under `turbo run test` plus 25 under `test:tools`, with one live
+to re-derive it: **876 passing under `turbo run test` plus 25 under `test:tools`, with one live
 test skipped.** P2.2's 47 are 19 in `@samsara/refine`, 25 in `@dt/travel-pack` and 3 in
 `@samsara/sources` for the TikTok login wall below.
 
@@ -263,6 +263,48 @@ indistinguishable from a complete one, and the caller is the only place that can
 
 Not yet run against hosted data. It queues spend, so it takes `--commit` and a human, and prints
 the item count and the estimated cost either way.
+
+## P2.8 (extract half) — the second pack, and what it cost
+
+Started early on purpose. P2.8's value is finding a contract shaped around the first vertical
+while there is still only one consumer, and waiting until P2.5 would have meant finding it with
+four stages built on top.
+
+**Result: zero edits under `packages/samsara/` other than the fixture.** Two new files, no
+modifications to anything existing. That is the acceptance ADR-0009 asks for, and it is worth
+stating precisely because the *first* pack did not clear it — registering `travelPack` found
+`PackRegistry.register` taking a `DomainPack<never>`, a signature that had typechecked since P0.5
+only because nothing had ever called it. One pack found a real bug; the second found none. The
+useful reading is not "the seam is fine" but **a contract with no caller is not a tested
+contract**, and the cheapest caller to write is a fake one.
+
+**The fixture disagrees with travel on every axis the engine could have assumed.** A numeric
+field and an enum in the mention shape, where travel's is all strings and nullable strings;
+`batchBy` on `sourceId` rather than language; a batch size of 5 rather than the default 20. The
+language one is the sharp axis: section 8 motivates batching with "do not ask a model to read
+Thai, English and Vietnamese in one breath", which makes "the engine groups by language" an easy
+and wrong conclusion. Five items sharing a language and a batch size of 5 means a
+language-grouping engine sends exactly one call; grouping by `batchBy` sends two. The test asserts
+two.
+
+**Written as a standing test, not a one-time run.** The plan's wording is "run the same pipeline
+over the same RawItems", which proves the seam on the day it is run and never again — the property
+a convention has and a check does not. P2.3, P2.4 and P2.5 each add assertions to
+`src/seam.test.ts` as their stages land.
+
+**One assertion in it was vacuous when first written and was caught by strengthening it.** The
+grouping test originally asserted `sources).toHaveLength(2)`, which only restated the call count.
+Rewriting it to check that no single prompt mixed two sources then failed — and the failure was
+the test's fault, not the engine's: `renderItem` never puts the item's URL in the prompt. It
+writes an explicit `source:` line, which is both the better assertion and a fact worth having
+pinned. **No URL harvested from a page is ever sent to a provider.** The test now asserts that
+too.
+
+**The skip key is per domain, which only a second pack can demonstrate.** `extractedIds` is keyed
+on `(domainId, packVersion, rawItemId)`, so a corpus already read by one pack is still unread as
+far as another is concerned. Had it been keyed on the item alone, a second vertical over shared
+raw items would have silently extracted nothing and looked exactly like a model that found no
+mentions.
 
 ## P2.1 — the LLM interface, and the model it deliberately did not choose
 
