@@ -5,6 +5,7 @@
 
 export * from "./entity.js"
 export * from "./mention.js"
+export * from "./osm-tags.js"
 export * from "./pack.js"
 export * from "./prompt.js"
 export * from "./resolve.js"

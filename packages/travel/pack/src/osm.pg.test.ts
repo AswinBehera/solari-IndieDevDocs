@@ -1,10 +1,11 @@
 import { osmPlaces, schema } from "@dt/db"
 import { type DatabaseLock, lockDatabase } from "@samsara/db/testing"
-import { sql } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { PostgresOsmSearch } from "./postgres.js"
+import type { OsmPlaceRow } from "./osm-tags.js"
+import { PostgresOsmSearch, upsertOsmPlaces } from "./postgres.js"
 import { BANGKOK } from "./tier0.js"
 
 /**
@@ -193,5 +194,96 @@ describe.runIf(hasDb)("Tier 1, against Postgres", () => {
     expect(plans.name).toContain("osm_places_name_trgm_idx")
     expect(plans.local).toContain("osm_places_name_local_trgm_idx")
     expect(plans.wrapped).not.toContain("osm_places_name_trgm_idx")
+  })
+})
+
+/**
+ * The writer, tested where the reader is, because the reader depends on it.
+ *
+ * `tools/load-osm.ts` is the only caller and cannot be tested at all — it is a
+ * fetch against volunteer infrastructure. What can be tested is the half that
+ * touches the database, and the property that matters is the one a second run
+ * exercises: an extract refreshed months later is mostly rows that are already
+ * here, and Tier 1 has to keep answering throughout.
+ */
+describe.runIf(hasDb)("loading an extract", () => {
+  const d = () => db as NonNullable<typeof db>
+
+  const row = (over: Partial<OsmPlaceRow> = {}): OsmPlaceRow => ({
+    id: "node/1",
+    city: "Bangkok",
+    name: "ก๋วยเตี๋ยวเรือทองหล่อ",
+    nameLocal: "ก๋วยเตี๋ยวเรือทองหล่อ",
+    nameEn: "Kuay Teow Reua Thonglor",
+    lat: 13.7263,
+    lng: 100.5148,
+    category: "food",
+    tags: ["restaurant", "thai"],
+    ...over,
+  })
+
+  const stored = async (id: string) =>
+    (await d().select().from(osmPlaces).where(eq(osmPlaces.id, id)))[0]
+
+  beforeEach(async () => {
+    await d().execute(sql`truncate table osm_places restart identity cascade`)
+  })
+
+  it("writes rows a search can find", async () => {
+    expect(await upsertOsmPlaces(d(), [row()])).toBe(1)
+    const [hit] = await new PostgresOsmSearch(d()).search(["Kuay Teow Reua Thonglor"], BANGKOK)
+    expect(hit?.osmId).toBe("node/1")
+  })
+
+  it("refreshes a POI in place rather than duplicating it", async () => {
+    // The whole reason the primary key is OSM's `<type>/<id>` and not ours. A
+    // second run of the same query is the ordinary case, not the exception.
+    await upsertOsmPlaces(d(), [row()])
+    await upsertOsmPlaces(d(), [row({ name: "ก๋วยเตี๋ยวเรือ ทองหล่อ", category: "drink" })])
+
+    const all = await d().select().from(osmPlaces)
+    expect(all).toHaveLength(1)
+    expect(all[0]).toMatchObject({ name: "ก๋วยเตี๋ยวเรือ ทองหล่อ", category: "drink" })
+  })
+
+  it("keeps when we first saw the POI, and moves when we last looked", async () => {
+    await upsertOsmPlaces(d(), [row()])
+    const first = await stored("node/1")
+    await upsertOsmPlaces(d(), [row({ name: "renamed" })])
+    const second = await stored("node/1")
+
+    // `created_at` is the only thing in the table that could answer "how long
+    // has this been in our extract"; an upsert that overwrote it would answer
+    // "always today".
+    expect(second?.createdAt).toEqual(first?.createdAt)
+    expect(second?.updatedAt.getTime()).toBeGreaterThanOrEqual(first?.updatedAt.getTime() ?? 0)
+  })
+
+  it("clears a spelling OSM has dropped, rather than keeping a stale one", async () => {
+    // The tempting alternative — only overwrite non-null values — would make the
+    // table accumulate spellings that no longer exist anywhere, and Tier 1 would
+    // go on matching a name the place has not had for a year.
+    await upsertOsmPlaces(d(), [row()])
+    await upsertOsmPlaces(d(), [row({ nameEn: null })])
+    expect((await stored("node/1"))?.nameEn).toBeNull()
+  })
+
+  it("writes more rows than fit in one statement", async () => {
+    // Postgres binds at most 65,535 parameters, so the loader batches. A city
+    // extract is six figures of rows and the batching is the difference between
+    // a load and a crash at row 8,192.
+    const rows = Array.from({ length: 2_500 }, (_, i) =>
+      row({ id: `node/${i}`, name: `Place ${i}`, nameLocal: null, nameEn: null }),
+    )
+    expect(await upsertOsmPlaces(d(), rows)).toBe(2_500)
+    const [count] = await d().select({ n: sql<number>`count(*)::int` }).from(osmPlaces)
+    expect(count?.n).toBe(2_500)
+  })
+
+  it("writes nothing, and asks nothing, for an empty extract", async () => {
+    // An INSERT with no VALUES is a syntax error, and "Overpass returned
+    // nothing" has to be a quiet no-op rather than a crash — it is what a bbox
+    // with a typo in it looks like.
+    expect(await upsertOsmPlaces(d(), [])).toBe(0)
   })
 })

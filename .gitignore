@@ -29,3 +29,8 @@ coverage/
 # `.env`: the Postgres tests truncate whatever `DATABASE_URL` names, so the hosted
 # database is reachable only through `tools/with-hosted-env.sh`, which explains why.
 .env.supabase
+
+# The saved Overpass responses. `tools/load-osm.ts` writes every response here
+# before parsing it, so a download is never paid for twice — see that file. Tens
+# of megabytes of somebody else’s data: evidence, not source.
+.osm/

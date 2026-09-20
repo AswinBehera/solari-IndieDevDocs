@@ -3,6 +3,7 @@ import type { EntityRepo } from "@samsara/refine"
 import { and, desc, eq, sql, type TablesRelationalConfig } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 import type { PlaceEntity } from "./entity.js"
+import type { OsmPlaceRow } from "./osm-tags.js"
 import type { OsmSearch } from "./resolve.js"
 import type { City } from "./tier0.js"
 
@@ -175,4 +176,65 @@ export class PostgresPlaceRepo implements EntityRepo<PlaceEntity> {
     if (!row) throw new Error("places insert returned no row")
     return row.id
   }
+}
+
+/**
+ * How many rows go into one INSERT.
+ *
+ * Postgres binds at most 65,535 parameters per statement and each row binds
+ * eight, so a thousand rows is ~8,000 — well under, and few enough statements
+ * that a 200,000-row extract is not 200,000 round trips.
+ */
+const UPSERT_BATCH = 1000
+
+/**
+ * Write an OSM extract into `osm_places`, the table Tier 1 searches.
+ *
+ * The writer lives beside `PostgresOsmSearch` rather than in the loader tool for
+ * one reason: the reader's behaviour depends on what the writer put in the
+ * columns — which spelling landed in `name` versus `name_local`, whether a tag
+ * list was deduplicated — and a test that exercises both at once can only exist
+ * if both are importable from here. `tools/load-osm.ts` fetches, maps and
+ * reports; this is the only part of it that touches the database.
+ *
+ * An upsert keyed on OSM's own `<type>/<id>`. A refresh is a re-run of the same
+ * query months later, and the rows it returns are mostly the rows already here:
+ * insert-only would fail on the first duplicate, and delete-then-insert would
+ * empty the table Tier 1 is reading from for as long as the load takes.
+ */
+export async function upsertOsmPlaces(db: Db, rows: readonly OsmPlaceRow[]): Promise<number> {
+  let written = 0
+  for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
+    const batch = rows.slice(i, i + UPSERT_BATCH)
+    await db
+      .insert(osmPlaces)
+      .values([...batch])
+      .onConflictDoUpdate({
+        target: osmPlaces.id,
+        /**
+         * `excluded` is the row the INSERT proposed, so a refresh takes OSM's
+         * current answer for every column: a POI that was renamed, moved or
+         * retagged updates rather than keeping the version first loaded.
+         *
+         * `created_at` is deliberately absent. It records when this extract
+         * first saw the POI, and a reload did not make it new — it is the only
+         * thing in the table that could ever answer "how long has this been in
+         * OSM for us", and an upsert that overwrote it would answer "always
+         * today".
+         */
+        set: {
+          city: sql`excluded.city`,
+          name: sql`excluded.name`,
+          nameLocal: sql`excluded.name_local`,
+          nameEn: sql`excluded.name_en`,
+          lat: sql`excluded.lat`,
+          lng: sql`excluded.lng`,
+          category: sql`excluded.category`,
+          tags: sql`excluded.tags`,
+          updatedAt: sql`now()`,
+        },
+      })
+    written += batch.length
+  }
+  return written
 }
