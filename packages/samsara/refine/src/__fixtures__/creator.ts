@@ -2,7 +2,7 @@ import { definePrompt } from "@samsara/llm"
 import { z } from "zod"
 import { ENVELOPE_INSTRUCTIONS, ITEMS_VARIABLE } from "../extract.js"
 import { MemoryEntityRepo } from "../memory.js"
-import type { DomainPack, Resolution } from "../pack.js"
+import type { DedupKey, DomainPack, Resolution } from "../pack.js"
 
 /**
  * The second pack (P2.8), and the only reason it exists is to be unlike the first.
@@ -23,6 +23,12 @@ import type { DomainPack, Resolution } from "../pack.js"
  *   that groups by source proves it.
  * - A batch size of 5 rather than the default 20, so the default is a default and
  *   not a constant.
+ * - **Dedup keys that are both exact** (P2.4). Travel's second key is a radius
+ *   around a coordinate, and a stage that walked keys strongest-first could
+ *   easily have grown an opinion that the weak key is the fuzzy one. Creator's
+ *   two keys are both exact string comparisons; what makes one stronger than the
+ *   other is how much identity it carries, which is the only thing the ordering
+ *   is supposed to mean.
  * - **A resolver with no geography in it** (P2.3). Travel's tiers end in a pair
  *   of coordinates and it would be easy for the stage to grow an opinion about
  *   that — a `geo` field on the resolution, a lat/lng in the cache row. A
@@ -76,8 +82,41 @@ export const creatorEntity = z.object({
 
 export type CreatorEntity = z.infer<typeof creatorEntity>
 
-/** Exposed so a test can read back what the stage wrote. */
-export const creatorRepo = new MemoryEntityRepo<CreatorEntity>()
+/**
+ * Exposed so a test can read back what the stage wrote.
+ *
+ * Configured for dedup as well, because `MemoryEntityRepo` cannot answer a key
+ * it has not been taught — `DedupKey.value` is `unknown` and that is the seam
+ * working, not a gap. Teaching it here rather than in the test is what makes the
+ * fixture a pack rather than a fragment: a pack owns what its keys mean on both
+ * ends, and the engine gets to remain unable to read either.
+ */
+export const creatorRepo = new MemoryEntityRepo<CreatorEntity>({
+  matches: (key: DedupKey, entity: CreatorEntity): boolean => {
+    if (key.kind === CHANNEL_KEY) {
+      return entity.channelUrl !== null && entity.channelUrl === key.value
+    }
+    if (key.kind === HANDLE_KEY) {
+      return `${entity.platform}:${entity.canonicalHandle}` === key.value
+    }
+    throw new Error(`unknown dedup key kind "${key.kind}"`)
+  },
+  /**
+   * The survivor takes whatever it was missing. Both fields are nullable for the
+   * same reason — the resolver could not find them — so a duplicate that did
+   * find one is the only thing that will ever supply it.
+   */
+  fold: (into: CreatorEntity, from: CreatorEntity): CreatorEntity => ({
+    ...into,
+    channelUrl: into.channelUrl ?? from.channelUrl,
+    postsPerWeek: into.postsPerWeek ?? from.postsPerWeek,
+  }),
+})
+
+/** The platform's own identifier for the channel. Exact, and the strongest thing here. */
+const CHANNEL_KEY = "channelUrl"
+/** The handle on a platform. Exact too, and weaker — a handle can be re-used after a rename. */
+const HANDLE_KEY = "handle"
 
 /**
  * Tiered the way ADR-0017 tiers travel's, and deliberately about nothing
@@ -148,4 +187,24 @@ creatorPack.resolve = {
    */
   key: (m) => `${m.platform}:${m.handle.trim().toLowerCase().replace(/^@/, "")}`,
   resolve: async (m) => resolveCreator(m),
+}
+
+/**
+ * Two keys, strongest first, and neither of them is about a place.
+ *
+ * The channel URL first, because it is the platform's own identifier and two
+ * entities carrying the same one are the same channel by definition. The
+ * `platform:handle` pair second, because a handle is only as stable as the person
+ * holding it — accounts get renamed and handles get re-used, so agreement here is
+ * strong evidence rather than proof.
+ *
+ * No key at all for a handle with no platform, which is deliberate rather than an
+ * oversight: `@bep_nha_minh` on YouTube and `@bep_nha_minh` on TikTok are
+ * routinely different people, and this pack's resolve key says so too.
+ */
+creatorPack.dedupKeys = (entity: CreatorEntity): DedupKey[] => {
+  const keys: DedupKey[] = []
+  if (entity.channelUrl !== null) keys.push({ kind: CHANNEL_KEY, value: entity.channelUrl })
+  keys.push({ kind: HANDLE_KEY, value: `${entity.platform}:${entity.canonicalHandle}` })
+  return keys
 }

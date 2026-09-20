@@ -190,12 +190,44 @@ export type Resolution<TEntity> =
     }
 
 /**
+ * One way of asking "is this the same thing as something already stored".
+ *
+ * `kind` is the pack's own name for the question — the engine prints it in the
+ * report and never interprets it. `value` is whatever the pack's repo needs to
+ * ask it, and is `unknown` for the reason `MentionRow.payload` is: the two ends
+ * of this are the pack's `dedupKeys` and the pack's own repo, and a type in
+ * between would be the engine having an opinion about a table it cannot see.
+ *
+ * A key is deliberately not a string. The first draft made it one, on the
+ * reasoning that a normalised name *is* a string and two equal strings are a
+ * duplicate — and that draft could express only the strongest of the three keys
+ * section 2.4 names. A radius around a coordinate and a similarity above a
+ * threshold are both questions with no exact answer to hash, and a contract that
+ * could not ask them would have quietly limited dedup to exact matching while
+ * appearing to be general.
+ */
+export interface DedupKey {
+  /** The pack's name for this kind of question. Counted in the report, never read. */
+  kind: string
+  /** Opaque. Built by `dedupKeys`, consumed by the same pack's repo. */
+  value: unknown
+}
+
+/** Which stored entity a key found, and which key found it. */
+export interface DedupMatch {
+  /** The survivor. The entity being examined is merged into this one. */
+  id: string
+  /** The `kind` of the key that matched. The report counts these; see `DedupReport`. */
+  kind: string
+}
+
+/**
  * A pack's own table, as the engine is allowed to see it.
  *
  * Ownership is inverted exactly as plan section 2.5 says: the engine calls this,
- * and never imports the table behind it. P2.3 needs one method. `findByKeys` and
- * `merge` arrive with P2.4, which is the stage that calls them — the same
- * discipline `ExtractSpec` was written under.
+ * and never imports the table behind it. P2.3 needed one method; P2.4 adds the
+ * two the dedup stage calls, which is the same discipline `ExtractSpec` was
+ * written under.
  */
 export interface EntityRepo<TEntity> {
   /**
@@ -207,6 +239,50 @@ export interface EntityRepo<TEntity> {
    * is measured on.
    */
   upsert(entity: TEntity): Promise<string>
+
+  /**
+   * The first of these keys that matches a stored entity other than `exclude`,
+   * or null.
+   *
+   * **The order of `keys` is the engine's and the repo must honour it.** Section
+   * 2.4 says strongest first, and the reason is not tidiness: the weakest key is
+   * also the most expensive one to ask — a similarity search is a scan where an
+   * exact reference is an index lookup — so stopping at the first hit is what
+   * keeps dedup affordable, and stopping at the *wrong* first hit is how two
+   * different entities get welded together on the flimsiest evidence available.
+   *
+   * The whole list goes in one call rather than one call per key, and that is
+   * the one place this contract asks the repo to do the walking. It is not a
+   * concession: an engine looping from outside pays a round trip per key, and an
+   * engine that batched to avoid that would have to run every key including the
+   * expensive one. Only the repo can have both, and returning the matching
+   * `kind` is what keeps it honest — a repo that ignored the order says so in
+   * the report, in the column the stage exists to produce.
+   *
+   * `exclude` is not optional and is not a convenience. The entity being
+   * examined is already in this table — the resolve stage wrote it — so every
+   * one of its own keys matches itself, and a repo asked without an exclusion
+   * would report every entity as a duplicate of itself on the first call.
+   */
+  findByKeys(keys: readonly DedupKey[], exclude: string): Promise<DedupMatch | null>
+
+  /**
+   * Fold `from` into `into`, and leave only `into`.
+   *
+   * What folding means is the pack's, because only the pack knows which of two
+   * rows holds the better answer — the engine cannot tell a coordinate found by
+   * a cheap exact method from one found by an expensive approximate one, and
+   * that comparison is the whole of it.
+   *
+   * Called **after** the engine has repointed everything on its own side (see
+   * `EntityLinks`), and the order is load-bearing under ADR-0014: a runner cut
+   * in half between the two leaves evidence pointing at the survivor and a
+   * duplicate row that nothing references, which the next run merges again
+   * because the keys still match. The reverse order loses the evidence, and
+   * evidence is the one thing in this pipeline that was paid for with a browser
+   * session.
+   */
+  merge(into: string, from: string): Promise<void>
 }
 
 /**
@@ -246,8 +322,8 @@ export interface ResolveSpec<TMention, TEntity> {
 }
 
 /**
- * Widened as far as P2.3 has a caller. `dedupKeys`, `score`, `sources` and
- * `queries` arrive in P2.4 and P2.5, each with the stage that calls it. Callers
+ * Widened as far as P2.4 has a caller. `score`, `sources` and `queries` arrive
+ * in P2.5 and Phase 3, each with the stage that calls it. Callers
  * should already type against this name so that the widening is a change in one
  * file rather than in every consumer.
  *
@@ -260,6 +336,36 @@ export interface ResolveSpec<TMention, TEntity> {
 export interface DomainPack<TMention = unknown, TEntity = unknown> extends DomainPackIdentity {
   extract: ExtractSpec<TMention>
   resolve?: ResolveSpec<TMention, TEntity>
+
+  /**
+   * The ways this pack can recognise one of its entities in another, strongest
+   * first (P2.4).
+   *
+   * A bare member rather than a `DedupSpec` beside `ResolveSpec`, and that is a
+   * deliberate departure from the pairing argument two types up. There is
+   * nothing here to pair it *with*: the repo the stage writes through is already
+   * on `resolve`, because it is the same table, and a second copy of it would be
+   * two members that could name two tables. So this stays the one thing dedup
+   * adds, under the name section 2.4 gives it.
+   *
+   * Which also makes the dependency honest. Dedup cannot run on a pack with no
+   * resolver, because there is nothing to deduplicate that resolution did not
+   * write, and the stage refuses by name rather than reporting a clean run over
+   * an empty table.
+   *
+   * Returning an empty array is a pack saying it has no way to recognise a
+   * duplicate — which is a real answer, and different from the member being
+   * absent. The stage counts the entity as examined and moves on.
+   */
+  /**
+   * Declared as a method rather than as a property holding a function, which is
+   * not a style choice: under `strictFunctionTypes` a function-typed property is
+   * checked contravariantly in `TEntity`, so a fully-typed pack would stop being
+   * assignable to the `DomainPack<unknown, unknown>` the registry holds — and the
+   * registry not caring about the entity type is the seam. Every other member of
+   * this contract is already written this way.
+   */
+  dedupKeys?(entity: TEntity): readonly DedupKey[]
 }
 
 /**

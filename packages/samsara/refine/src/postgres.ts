@@ -1,8 +1,9 @@
-import { entityResolutions, mentions, rawItems } from "@samsara/db"
+import { entityResolutions, evidence, mentions, rawItems } from "@samsara/db"
 import { and, asc, desc, eq, inArray, sql, type TablesRelationalConfig } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 import type {
   CachedResolution,
+  EntityLinks,
   MentionFilter,
   MentionRecord,
   MentionRow,
@@ -10,6 +11,7 @@ import type {
   MentionStore,
   PendingMention,
   PendingMentionReader,
+  RepointCount,
   ResolutionCache,
   ResolutionCommit,
 } from "./ports.js"
@@ -290,5 +292,63 @@ export class PostgresPendingMentions implements PendingMentionReader {
         languageGuess: row.languageGuess,
       },
     }))
+  }
+}
+
+/**
+ * The real `EntityLinks`: three updates, one transaction.
+ *
+ * One transaction rather than three statements is the whole implementation, and
+ * the reason is the port's: under ADR-0014 the runner is a scheduled process that
+ * can be stopped between any two statements, and a corpus where the evidence and
+ * the mentions disagree about which entity they describe is not a state anything
+ * downstream can reason about. Either all three move or none do.
+ *
+ * Every clause is `entity_id = from` and therefore matches nothing the second
+ * time, which is what lets the dedup stage run this *before* the pack's own
+ * merge and still be safe to re-run — see `EntityRepo.merge` for why that order
+ * is the one that survives being cut in half.
+ *
+ * `mentions` and `entity_resolutions` carry a nullable `entity_id` and `evidence`
+ * does not, and the filter is written the same way for all three regardless: a
+ * row with no entity was never pointing at the duplicate, so it is not this
+ * operation's business.
+ */
+export class PostgresEntityLinks implements EntityLinks {
+  constructor(private readonly db: Db) {}
+
+  async repoint(domainId: string, from: string, into: string): Promise<RepointCount> {
+    if (from === into) return { evidence: 0, mentions: 0, resolutions: 0 }
+
+    return await this.db.transaction(async (tx) => {
+      // `returning` a single column rather than reading `rowCount`, which the
+      // generic `PgDatabase` type does not expose — the driver's result shape is
+      // `unknown` here, and a cast to reach a count is the kind of thing that
+      // stops being true when the driver changes. The id lists are small by
+      // construction: they are the rows that pointed at one duplicate.
+      const movedEvidence = await tx
+        .update(evidence)
+        .set({ entityId: into })
+        .where(and(eq(evidence.domainId, domainId), eq(evidence.entityId, from)))
+        .returning({ id: evidence.id })
+
+      const movedMentions = await tx
+        .update(mentions)
+        .set({ entityId: into })
+        .where(and(eq(mentions.domainId, domainId), eq(mentions.entityId, from)))
+        .returning({ id: mentions.id })
+
+      const movedResolutions = await tx
+        .update(entityResolutions)
+        .set({ entityId: into })
+        .where(and(eq(entityResolutions.domainId, domainId), eq(entityResolutions.entityId, from)))
+        .returning({ id: entityResolutions.id })
+
+      return {
+        evidence: movedEvidence.length,
+        mentions: movedMentions.length,
+        resolutions: movedResolutions.length,
+      }
+    })
   }
 }

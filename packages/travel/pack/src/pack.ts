@@ -1,4 +1,5 @@
 import type { DomainPack, EntityRepo, ExtractItem } from "@samsara/refine"
+import { placeDedupKeys } from "./dedup.js"
 import { type PlaceEntity, placeEntity } from "./entity.js"
 import { type PlaceMention, placeMention } from "./mention.js"
 import { PLACE_EXTRACT_PROMPT_VERSION, placeExtractPrompt } from "./prompt.js"
@@ -13,9 +14,11 @@ import { BANGKOK, type City } from "./tier0.js"
  * set. `createTravelPack` below adds the resolver, and needs dependencies that
  * a module-level constant cannot have.
  *
- * `dedupKeys` and `score` arrive with the stages that call them (P2.4, P2.5),
- * which is the same discipline `@samsara/refine`'s contract applies from the
- * other side.
+ * `score` arrives with the stage that calls it (P2.5), which is the same
+ * discipline `@samsara/refine`'s contract applies from the other side.
+ * `dedupKeys` is on `createTravelPack` below rather than here, because it is only
+ * ever reached through `pack.resolve.repo` and a pack with keys but nowhere to
+ * look them up is a pack the dedup stage refuses anyway.
  *
  * `version` is the prompt's version, deliberately the same string. The pack
  * version is what the extract stage skips already-done work on, so a prompt
@@ -82,5 +85,6 @@ export const createTravelPack = (deps: TravelPackDeps): DomainPack<PlaceMention,
       key: placeKey(city),
       resolve: createResolver({ city, ...(deps.osm === undefined ? {} : { osm: deps.osm }) }),
     },
+    dedupKeys: placeDedupKeys,
   }
 }

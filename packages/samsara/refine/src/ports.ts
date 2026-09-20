@@ -254,3 +254,50 @@ export interface ResolutionCache {
   read(domainId: string, keys: readonly string[]): Promise<Map<string, CachedResolution>>
   commit(entry: ResolutionCommit): Promise<void>
 }
+
+/**
+ * How many engine rows moved when two entities were merged.
+ *
+ * Three numbers rather than one, because they answer three different questions
+ * and only one of them is an assertion. `evidence` is section 2.4's "merge
+ * preserves all Evidence" stated as a count instead of a hope — it is the
+ * receipts, and losing one is losing the only proof a claim was ever made.
+ * `mentions` is how many extracted names were pointing at the duplicate.
+ * `resolutions` is how many cache keys were, and it is the one that stops the
+ * merge from undoing itself: a cache row still pointing at a deleted id would
+ * hand that id straight back to the next run.
+ */
+export interface RepointCount {
+  evidence: number
+  mentions: number
+  resolutions: number
+}
+
+/**
+ * Everything on the engine's side that points at an entity id, and the one
+ * operation the dedup stage needs over it.
+ *
+ * The pair `(domain_id, entity_id)` appears in three engine tables and is opaque
+ * in all three — plan section 3's rule that an engine table never holds a
+ * foreign key into a vertical's. That opacity is what makes this port necessary
+ * rather than incidental: the pack's repo could merge its own two rows perfectly
+ * and every mention, every piece of evidence and every cache row would still be
+ * pointing at the id it deleted, and no constraint anywhere would say so.
+ *
+ * One method, taking both ids, because the three updates must not be separable.
+ * A runner under ADR-0014 can be killed between any two statements, and being
+ * cut between the evidence update and the mention update leaves a corpus where
+ * the receipts and the names they came from disagree about which entity they are
+ * about. An implementation over a database is expected to use one transaction;
+ * the in-memory one does all three before it returns.
+ */
+export interface EntityLinks {
+  /**
+   * Repoint every engine reference from `from` to `into`, and report what moved.
+   *
+   * Idempotent by construction: run twice, the second run matches no rows and
+   * returns zeroes. That is what makes it safe to put *before* the pack's own
+   * merge, which is where it has to be — see `EntityRepo.merge`.
+   */
+  repoint(domainId: string, from: string, into: string): Promise<RepointCount>
+}

@@ -3,15 +3,11 @@
 Phase: 2 — in progress. Phase 1's acceptance week is **still draining** (six of seven days queued,
 day 0 at 60.0%), and Phase 0 is **complete, pending the gate** (below; the gate is a human review
 and does not block buildable work).
-Last completed: **P2.2 — the extract stage, and fifty items somebody had to read**. The ten
-labels it flagged have since been **audited by a human, one item at a time**; four rulings moved,
-four prompt rules changed with them, and the golden set now reads 19 place-bearing items, 74
-places, 31 negatives.
-901 tests across the repo, seam allowances **0 of 5** across 170 files. The count is measured
+Last completed: **P2.4 — the dedup stage, and the key that does not exist**.
+1,110 tests across the repo, seam allowances **0 of 5** across 174 files. The count is measured
 rather than carried forward, and the basis is written down here so the next session does not have
-to re-derive it: **876 passing under `turbo run test` plus 25 under `test:tools`, with one live
-test skipped.** P2.2's 47 are 19 in `@samsara/refine`, 25 in `@dt/travel-pack` and 3 in
-`@samsara/sources` for the TikTok login wall below.
+to re-derive it: **1,085 passing under `turbo run test` plus 25 under `test:tools`, with one live
+test skipped.** P2.4's 59 are 21 in `@samsara/refine` and 38 in `@dt/travel-pack`.
 
 **Sixteen billed sessions, about 7.8 minutes of 4,000.** P2.2 spent three of them harvesting the
 golden corpus — roughly 3.4 minutes, and that figure is softer than the ones below it: it is
@@ -31,6 +27,103 @@ Pantip sessions was waste and is counted as such**: the first run was piped to `
 not stop the capture — it had already opened the browser and billed — and it was then re-run to see
 the head of the output. The pipe cost 0.4584 minutes and produced nothing. Reading a recorder's
 output through `tail` is not free, because the spend happens before the bytes reach the pipe.
+
+## P2.4 — the dedup stage, and the key that does not exist
+
+The stage walks a page of entities that have already been written, asks the pack what each one
+could be recognised by, and collapses what it finds. Generic: 12 tests in `@samsara/refine` run it
+over a fixture shape that is neither a place nor a creator, and the engine still cannot read a
+single key value — `DedupKey.value` is `unknown` on purpose, and the only thing that crosses back
+is the pack's own name for the key that matched.
+
+**The walk lives in the repo, and that is a departure from the plan's wording.** Section 2.4 says
+"walk `pack.dedupKeys(entity)` strongest-first, ask `repo.findByKeys`", which reads like a loop in
+the engine calling the repo once per key. `EntityRepo.findByKeys` takes the whole ordered list
+instead. The reason is that travel's strongest key is one indexed equality on a jsonb column and
+its weakest is a bounding-box scan followed by a distance computation, and only the repo is in a
+position to both batch those and stop at the first one that answers. An engine-side loop would
+have been one round trip per key per entity, forever, and no test would have failed. Returning the
+matching `kind` is what keeps the repo honest about it, because that value lands in the report.
+
+**`exclude` is mandatory rather than optional**, which is a small thing that would have been a
+long afternoon. Dedup runs after resolution, over rows that are already in the table, so every
+entity is present when its own keys are asked and an unexcluded query reports every place in
+Thailand as a duplicate of itself.
+
+**Two ports, not one.** The pack's repo merges its own rows and knows what its columns mean. The
+engine got a new `EntityLinks.repoint`, which moves `evidence`, `mentions` and
+`entity_resolutions` — the three tables that hold an opaque `(domain_id, entity_id)` with **no
+foreign key** into any vertical's table. That absence is ADR-0009's seam and it is also why
+nothing else in the database would ever notice those rows pointing at an id a pack has just
+deleted. The three move in one transaction because ADR-0014 asks what survives being cut in half,
+and the answer here is that the order matters: repoint first, merge second. Cut after the repoint
+and the next run finds both rows and finishes the job. Cut after the merge and the evidence is
+orphaned permanently, which is the one outcome no later run can repair. `entity_resolutions` is
+the row that stops a merge undoing itself — left pointing at a deleted id, the cache would hand
+the duplicate straight back on the next run.
+
+**The older row survives, and a page's own order is how the stage knows.** This was the one real
+bug, and it was inverted in the first version: the stage merged the examined entity into whatever
+`findByKeys` returned, and since a page is walked oldest-first, the older entity is examined first
+and finds the newer one — so every same-page merge kept the newer row, which is the opposite of
+the documented rule. Five of twelve tests caught it. The fix is a position map over the page, and
+the side benefit is worth recording: it means a pack's keys do not have to be symmetric for the
+direction to come out right.
+
+**The third key is not built, and that is a finding rather than a skip.** Section 2.4 names three:
+`externalRef`, normalised name plus a 150m radius, and embedding similarity above a threshold. The
+first two are built. The third needs an embedding, and `places` has no vector column, nothing in
+this repository computes one, and `pgvector` is not installed. Building it would have meant either
+a migration and an embedding pipeline inside a dedup task, or a key that returns nothing forever
+while appearing in the report as a key that never matches — the second of which is worse than its
+absence, because a report line reading `embedding: 0` looks like a measurement. The contract takes
+an ordered list, so appending it later changes one file. Recorded in `packages/travel/pack/src/dedup.ts`
+rather than as a stub.
+
+**Normalisation runs in exactly one place, and the Postgres repo is split down the middle to keep
+it there.** The `geo` key does the bounding box in SQL — which is the part a database is uniquely
+good at, throwing away everything outside a lat/lng box from an index without reading it — and
+then applies the radius and the name comparison in TypeScript. The radius could have been SQL too.
+The *name* could not: `normaliseName` applies NFKC before it lowercases, because Thai arrives in
+different normal forms from different keyboards, and Postgres has no NFKC without an extension. A
+SQL normaliser would therefore have been a second, slightly different normalisation, and the two
+would have disagreed on exactly the rows this key exists to catch while agreeing on every row a
+test would think to write.
+
+**Writing travel's tests found something about `normaliseName` worth knowing.** It keeps letters
+and digits and drops everything else, and Thai tone marks and the `์` killer mark are neither —
+they are Unicode `Mn`. So `เจ๊ไฝ` normalises to `เจไฝ` and `ทิพย์สมัย` to `ทพยสมย`. In the
+direction dedup needs it that is a feature: one caption typed the tone mark and the other did not,
+and the key fires. It is also more tolerant than a Thai reader would be, and the same function
+decides Tier 0 matching and has its own golden set — so changing it is a change to *resolution*,
+not to dedup, and it has been left alone and written down instead. Both directions are tests.
+
+**The merge itself keeps whichever side knows something.** `geo`, `external_ref` and
+`resolved_tier` move together or not at all, and only when the survivor has no coordinate, because
+they are one answer from one tier and a Tier 1 coordinate under a Tier 0 reference would be a row
+claiming OSM agrees with a pin it has never seen. `local_name` fills in, `tags` union,
+`first_seen_at` takes the earlier and `last_seen_at` the later, `evidence_count` adds.
+`canonical_name`, `city`, `category` and `scores` are left alone: the survivor is the row a reader
+has already seen, and `scores` belongs to P2.5 and hangs off evidence that has just moved. The
+duplicate is deleted rather than tombstoned — there is no `merged_into` column and adding one is a
+migration this task does not need, because the question a tombstone answers is already answered by
+`entity_resolutions`. `postcards.place_id` is `ON DELETE SET NULL`, which is the one reference a
+delete can reach, and a postcard losing its pin to a merge is a gap worth knowing about rather
+than a silent rewrite.
+
+**P2.8, third stage: zero edits under `packages/samsara/` other than the fixture.** The creator
+pack gained `dedupKeys` and a repo taught what its own two keys mean, which is the addition P2.8
+permits. Five assertions went into `seam.test.ts`, and the one that was actually at risk is the
+first: travel's weak key is a radius around a coordinate, and a stage that walks keys
+strongest-first could very easily have grown an opinion that the weak key is the *spatial* one — a
+`near` on the key, a radius in the report, a distance in the match. A creator has no coordinate to
+be near. Both of its keys are exact string comparisons, and what makes one stronger than the other
+is how much identity it carries, which is the only thing the ordering was ever supposed to mean.
+
+**Still owed from Phase 2, unchanged by this task:** Tier 2 has no provider and that is deliberate;
+the Phase 1 backfill has not been run (`./tools/with-hosted-env.sh npx tsx tools/backfill-refine.ts travel`,
+which needs `--commit` and a human); and P2.5's scorer is what the Place Postcard is already
+rendering and nothing yet produces.
 
 ## P2.2 — the extract stage, and fifty items somebody had to read
 

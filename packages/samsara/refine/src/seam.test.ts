@@ -3,9 +3,15 @@ import { BudgetGuard, MemoryCounterStore } from "@samsara/kernel"
 import { definePrompt, fakeChatClient, LlmClient, type LlmConfig } from "@samsara/llm"
 import { beforeEach, describe, expect, it } from "vitest"
 import { z } from "zod"
-import { creatorPack, creatorRepo } from "./__fixtures__/creator.js"
+import {
+  type CreatorEntity,
+  type CreatorMention,
+  creatorPack,
+  creatorRepo,
+} from "./__fixtures__/creator.js"
+import { type DedupEntity, dedup } from "./dedup.js"
 import { ENVELOPE_INSTRUCTIONS, extract, ITEMS_VARIABLE } from "./extract.js"
-import { MemoryMentionSink, MemoryResolutionCache } from "./memory.js"
+import { MemoryEntityLinks, MemoryMentionSink, MemoryResolutionCache } from "./memory.js"
 import { type DomainPack, PackRegistry } from "./pack.js"
 import type { ExtractItem, PendingMention } from "./ports.js"
 import { resolve } from "./resolve.js"
@@ -418,5 +424,159 @@ describe("a second pack, resolving over the same engine", () => {
     expect(report.unresolvable).toBe(1)
     expect(creatorRepo.entities).toHaveLength(3)
     expect(creatorRepo.entities[2]?.entity.channelUrl).toBeNull()
+  })
+})
+
+/**
+ * The same singleton repo the resolve block uses, reset the same way and with
+ * its merge log cleared too — a merge count left over from a previous test is
+ * the one assertion in this file that would be false in a way nothing else
+ * catches.
+ */
+describe("a second pack, deduplicating over the same engine", () => {
+  beforeEach(() => {
+    creatorRepo.entities.length = 0
+    creatorRepo.merges.length = 0
+  })
+
+  /** The stage takes a page of already-written entities; this is what the repo holds. */
+  const stored = (): DedupEntity<CreatorEntity>[] =>
+    creatorRepo.entities.map((row) => ({ id: row.id, entity: row.entity }))
+
+  const write = async (...entities: CreatorEntity[]): Promise<void> => {
+    for (const entity of entities) await creatorRepo.upsert(entity)
+  }
+
+  it("collapses duplicates on keys that have no geometry in them", async () => {
+    // The sharp one for this stage. Travel's second key is a normalised name
+    // inside a 150m radius, and a stage that walked keys strongest-first could
+    // very easily have grown an opinion that the weak key is a *spatial* one — a
+    // `near` on the key, a radius in the report, a distance in the match. A
+    // creator has no coordinate to be near. Both of these keys are exact string
+    // comparisons and the ordering between them is about identity, not precision.
+    await write(
+      {
+        canonicalHandle: "chi_hai_food",
+        platform: "youtube",
+        channelUrl: "https://example.invalid/c/chi-hai",
+        postsPerWeek: 3,
+      },
+      {
+        canonicalHandle: "chi_hai_food_official",
+        platform: "youtube",
+        channelUrl: "https://example.invalid/c/chi-hai",
+        postsPerWeek: null,
+      },
+    )
+    const links = new MemoryEntityLinks()
+
+    const report = await dedup({ pack: creatorPack, entities: stored(), links })
+
+    expect(report).toMatchObject({ merged: 1 })
+    expect(report.keys).toEqual([{ kind: "channelUrl", count: 1 }])
+    expect(creatorRepo.entities).toHaveLength(1)
+    // Two different handles collapsed on the channel they both point at, and the
+    // survivor took the cadence the duplicate had. The fold is the pack's.
+    expect(creatorRepo.entities[0]?.entity).toMatchObject({
+      canonicalHandle: "chi_hai_food",
+      postsPerWeek: 3,
+    })
+  })
+
+  it("reports which of the pack's own keys did the work, without knowing what either means", async () => {
+    // `DedupReport.keys` is this stage's counterpart of `ResolveReport.tiers`,
+    // and the point is the same: it is computed entirely from what the pack
+    // returned. These kinds are strings the creator fixture invented. Neither
+    // appears anywhere in `@samsara/refine`, and the report still names them.
+    await write(
+      { canonicalHandle: "bep_nha_minh", platform: "tiktok", channelUrl: null, postsPerWeek: 2 },
+      { canonicalHandle: "bep_nha_minh", platform: "tiktok", channelUrl: null, postsPerWeek: null },
+    )
+    const links = new MemoryEntityLinks()
+
+    const report = await dedup({ pack: creatorPack, entities: stored(), links })
+
+    expect(report.keys).toEqual([{ kind: "handle", count: 1 }])
+  })
+
+  it("keeps two packs' entities apart, because a merge is scoped to a domain", async () => {
+    // The engine's side of a merge is `(domain_id, entity_id)`, and the domain
+    // half is the reason a second vertical can share these tables at all. A
+    // repoint that ignored it would move another pack's evidence onto this
+    // pack's survivor, and nothing downstream could tell.
+    await write(
+      {
+        canonicalHandle: "chi_hai_food",
+        platform: "youtube",
+        channelUrl: "https://example.invalid/c/chi-hai",
+        postsPerWeek: null,
+      },
+      {
+        canonicalHandle: "chi_hai_food",
+        platform: "youtube",
+        channelUrl: "https://example.invalid/c/chi-hai",
+        postsPerWeek: null,
+      },
+    )
+    const entities = stored()
+    const links = new MemoryEntityLinks()
+    const duplicate = entities[1]?.id ?? ""
+    links.addEvidence("creator", duplicate)
+    // Same entity id, different domain. Contrived on purpose: the ids are opaque
+    // and nothing stops two packs minting the same one.
+    links.addEvidence("library", duplicate)
+
+    const report = await dedup({ pack: creatorPack, entities, links })
+
+    expect(report.evidence).toBe(1)
+    expect(links.evidence.find((row) => row.domainId === "library")?.entityId).toBe(duplicate)
+  })
+
+  it("does not require a pack to have a way of recognising anything", async () => {
+    // `dedupKeys` returning an empty array is a real answer — an entity with
+    // nothing to compare — and it has to be distinguishable from a miss, because
+    // a rising count of them is a resolver problem surfacing in the wrong
+    // stage's report. The creator pack always has a handle, so this asks it to
+    // say nothing for one call.
+    const keys = creatorPack.dedupKeys
+    if (!keys) throw new Error("the fixture lost its dedup keys")
+    const silent: DomainPack<CreatorMention, CreatorEntity> = {
+      ...(creatorPack as DomainPack<CreatorMention, CreatorEntity>),
+      dedupKeys: () => [],
+    }
+    await write(
+      { canonicalHandle: "a", platform: "forum", channelUrl: null, postsPerWeek: null },
+      { canonicalHandle: "a", platform: "forum", channelUrl: null, postsPerWeek: null },
+    )
+
+    const report = await dedup({ pack: silent, entities: stored(), links: new MemoryEntityLinks() })
+
+    expect(report).toMatchObject({ examined: 2, keyless: 2, merged: 0 })
+  })
+
+  it("runs the whole pipeline end to end, and the count that comes out is the count of things", async () => {
+    // Extract, resolve, dedup, over one corpus, with the engine untouched. Five
+    // items all naming the same channel: five mentions, one resolve key, one
+    // entity — and therefore nothing for dedup to do, which is the correct
+    // answer and worth asserting. The resolve cache already collapses repeats of
+    // one name; dedup exists for the pair that two *different* keys resolved to
+    // two rows, which is not a thing one batch can produce.
+    const sink = new MemoryMentionSink()
+    const items = corpus()
+    await extract({
+      pack: creatorPack,
+      llm: llm(fakeChatClient((req) => creatorAnswer(req.user))),
+      items,
+      sink,
+      scope: { purpose: "refine" },
+    })
+    const cache = new MemoryResolutionCache()
+    const resolved = await resolve({ pack: creatorPack, mentions: pendingFrom(sink, items), cache })
+    expect(resolved).toMatchObject({ mentions: 5, keys: 1, entities: 1 })
+
+    const links = new MemoryEntityLinks(cache)
+    const report = await dedup({ pack: creatorPack, entities: stored(), links })
+
+    expect(report).toMatchObject({ entities: 1, examined: 1, merged: 0, keyless: 0 })
   })
 })

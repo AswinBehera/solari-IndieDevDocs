@@ -1,7 +1,7 @@
 import type { LookupHit, Resolution, ResolveCtx } from "@samsara/refine"
 import type { PlaceEntity } from "./entity.js"
 import type { PlaceMention } from "./mention.js"
-import { type City, inBbox, nameAgreement, type Pin, pinsIn } from "./tier0.js"
+import { type City, inBbox, nameAgreement, normaliseName, type Pin, pinsIn } from "./tier0.js"
 
 /**
  * The travel pack's tiered resolver (ADR-0017).
@@ -268,11 +268,5 @@ export function createResolver(deps: TravelResolveDeps) {
  */
 export const placeKey = (city: City) => {
   const prefix = city.name.toLowerCase()
-  return (mention: PlaceMention): string => {
-    const normalised = mention.localName
-      .normalize("NFKC")
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}]+/gu, "")
-    return `${prefix}:${normalised}`
-  }
+  return (mention: PlaceMention): string => `${prefix}:${normaliseName(mention.localName)}`
 }

@@ -1,12 +1,14 @@
 import type { ResolutionState } from "@samsara/core"
-import type { EntityRepo } from "./pack.js"
+import type { DedupKey, DedupMatch, EntityRepo } from "./pack.js"
 import type {
   CachedResolution,
+  EntityLinks,
   MentionFilter,
   MentionRecord,
   MentionRow,
   MentionSink,
   MentionStore,
+  RepointCount,
   ResolutionCache,
   ResolutionCommit,
 } from "./ports.js"
@@ -148,19 +150,139 @@ export class MemoryResolutionCache implements ResolutionCache {
 }
 
 /**
+ * What a fake needs to be told before it can deduplicate anything.
+ *
+ * Both are optional and both default to doing nothing, which is the honest
+ * default: `DedupKey.value` is `unknown` by design, so a generic in-memory repo
+ * cannot answer a single one of a pack's questions without being handed the
+ * answer. A fake left un-configured finds no duplicates and says so, rather than
+ * inventing a comparison — `JSON.stringify` equality on the value would have
+ * worked for an exact identifier and silently returned nothing for a radius or a
+ * threshold, which is the shape of fake that makes a stage's tests pass while the
+ * real repo does something else.
+ */
+export interface MemoryEntityRepoOptions<TEntity> {
+  /** Does this stored entity answer to this key? Absent means "never". */
+  matches?: (key: DedupKey, entity: TEntity) => boolean
+  /**
+   * What the survivor looks like after absorbing the duplicate. Absent leaves it
+   * untouched, which is a legitimate merge — a pack whose rows carry nothing
+   * worth folding still wants the duplicate gone and its evidence moved.
+   */
+  fold?: (into: TEntity, from: TEntity) => TEntity
+}
+
+/**
  * An `EntityRepo` that keeps entities in an array and hands back their index.
  *
- * Deliberately does no deduplication at all, because `EntityRepo.upsert` says it
- * must not: collapsing two spellings of one name is P2.4's job, and a fake that
- * did it early would make this stage's tests pass over the exact behaviour P2.4
- * is measured on.
+ * `upsert` deliberately does no deduplication at all, because the port says it
+ * must not: collapsing two spellings of one name is the dedup stage's job, and a
+ * fake that did it early would make the resolve stage's tests pass over the exact
+ * behaviour dedup is measured on.
+ *
+ * `merge` **deletes** the duplicate rather than tombstoning it, which is what the
+ * one real implementation does, so a chain of merges behaves here the way it
+ * behaves there. The stage defends against a tombstoning repo anyway; this fake
+ * is not the thing that proves it needs to.
  */
 export class MemoryEntityRepo<TEntity> implements EntityRepo<TEntity> {
   readonly entities: { id: string; entity: TEntity }[] = []
+  /** Every merge, in order, so a test can assert the direction and not just the count. */
+  readonly merges: { into: string; from: string }[] = []
+  private minted = 0
+
+  constructor(private readonly options: MemoryEntityRepoOptions<TEntity> = {}) {}
 
   async upsert(entity: TEntity): Promise<string> {
-    const id = `entity-${this.entities.length + 1}`
+    // Minted from a counter rather than from `entities.length`, which was the
+    // first version and is wrong the moment `merge` removes a row: the next
+    // upsert would reuse the id of something that had just been merged away, and
+    // every engine pointer still on its way to the survivor would land on it.
+    this.minted++
+    const id = `entity-${this.minted}`
     this.entities.push({ id, entity })
     return id
+  }
+
+  async findByKeys(keys: readonly DedupKey[], exclude: string): Promise<DedupMatch | null> {
+    const matches = this.options.matches
+    if (!matches) return null
+    // Keys in the order given, entities in insertion order within each key. The
+    // outer loop is the one the port makes a promise about — strongest key first,
+    // whatever the stored order — so it has to be the outer one.
+    for (const key of keys) {
+      for (const row of this.entities) {
+        if (row.id === exclude) continue
+        if (matches(key, row.entity)) return { id: row.id, kind: key.kind }
+      }
+    }
+    return null
+  }
+
+  async merge(into: string, from: string): Promise<void> {
+    const target = this.entities.find((row) => row.id === into)
+    const index = this.entities.findIndex((row) => row.id === from)
+    if (!target || index < 0) throw new Error(`cannot merge ${from} into ${into}: no such entity`)
+    const duplicate = this.entities[index]
+    if (duplicate && this.options.fold)
+      target.entity = this.options.fold(target.entity, duplicate.entity)
+    this.entities.splice(index, 1)
+    this.merges.push({ into, from })
+  }
+}
+
+/**
+ * An `EntityLinks` that moves pointers in memory.
+ *
+ * It holds the evidence rows itself and borrows the other two from a
+ * `MemoryResolutionCache` when it is given one, which is not an asymmetry for
+ * its own sake: the cache is already the fake that owns mention state and
+ * resolution state, and a second copy of either would let a test assert a merge
+ * moved something while the thing the resolve stage actually wrote sat
+ * unchanged. Evidence has no fake anywhere else because nothing writes evidence
+ * yet — so a test that wants to prove a merge preserves it has to put the rows
+ * here by hand, and saying so is better than a zero that looks like a pass.
+ */
+export class MemoryEntityLinks implements EntityLinks {
+  readonly evidence: { id: string; domainId: string; entityId: string }[] = []
+
+  constructor(private readonly cache?: MemoryResolutionCache) {}
+
+  /** Put an evidence row on an entity, since no stage does it yet. */
+  addEvidence(
+    domainId: string,
+    entityId: string,
+    id = `evidence-${this.evidence.length + 1}`,
+  ): void {
+    this.evidence.push({ id, domainId, entityId })
+  }
+
+  async repoint(domainId: string, from: string, into: string): Promise<RepointCount> {
+    const count: RepointCount = { evidence: 0, mentions: 0, resolutions: 0 }
+
+    for (const row of this.evidence) {
+      if (row.domainId === domainId && row.entityId === from) {
+        row.entityId = into
+        count.evidence++
+      }
+    }
+
+    const cache = this.cache
+    if (cache) {
+      for (const mention of cache.mentions.values()) {
+        if (mention.entityId === from) {
+          mention.entityId = into
+          count.mentions++
+        }
+      }
+      for (const row of cache.rows.get(domainId)?.values() ?? []) {
+        if (row.entityId === from) {
+          row.entityId = into
+          count.resolutions++
+        }
+      }
+    }
+
+    return count
   }
 }

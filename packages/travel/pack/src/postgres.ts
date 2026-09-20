@@ -1,11 +1,20 @@
 import { osmPlaces, places } from "@dt/db"
-import type { EntityRepo } from "@samsara/refine"
-import { and, desc, eq, sql, type TablesRelationalConfig } from "drizzle-orm"
+import type { DedupKey, DedupMatch, EntityRepo } from "@samsara/refine"
+import { and, between, desc, eq, inArray, ne, sql, type TablesRelationalConfig } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
+import {
+  asExternalRefKey,
+  asGeoKey,
+  boxAround,
+  EXTERNAL_REF_KEY,
+  GEO_KEY,
+  metresBetween,
+} from "./dedup.js"
 import type { PlaceEntity } from "./entity.js"
 import type { OsmPlaceRow } from "./osm-tags.js"
 import type { OsmSearch } from "./resolve.js"
 import type { City } from "./tier0.js"
+import { normaliseName } from "./tier0.js"
 
 /**
  * Tier 1, against our own OSM extract (ADR-0017).
@@ -176,6 +185,216 @@ export class PostgresPlaceRepo implements EntityRepo<PlaceEntity> {
     if (!row) throw new Error("places insert returned no row")
     return row.id
   }
+
+  /**
+   * The keys in the order the stage gave them, first hit wins (P2.4).
+   *
+   * The loop is here rather than in the stage because `EntityRepo.findByKeys`
+   * says it must be: the strongest key is one indexed equality and the weakest is
+   * a box scan plus a distance computation, and returning as soon as the cheap
+   * one answers is the difference between dedup costing one query per entity and
+   * costing all of them.
+   */
+  async findByKeys(keys: readonly DedupKey[], exclude: string): Promise<DedupMatch | null> {
+    for (const key of keys) {
+      const id =
+        key.kind === EXTERNAL_REF_KEY
+          ? await this.byExternalRef(key.value, exclude)
+          : key.kind === GEO_KEY
+            ? await this.byGeo(key.value, exclude)
+            : unknownKey(key.kind)
+      if (id !== null) return { id, kind: key.kind }
+    }
+    return null
+  }
+
+  /**
+   * Whole-value jsonb equality, not two `->>` extractions.
+   *
+   * Both are correct and only one is indexable: `places_external_ref_idx` is a
+   * btree over the whole `external_ref` column, so an expression around it takes
+   * the index off the table — the same trap `PostgresOsmSearch` documents about
+   * wrapping a trigram column in `coalesce`. jsonb equality ignores key order and
+   * insignificant whitespace, so the comparison does not depend on how the writer
+   * happened to serialise the object.
+   *
+   * What it *does* depend on is `external_ref` having exactly the two fields this
+   * key carries. That is held by `placeEntity`, which the engine validates before
+   * the repo is allowed to write, and it is the one thing to change here if a
+   * third field is ever added — whole-value equality would stop matching silently,
+   * and a duplicate that never collapses is a quiet failure.
+   */
+  private async byExternalRef(value: unknown, exclude: string): Promise<string | null> {
+    const key = asExternalRefKey(value)
+    const wanted = JSON.stringify({ source: key.source, id: key.id })
+    const [row] = await this.db
+      .select({ id: places.id })
+      .from(places)
+      .where(and(ne(places.id, exclude), sql`${places.externalRef} = ${wanted}::jsonb`))
+      // Oldest first, so that when three rows carry one reference the survivor is
+      // stable across runs rather than whichever the planner reached first.
+      .orderBy(places.firstSeenAt, places.id)
+      .limit(1)
+    return row?.id ?? null
+  }
+
+  /**
+   * A bounding box in SQL, then the real radius and the name comparison here.
+   *
+   * The split is the whole design of this key. The radius could be done in SQL
+   * with `earthdistance` or PostGIS, and the name could be done in SQL with
+   * `regexp_replace(lower(...))` — and that second one is where it falls apart.
+   * `normaliseName` applies NFKC before it lowercases, because Thai arrives in
+   * different normal forms from different keyboards, and Postgres has no NFKC
+   * without an extension. A SQL normaliser would therefore be a *second, slightly
+   * different* normalisation, and the two would disagree on exactly the rows this
+   * key exists to catch while agreeing on every row a test would think to write.
+   *
+   * So the database does the part it is uniquely good at — throwing away
+   * everything outside a lat/lng box, from an index, without reading it — and the
+   * comparison that decides the merge runs once, in the one function that defines
+   * it. A 150m box in a city returns a handful of rows.
+   */
+  private async byGeo(value: unknown, exclude: string): Promise<string | null> {
+    const key = asGeoKey(value)
+    const { dLat, dLng } = boxAround(key.lat, key.radiusM)
+    const wanted = new Set(key.names)
+
+    const rows = await this.db
+      .select({
+        id: places.id,
+        canonicalName: places.canonicalName,
+        localName: places.localName,
+        lat: places.lat,
+        lng: places.lng,
+      })
+      .from(places)
+      .where(
+        and(
+          ne(places.id, exclude),
+          between(places.lat, key.lat - dLat, key.lat + dLat),
+          between(places.lng, key.lng - dLng, key.lng + dLng),
+        ),
+      )
+      .orderBy(places.firstSeenAt, places.id)
+      .limit(GEO_CANDIDATES)
+
+    for (const row of rows) {
+      const lat = Number(row.lat)
+      const lng = Number(row.lng)
+      // A row inside the box but outside the circle. The box is a superset by
+      // construction — see `boxAround` — and these are its corners.
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
+      if (metresBetween(key, { lat, lng }) > key.radiusM) continue
+
+      const names = [row.localName, row.canonicalName]
+        .filter((name): name is string => name !== null)
+        .map(normaliseName)
+      if (names.some((name) => name.length > 0 && wanted.has(name))) return row.id
+    }
+    return null
+  }
+
+  /**
+   * Fold `from` into `into`, then delete `from`.
+   *
+   * What folding means, field by field, and the argument is the same one each
+   * time: **keep whichever side actually knows something.**
+   *
+   * - `geo` and `external_ref` and `resolved_tier` move together or not at all,
+   *   and only when the survivor has no coordinate. They are one answer from one
+   *   tier — a coordinate from Tier 1 with an `external_ref` from Tier 0 would be
+   *   a row claiming OSM agrees with a pin it has never seen.
+   * - `local_name` fills in when the survivor has none. A native-script name is
+   *   the spelling that resolves, and the duplicate having one is the most useful
+   *   thing it can contribute.
+   * - `tags` are unioned, because they are things sources said about the place
+   *   and two sources saying different things is more information, not a conflict.
+   * - `first_seen_at` takes the earlier and `last_seen_at` the later, so the span
+   *   over the merged row is the span over both.
+   * - `evidence_count` adds, matching what `EntityLinks.repoint` just did to the
+   *   rows themselves.
+   * - `canonical_name`, `city`, `category` and `scores` are left alone. The
+   *   survivor is the older row and these are the fields a reader has already
+   *   seen; changing them on a merge would rename a place behind whatever is
+   *   pointing at it. `scores` additionally belongs to P2.5 and has explanations
+   *   attached to evidence that has itself just moved — recomputing it is that
+   *   stage's job and guessing at it here would attach a `because` to the wrong
+   *   receipts.
+   *
+   * One statement for the update, and the delete after it, inside one
+   * transaction: the stage has already moved every engine pointer onto `into`, so
+   * a half-finished merge that left both rows would be found and finished by the
+   * next run, but a half-finished merge that deleted `from` without folding it
+   * would have thrown the duplicate's coordinate away for good.
+   */
+  async merge(into: string, from: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select()
+        .from(places)
+        .where(inArray(places.id, [into, from]))
+        .for("update")
+
+      const survivor = rows.find((row) => row.id === into)
+      const duplicate = rows.find((row) => row.id === from)
+      if (!survivor || !duplicate) {
+        throw new Error(`cannot merge ${from} into ${into}: no such row`)
+      }
+
+      const takesGeo = survivor.lat === null || survivor.lng === null
+      const tags = [...new Set([...survivor.tags, ...duplicate.tags])]
+
+      await tx
+        .update(places)
+        .set({
+          localName: survivor.localName ?? duplicate.localName,
+          ...(takesGeo
+            ? {
+                lat: duplicate.lat,
+                lng: duplicate.lng,
+                externalRef: duplicate.externalRef,
+                resolvedTier: duplicate.resolvedTier,
+              }
+            : {}),
+          tags,
+          firstSeenAt:
+            duplicate.firstSeenAt < survivor.firstSeenAt
+              ? duplicate.firstSeenAt
+              : survivor.firstSeenAt,
+          lastSeenAt:
+            duplicate.lastSeenAt > survivor.lastSeenAt ? duplicate.lastSeenAt : survivor.lastSeenAt,
+          evidenceCount: survivor.evidenceCount + duplicate.evidenceCount,
+          updatedAt: new Date(),
+        })
+        .where(eq(places.id, into))
+
+      // Deleted rather than tombstoned. There is no `merged_into` column and
+      // adding one is a migration this task does not need: the thing a tombstone
+      // would answer — "where did this id go" — is already answered by
+      // `entity_resolutions`, whose row for the key was repointed at the survivor
+      // before this ran. `postcards.place_id` is `ON DELETE SET NULL`, which is
+      // the one reference a delete can reach, and a postcard losing its pin to a
+      // merge is a gap worth knowing about rather than a silent rewrite.
+      await tx.delete(places).where(eq(places.id, from))
+    })
+  }
+}
+
+/**
+ * How many rows inside the box are worth comparing.
+ *
+ * Twenty. The box is a 300m square and a name match inside it is the whole
+ * question, so the only thing this bound protects against is a coordinate that is
+ * wrong in a way that puts it on top of a dense cluster — a market, a mall, a
+ * food court. In that case the first twenty by age are as good a sample as any,
+ * and an unbounded read is how one bad coordinate turns a dedup run into a scan.
+ */
+const GEO_CANDIDATES = 20
+
+/** Never reached by this pack's own keys; see `asGeoKey` for why it throws. */
+const unknownKey = (kind: string): never => {
+  throw new Error(`unknown dedup key kind "${kind}"`)
 }
 
 /**

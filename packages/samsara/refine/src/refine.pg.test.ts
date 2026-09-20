@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import {
   entityResolutions,
+  evidence,
   harvestRuns,
   mentions,
   personas,
@@ -9,12 +10,13 @@ import {
   sessions,
 } from "@samsara/db"
 import { type DatabaseLock, lockDatabase } from "@samsara/db/testing"
-import { sql } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import type { MentionRow } from "./ports.js"
 import {
+  PostgresEntityLinks,
   PostgresMentionSink,
   PostgresMentionStore,
   PostgresPendingMentions,
@@ -82,12 +84,14 @@ describe.runIf(hasDb)("refine, against Postgres", () => {
   const store = () => new PostgresMentionStore(d())
 
   let itemId: string
+  /** Held because `evidence.persona_id` is `ON DELETE restrict` and needs a real one. */
+  let personaId: string
 
   beforeEach(async () => {
     await d().execute(
       sql`truncate table entity_resolutions, mentions, raw_items, harvest_runs, sessions, personas restart identity cascade`,
     )
-    const personaId = randomUUID()
+    personaId = randomUUID()
     await d().insert(personas).values({
       id: personaId,
       name: "regular",
@@ -425,6 +429,116 @@ describe.runIf(hasDb)("refine, against Postgres", () => {
         .orderBy(mentions.createdAt, mentions.id)
         .limit(1)
       expect(all[0]?.id).toBe(oldest[0]?.id)
+    })
+  })
+
+  /**
+   * `PostgresEntityLinks`, which is the engine's whole share of a merge (P2.4).
+   *
+   * These three tables hold an opaque `(domain_id, entity_id)` with **no foreign
+   * key** into any vertical's table — that absence is ADR-0009's seam, and it is
+   * also the reason nothing else in the database would ever notice these rows
+   * pointing at an id that a pack has just deleted. A fake can move fields in an
+   * array. What needs a real Postgres is that the three updates are one
+   * transaction, and that the `domain_id` half is actually in every WHERE.
+   */
+  describe("repointing what a merge is about to leave behind", () => {
+    const links = () => new PostgresEntityLinks(d())
+
+    const evidenceFor = async (domainId: string, entityId: string): Promise<string> => {
+      const [written] = await d()
+        .insert(evidence)
+        .values({
+          domainId,
+          entityId,
+          rawItemId: itemId,
+          sourceId: "fake.search",
+          sourceUrl: "https://example.invalid/topic/44225687",
+          personaId,
+          language: "vi",
+          capturedAt,
+          extract: { localName: "Phở Hòa" },
+          rawRef: "captures/fake.search/1.json",
+        })
+        .returning({ id: evidence.id })
+      return written?.id as string
+    }
+
+    const duplicate = randomUUID()
+    const survivor = randomUUID()
+
+    it("moves all three kinds of pointer and counts what it moved", async () => {
+      const kept = await evidenceFor("atlas", duplicate)
+      // Through `commit`, because that is the only way a mention ever acquires an
+      // entity id — `MentionRow.entityId` is typed `null` so the extract stage
+      // cannot claim one. Setting the column directly here would be testing the
+      // repoint against a state nothing in the pipeline can produce.
+      const mention = row()
+      await sink().insertMany([mention])
+      await new PostgresResolutionCache(d()).commit({
+        domainId: "atlas",
+        key: "phohoa",
+        state: "resolved",
+        entityId: duplicate,
+        tier: 1,
+        confidence: 0.8,
+        mentionIds: [mention.id],
+        deferred: false,
+      })
+
+      const moved = await links().repoint("atlas", duplicate, survivor)
+
+      expect(moved).toEqual({ evidence: 1, mentions: 1, resolutions: 1 })
+      // Evidence is the one section 2.4 names by name: a merge preserves it, and
+      // the row is the same row rather than a copy.
+      const [carried] = await d().select().from(evidence).where(eq(evidence.id, kept))
+      expect(carried?.entityId).toBe(survivor)
+      expect(carried?.extract).toEqual({ localName: "Phở Hòa" })
+      const [cached] = await d().select().from(entityResolutions)
+      // The cache row is what stops the merge undoing itself: left pointing at a
+      // deleted id, the next run would read it back and hand out the duplicate.
+      expect(cached?.entityId).toBe(survivor)
+    })
+
+    it("leaves another domain's rows exactly where they were", async () => {
+      // Same entity id, different domain — contrived, and permitted: the ids are
+      // opaque and nothing stops two packs minting the same one. Without the
+      // `domain_id` half in the WHERE, this merge would move a vertical's
+      // evidence onto another vertical's survivor and nothing would ever say so.
+      const mine = await evidenceFor("atlas", duplicate)
+      const theirs = await evidenceFor("cartography", duplicate)
+
+      const moved = await links().repoint("atlas", duplicate, survivor)
+
+      expect(moved.evidence).toBe(1)
+      const rows = await d().select().from(evidence)
+      expect(rows.find((r) => r.id === mine)?.entityId).toBe(survivor)
+      expect(rows.find((r) => r.id === theirs)?.entityId).toBe(duplicate)
+    })
+
+    it("counts nothing when there is nothing pointing at the duplicate", async () => {
+      // A legitimate merge: two rows that were resolved from the same key and
+      // never had a mention attributed separately. Zero is an answer, not a miss.
+      expect(await links().repoint("atlas", duplicate, survivor)).toEqual({
+        evidence: 0,
+        mentions: 0,
+        resolutions: 0,
+      })
+    })
+
+    it("refuses to move a row onto itself", async () => {
+      // Cheap, but the guard is load-bearing: the stage follows merge chains, and
+      // a chain that settles on the entity it started from would otherwise issue
+      // an UPDATE whose WHERE and SET say the same thing.
+      await evidenceFor("atlas", duplicate)
+
+      expect(await links().repoint("atlas", duplicate, duplicate)).toEqual({
+        evidence: 0,
+        mentions: 0,
+        resolutions: 0,
+      })
+      const [untouched] = await d().select().from(evidence)
+      expect(untouched?.entityId).toBe(duplicate)
     })
   })
 })
