@@ -30,6 +30,11 @@
  *      in `.osm/` and the path is printed.
  *   3. **`--from <file>` replays a saved response** with no network at all. This
  *      is the form to use while iterating on the mapping in `osm-tags.ts`.
+ *   4. **`--count` asks how big the answer is** before asking for the answer.
+ *      It is the one case where two queries are politer than one: Overpass
+ *      answers a count without serialising a result set, and a nationwide query
+ *      that dies on `maxsize` after fourteen minutes has spent all of the
+ *      lookup and wasted all of it.
  *
  * `--commit` is required to write rows, on the same principle as
  * `tools/backfill-refine.ts`: the default prints what would happen. But note the
@@ -38,8 +43,9 @@
  * free for us and not free for them, which is the reason rule 2 exists.
  *
  * Usage:
- *   npx tsx --env-file=.env tools/load-osm.ts                    # query, save, report
- *   npx tsx --env-file=.env tools/load-osm.ts --commit           # and write the rows
+ *   npx tsx tools/load-osm.ts --city thailand --count             # how big is it?
+ *   npx tsx --env-file=.env tools/load-osm.ts                     # query, save, report
+ *   npx tsx --env-file=.env tools/load-osm.ts --commit            # and write the rows
  *   npx tsx --env-file=.env tools/load-osm.ts --from .osm/x.json --commit
  *   ./tools/with-hosted-env.sh npx tsx tools/load-osm.ts --from .osm/x.json --commit
  *
@@ -59,8 +65,28 @@ import {
 } from "../packages/travel/pack/src/index.js"
 import { upsertOsmPlaces } from "../packages/travel/pack/src/postgres.js"
 
-/** The cities there is a bbox for. One, so far, and adding a second is a line here. */
-const CITIES: Record<string, City> = { bangkok: BANGKOK }
+/**
+ * Thailand, which is not a city and is deliberately shaped like one.
+ *
+ * The golden corpus is a Thai food board, and a food board talks about the whole
+ * country: the labelled places include a waterfall in Phetchabun, a farm shop at
+ * Khao Yai and a lagoon at Phu Pha Man. Measuring Tier 1 against a Bangkok-only
+ * extract therefore measures the overlap of two different geographies, and reads
+ * as a failure of the tier rather than of the extract's bounds.
+ *
+ * **Loading this replaces the Bangkok extract rather than adding to it.** The
+ * primary key is OSM's `<type>/<id>`, so every POI that is in both extracts is
+ * one row, and the last load decides what `city` says. That makes `city` the
+ * wrong shape for what it is now being asked to do — it is a filter on a column
+ * that holds whichever extract touched the row last, not a fact about the place.
+ * The honest fix is to derive the city from the coordinate at query time and let
+ * the bbox be the filter it already almost is; this is the measurement that
+ * decides whether that work is worth doing, so it is not done here.
+ */
+const THAILAND: City = { name: "Thailand", bbox: [97.3, 5.6, 105.7, 20.5] }
+
+/** The extracts there is a bbox for. Adding another is a line here. */
+const CITIES: Record<string, City> = { bangkok: BANGKOK, thailand: THAILAND }
 
 const ENDPOINT = "https://overpass-api.de/api/interpreter"
 
@@ -98,18 +124,19 @@ const FETCH_TIMEOUT_MS = (OVERPASS_TIMEOUT_S + 120) * 1000
  * hundreds: an extract that Tier 1 matches names against has no use for the
  * unnamed half of OSM.
  */
-function overpassQuery(city: City): string {
+function overpassQuery(city: City, mode: "data" | "count"): string {
   const [w, s, e, n] = city.bbox
   const bbox = `${s},${w},${n},${e}`
   const families = ["amenity", "shop", "leisure", "tourism", "historic", "natural"]
   const clauses = families.map((key) => `  nwr["${key}"]["name"](${bbox});`).join("\n")
-  return `[out:json][timeout:${OVERPASS_TIMEOUT_S}];\n(\n${clauses}\n);\nout center tags;`
+  const out = mode === "count" ? "out count;" : "out center tags;"
+  return `[out:json][timeout:${OVERPASS_TIMEOUT_S}];\n(\n${clauses}\n);\n${out}`
 }
 
 function usage(message: string): never {
   console.error(`load-osm: ${message}`)
-  console.error("usage: tools/load-osm.ts [--city <name>] [--from <file>] [--commit]")
-  console.error(`cities: ${Object.keys(CITIES).join(", ")}`)
+  console.error("usage: tools/load-osm.ts [--city <name>] [--from <file>] [--count] [--commit]")
+  console.error(`extracts: ${Object.keys(CITIES).join(", ")}`)
   process.exit(1)
 }
 
@@ -128,8 +155,8 @@ const mb = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)}MB`
  *
  * Deliberately not a function that can be called twice.
  */
-async function fetchExtract(city: City): Promise<string> {
-  const query = overpassQuery(city)
+async function ask(city: City, mode: "data" | "count"): Promise<string> {
+  const query = overpassQuery(city, mode)
   console.log(`querying ${ENDPOINT} for ${city.name}, once`)
   console.log(`(server-side timeout ${OVERPASS_TIMEOUT_S}s; this can take minutes)\n`)
 
@@ -152,6 +179,11 @@ async function fetchExtract(city: City): Promise<string> {
   }
 
   const body = await response.text()
+  // A count is four numbers. Saving it would clutter `.osm/` with files that
+  // cannot be replayed with `--from`, and nothing was expensive enough to be
+  // worth not paying for twice.
+  if (mode === "count") return body
+
   const path = savePath(city)
   writeFileSync(path, body)
   console.log(`saved ${mb(body.length)} to ${path}`)
@@ -241,7 +273,30 @@ async function main(): Promise<void> {
   // rudeness this file is arranged to avoid.
   if (commit && !url) usage("DATABASE_URL is not set, and --commit needs somewhere to write")
 
-  const body = from ? readFileSync(resolve(from), "utf8") : await fetchExtract(city)
+  /**
+   * `out count` before `out center tags`, for a bbox nobody has run before.
+   *
+   * It is a second query, which the rest of this file is arranged to avoid, and
+   * it is cheap in the way that matters: Overpass answers a count from the same
+   * search without serialising a result set, so it costs the lookup and none of
+   * the transfer. Aiming a fifteen-minute nationwide query at a volunteer
+   * instance without knowing whether the answer is fifty thousand rows or five
+   * million — and having it die on `maxsize` after fourteen of them — is the
+   * more expensive kind of politeness to skip.
+   */
+  if (args.includes("--count")) {
+    const counts = JSON.parse(await ask(city, "count")) as {
+      elements?: { tags?: Record<string, string> }[]
+    }
+    const tags = counts.elements?.[0]?.tags ?? {}
+    console.log(`${city.name}: ${tags.total ?? "?"} element(s) match`)
+    console.log(
+      `(nodes ${tags.nodes ?? "?"}, ways ${tags.ways ?? "?"}, relations ${tags.relations ?? "?"})`,
+    )
+    return
+  }
+
+  const body = from ? readFileSync(resolve(from), "utf8") : await ask(city, "data")
   if (from) console.log(`read ${mb(body.length)} from ${from}\n`)
 
   const parsed = parse(body, city)
