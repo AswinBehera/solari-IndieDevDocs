@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client"
 import { App } from "./App"
 import "./index.css"
 import { Lab } from "./lab/Lab"
+import { Places } from "./places/Places"
 
 // TanStack Query is the only cache layer (ADR-0002): no second state library.
 const queryClient = new QueryClient({
@@ -35,7 +36,16 @@ if (!root) throw new Error("#root is missing from index.html")
  * rather than falling through to the dev shell, which would look like the Lab is
  * missing.
  */
-const page = window.location.pathname.startsWith("/lab") ? <Lab /> : <App />
+const path = window.location.pathname
+// `/lab/places` is checked before `/lab`, because `startsWith` would otherwise
+// swallow it into the Persona Lab — which is precisely the page it is not.
+const page = path.startsWith("/lab/places") ? (
+  <Places />
+) : path.startsWith("/lab") ? (
+  <Lab />
+) : (
+  <App />
+)
 
 createRoot(root).render(
   <StrictMode>

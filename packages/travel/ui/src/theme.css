@@ -1,0 +1,37 @@
+/**
+ * The design canvas, read into code — and the only place these values live.
+ *
+ * `docs/design/README.md` calls the canvas "the source of truth for palette, type,
+ * and copy tone **until `@dt/ui` exists**". This file is that handover: the values
+ * below were read off `Doen Thang.dc.html`, and from here on the canvas is a
+ * reference for layout and tone rather than the place the palette lives.
+ *
+ * **These are declared once, in CSS, and never mirrored into TypeScript.** Tailwind
+ * v4 derives utilities from the variable name, so `--color-ink-muted` is what makes
+ * `text-ink-muted` and `fill-ink-muted` exist, and a component can reach every token
+ * through a class. A second copy as a TS object would exist only to be passed to an
+ * `svg` `fill`, which `fill-*` already covers — and would then need a test to keep
+ * the two honest. One declaration needs no such test.
+ *
+ * **The contract with the consumer.** An app using `@dt/ui` must `@import` this from
+ * its own stylesheet; the components assume these utilities exist. That is imported
+ * rather than bundled into a component because `@theme` has to reach Tailwind's
+ * compiler, and a JS-side `import "./theme.css"` from a package that ships
+ * TypeScript source would depend on the consumer's bundler handling CSS imports the
+ * same way Vite does.
+ */
+
+@theme {
+  --color-surface: #f4f1ea;
+  --color-surface-raised: #ede9df;
+  --color-ink: #23242a;
+  --color-ink-muted: #5b584f;
+  --color-ink-faint: #8a867b;
+  --color-rule: #d9d4c7;
+  --color-accent-pink: #ff2d95;
+  --color-accent-blue: #16204a;
+
+  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-body: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, SFMono-Regular, monospace;
+}

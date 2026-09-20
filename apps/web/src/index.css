@@ -1,1 +1,12 @@
 @import "tailwindcss";
+
+/* The design tokens `@dt/ui` generates its utilities from. Imported here rather
+   than by a component, because `@theme` has to reach Tailwind's compiler. */
+@import "@dt/ui/theme.css";
+
+/* `@dt/ui` reaches this app as a symlink into `node_modules`, and Tailwind's
+   automatic content detection skips `node_modules` — so without this line the
+   card's own classes are never generated and it renders unstyled while every
+   class used directly in `apps/web` works. The path is to the real directory,
+   not the symlink, because that is what the scanner walks. */
+@source "../../../packages/travel/ui/src";
