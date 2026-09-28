@@ -7,6 +7,8 @@ import {
 } from "@samsara/harvest"
 import {
   BudgetGuard,
+  type EnqueueInput,
+  type EnqueueResult,
   Kernel,
   type Logger,
   MemoryCounterStore,
@@ -25,6 +27,7 @@ import {
   type DomainPack,
   ENVELOPE_INSTRUCTIONS,
   ITEMS_VARIABLE,
+  MemoryEntityRepo,
   MemoryMentionSink,
   PackRegistry,
 } from "@samsara/refine"
@@ -32,6 +35,7 @@ import { describe, expect, it } from "vitest"
 import { z } from "zod"
 import type { JobContext } from "./handlers.js"
 import { createRefineHandler } from "./refine.js"
+import { resolveJobKey } from "./resolve.js"
 
 /**
  * What this handler owns, which is again smaller than it looks: validate a
@@ -67,6 +71,25 @@ const pack: DomainPack<z.infer<typeof mentionSchema>> = {
     }),
     batchBy: (item) => item.languageGuess ?? "unknown",
   },
+}
+
+/** The same pack, able to resolve: the only kind the extract job hands on. */
+const resolvable: DomainPack<z.infer<typeof mentionSchema>, { canonicalName: string }> = {
+  ...pack,
+  resolve: {
+    entitySchema: z.object({ canonicalName: z.string() }),
+    repo: new MemoryEntityRepo(),
+    key: (m) => m.name,
+    resolve: async () => ({ outcome: "unresolvable", tier: 3 }),
+  },
+}
+
+class FakeJobs {
+  readonly enqueued: EnqueueInput[] = []
+  async enqueue(input: EnqueueInput): Promise<EnqueueResult> {
+    this.enqueued.push(input)
+    return { id: `job-${this.enqueued.length}`, deduped: false }
+  }
 }
 
 const CEILINGS: Record<MeterId, number> = {
@@ -134,6 +157,8 @@ async function harness(
     runDomainId?: string
     withoutLlm?: boolean
     registerPack?: boolean
+    resolvable?: boolean
+    jobs?: FakeJobs
   } = {},
 ) {
   const logger: Logger = new MemoryLogger()
@@ -165,10 +190,11 @@ async function harness(
     items,
     sink,
     ...(behaviour.withoutLlm ? {} : { llm }),
+    ...(behaviour.jobs ? { queue: behaviour.jobs } : {}),
   })
 
   const packs = new PackRegistry()
-  if (behaviour.registerPack !== false) packs.register(pack)
+  if (behaviour.registerPack !== false) packs.register(behaviour.resolvable ? resolvable : pack)
 
   const notes: string[] = []
   const ctx = (payload: unknown): JobContext => ({
@@ -303,6 +329,51 @@ describe("the path through", () => {
     expect(h.chat.calls).toBe(first)
     expect(h.sink.rows).toHaveLength(2)
     expect(h.notes.at(-1)).toContain("2 already done")
+  })
+})
+
+describe("what the job hands on", () => {
+  const echo = ((req: { user: string }) =>
+    answers([...req.user.matchAll(/ref:\s*(\S+)/g)].map((m) => m[1] as string))) as never
+
+  it("queues the domain's resolve, keyed on its own job id", async () => {
+    const jobs = new FakeJobs()
+    const h = await harness({ items: 2, script: echo, resolvable: true, jobs })
+    await h.handler(h.ctx(PAYLOAD))
+    expect(jobs.enqueued).toEqual([
+      {
+        type: "refine.resolve",
+        domainId: "atlas",
+        idempotencyKey: resolveJobKey("atlas", "j1"),
+        payload: { domainId: "atlas" },
+      },
+    ])
+  })
+
+  it("queues nothing for a pack that cannot resolve", async () => {
+    const jobs = new FakeJobs()
+    const h = await harness({ items: 2, script: echo, jobs })
+    await h.handler(h.ctx(PAYLOAD))
+    expect(jobs.enqueued).toHaveLength(0)
+  })
+
+  it("queues nothing for an empty run", async () => {
+    const jobs = new FakeJobs()
+    const h = await harness({ items: 0, resolvable: true, jobs })
+    await h.handler(h.ctx(PAYLOAD))
+    expect(jobs.enqueued).toHaveLength(0)
+  })
+
+  it("queues nothing when the extraction was partial, so the retry goes first", async () => {
+    const jobs = new FakeJobs()
+    const h = await harness({
+      items: 1,
+      resolvable: true,
+      jobs,
+      script: (() => ({ throws: new Error("provider fell over") })) as never,
+    })
+    await expect(h.handler(h.ctx(PAYLOAD))).rejects.toThrow(/unextracted/)
+    expect(jobs.enqueued).toHaveLength(0)
   })
 })
 

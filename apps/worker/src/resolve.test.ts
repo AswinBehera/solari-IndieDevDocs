@@ -1,6 +1,8 @@
 import type { MeterId } from "@samsara/core"
 import {
   BudgetGuard,
+  type EnqueueInput,
+  type EnqueueResult,
   Kernel,
   type Logger,
   MemoryCounterStore,
@@ -24,8 +26,10 @@ import {
 } from "@samsara/refine"
 import { describe, expect, it } from "vitest"
 import { z } from "zod"
+import { dedupJobKey } from "./dedup.js"
 import type { JobContext } from "./handlers.js"
 import { createResolveHandler, resolveJobKey } from "./resolve.js"
+import { scoreJobKey } from "./score.js"
 
 /**
  * What this handler owns is the *loop*, and nothing else.
@@ -107,6 +111,15 @@ class FakeEvidence implements EvidenceWriter {
   }
 }
 
+/** The job queue the handler chains into, as opposed to `FakeQueue`, which is the mention queue. */
+class FakeJobs {
+  readonly enqueued: EnqueueInput[] = []
+  async enqueue(input: EnqueueInput): Promise<EnqueueResult> {
+    this.enqueued.push(input)
+    return { id: `job-${this.enqueued.length}`, deduped: false }
+  }
+}
+
 function harness(
   behaviour: {
     pages?: PendingMention[][]
@@ -114,6 +127,10 @@ function harness(
     registerPack?: boolean
     aborted?: boolean
     evidence?: EvidenceWriter
+    jobs?: FakeJobs
+    keys?: boolean
+    score?: boolean
+    attempt?: number
   } = {},
 ) {
   const repo = new MemoryEntityRepo<Entity>()
@@ -148,6 +165,10 @@ function harness(
         )
       },
     },
+    ...(behaviour.keys === false
+      ? {}
+      : { dedupKeys: (e: Entity) => [{ kind: "name", value: e.canonicalName }] }),
+    ...(behaviour.score === false ? {} : { score: { scores: { busy: [] } } }),
   }
 
   const queue = new FakeQueue(behaviour.pages ?? [page(0, 3)])
@@ -155,6 +176,7 @@ function harness(
     pending: queue,
     cache: new MemoryResolutionCache(),
     ...(behaviour.evidence ? { evidence: behaviour.evidence } : {}),
+    ...(behaviour.jobs ? { queue: behaviour.jobs } : {}),
   })
 
   const packs = new PackRegistry()
@@ -166,7 +188,12 @@ function harness(
 
   const notes: string[] = []
   const ctx = (payload: unknown): JobContext => ({
-    job: { id: "j1", type: "refine.resolve", payload } as JobContext["job"],
+    job: {
+      id: "j1",
+      type: "refine.resolve",
+      payload,
+      attempt: behaviour.attempt ?? 1,
+    } as JobContext["job"],
     kernel: new Kernel({
       registry: new SessionRegistry(new MemorySessionStore(), logger),
       guard: new BudgetGuard({ store: new MemoryCounterStore(), ceilings: CEILINGS }),
@@ -300,6 +327,54 @@ describe("what it does with the report", () => {
       expect(note).not.toContain("District 1")
       expect(note).not.toContain("Quán")
     }
+  })
+})
+
+describe("what the job hands on", () => {
+  it("queues dedup, keyed on its own id, when it wrote entities", async () => {
+    const jobs = new FakeJobs()
+    const { handler, ctx } = harness({ jobs })
+    await handler(ctx(PAYLOAD))
+    expect(jobs.enqueued).toEqual([
+      {
+        type: "refine.dedup",
+        domainId: "atlas",
+        idempotencyKey: dedupJobKey("atlas", "j1"),
+        payload: { domainId: "atlas" },
+      },
+    ])
+  })
+
+  it("goes straight to score for a pack that declares no dedup keys", async () => {
+    const jobs = new FakeJobs()
+    const { handler, ctx } = harness({ jobs, keys: false })
+    await handler(ctx(PAYLOAD))
+    expect(jobs.enqueued.map((j) => j.idempotencyKey)).toEqual([scoreJobKey("atlas", "j1")])
+  })
+
+  it("queues nothing for a pack with neither", async () => {
+    const jobs = new FakeJobs()
+    const { handler, ctx } = harness({ jobs, keys: false, score: false })
+    await handler(ctx(PAYLOAD))
+    expect(jobs.enqueued).toHaveLength(0)
+  })
+
+  it("queues nothing when nothing moved, because dedup and score walk the whole table", async () => {
+    // Every key deferred: no entity written, no receipt recorded.
+    const jobs = new FakeJobs()
+    const { handler, ctx } = harness({
+      jobs,
+      resolution: () => ({ outcome: "deferred", reason: "budget" }),
+    })
+    await handler(ctx(PAYLOAD))
+    expect(jobs.enqueued).toHaveLength(0)
+  })
+
+  it("queues anyway on a retry, whose first attempt may have done the work", async () => {
+    const jobs = new FakeJobs()
+    const { handler, ctx } = harness({ jobs, pages: [], attempt: 2 })
+    await handler(ctx(PAYLOAD))
+    expect(jobs.enqueued.map((j) => j.type)).toEqual(["refine.dedup"])
   })
 })
 
