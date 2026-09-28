@@ -5,7 +5,10 @@ import type {
   ResolutionCache,
 } from "@samsara/refine"
 import { MENTION_LIST_LIMIT, resolve } from "@samsara/refine"
+import { chain, type Queue } from "./chain.js"
+import { dedupJobKey } from "./dedup.js"
 import type { JobHandler } from "./handlers.js"
+import { scoreJobKey } from "./score.js"
 
 /**
  * The `refine.resolve` job type: pending mentions turned into entities.
@@ -58,9 +61,11 @@ const MAX_PAGES = 5
  * purpose is to drain a queue that keeps refilling is the wrong shape entirely.
  *
  * The window is whatever makes two enqueues mean two different intents: a date
- * for the weekly cron, a run id for a chain from `refine.extract`. It is the
+ * for a cron, the upstream job's id for a chain from `refine.extract`. It is the
  * caller's to choose because only the caller knows why it is asking, and a
- * default here would silently make every caller's answer the same one.
+ * default here would silently make every caller's answer the same one. (This
+ * comment first said "a run id" for the chain; `chain.ts` says why a re-extraction
+ * under a bumped pack version makes that the wrong window.)
  */
 export const resolveJobKey = (domainId: string, window: string): string =>
   `refine.resolve:${domainId}:${window}`
@@ -112,6 +117,11 @@ export interface ResolveHandlerDeps {
    * correct without it. What is lost is receipts, which the report counts.
    */
   evidence?: EvidenceWriter
+  /**
+   * Where the next stage is queued when this job changed anything. Absent,
+   * nothing is chained.
+   */
+  queue?: Queue
 }
 
 export function createResolveHandler(deps: ResolveHandlerDeps): JobHandler {
@@ -129,6 +139,7 @@ export function createResolveHandler(deps: ResolveHandlerDeps): JobHandler {
       asked: 0,
       resolved: 0,
       unresolvable: 0,
+      entities: 0,
       evidence: 0,
     }
     const tiers = new Map<number, number>()
@@ -164,6 +175,7 @@ export function createResolveHandler(deps: ResolveHandlerDeps): JobHandler {
       totals.asked += report.asked
       totals.resolved += report.resolved
       totals.unresolvable += report.unresolvable
+      totals.entities += report.entities
       totals.evidence += report.evidence
       invalid += report.invalid
       for (const t of report.tiers) tiers.set(t.tier, (tiers.get(t.tier) ?? 0) + t.count)
@@ -215,5 +227,33 @@ export function createResolveHandler(deps: ResolveHandlerDeps): JobHandler {
       const summary = [...deferrals.entries()].map(([reason, count]) => `${reason}×${count}`)
       await ctx.heartbeat(`${input.domainId}: deferred ${summary.join(", ")}`)
     }
+
+    /**
+     * Chained only when the table or its receipts changed.
+     *
+     * Every extraction queues a resolve, and most of them find the pending
+     * queue already drained by the one before — dedup and score both walk the
+     * whole entity table, so chaining from a job that moved nothing would pay
+     * for two full walks to learn nothing. New entities want deduplicating and
+     * new evidence wants scoring; nothing else does.
+     *
+     * Except on a retry. A first attempt can commit its resolutions and then
+     * fail, and the retry then finds nothing pending and would chain nothing —
+     * so the work the first attempt did would wait for some unrelated run to
+     * come by. A retry chains unconditionally; the cost is one walk.
+     */
+    const moved = totals.entities > 0 || totals.evidence > 0
+    if (!moved && !(ctx.job.attempt > 1)) return
+
+    const next = pack.dedupKeys ? "refine.dedup" : pack.score ? "refine.score" : null
+    if (next === null) return
+    await chain(ctx, deps.queue, {
+      type: next,
+      domainId: input.domainId,
+      idempotencyKey:
+        next === "refine.dedup"
+          ? dedupJobKey(input.domainId, ctx.job.id)
+          : scoreJobKey(input.domainId, ctx.job.id),
+    })
   }
 }

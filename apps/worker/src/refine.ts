@@ -3,7 +3,9 @@ import { ITEM_LIST_LIMIT } from "@samsara/harvest"
 import type { LlmClient } from "@samsara/llm"
 import type { ExtractItem, MentionSink } from "@samsara/refine"
 import { extract } from "@samsara/refine"
+import { chain, type Queue } from "./chain.js"
 import type { JobHandler } from "./handlers.js"
+import { resolveJobKey } from "./resolve.js"
 
 /**
  * The `refine.extract` job type: one harvest run's items, read by a model.
@@ -81,6 +83,11 @@ export interface RefineHandlerDeps {
    * nobody claims looks identical to a queue that is empty.
    */
   llm?: LlmClient
+  /**
+   * Where the resolve job is queued once this run's mentions are written.
+   * Absent, nothing is chained — which is how the tests and the bake-off call it.
+   */
+  queue?: Queue
 }
 
 export function createRefineHandler(deps: RefineHandlerDeps): JobHandler {
@@ -174,5 +181,14 @@ export function createRefineHandler(deps: RefineHandlerDeps): JobHandler {
           `items unextracted (${summary})`,
       )
     }
+
+    // After the failure check, so a partial extraction is retried before the
+    // corpus moves on. A pack that cannot resolve has nowhere to send it.
+    if (!pack.resolve) return
+    await chain(ctx, deps.queue, {
+      type: "refine.resolve",
+      domainId: input.domainId,
+      idempotencyKey: resolveJobKey(input.domainId, ctx.job.id),
+    })
   }
 }

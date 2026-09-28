@@ -34,7 +34,9 @@ import type { EntityLinks } from "./ports.js"
  * *later* in that page is merged into the entity being examined rather than the
  * other way round. Everything else — a match earlier in the page, or a match
  * already in the table from a previous run — is older, and the entity being
- * examined is merged into it.
+ * examined is merged into it. A caller walking the table page by page says which
+ * rows it has already passed (`earlier`), and then a match on a page it has not
+ * reached yet counts as later too; see that option for the bug it closes.
  *
  * The first version of this had no such rule and merged into the match every
  * time, which reads as the same thing and is not: two duplicates in one page are
@@ -83,6 +85,26 @@ export interface DedupOptions<TMention, TEntity> {
   /** One page, oldest first. See `DedupEntity` for why the caller reads it. */
   entities: readonly DedupEntity<TEntity>[]
   links: EntityLinks
+  /**
+   * Every id on an earlier page of the same oldest-first walk, when the caller
+   * is walking the table a page at a time.
+   *
+   * Decision 2 needs to know whether a match is older or newer than the entity
+   * that found it, and inside the page the position answers that. Outside it,
+   * the stage used to assume "older", which is true only when the page is the
+   * whole table. A job that pages from the oldest row breaks that in the common
+   * case: two duplicates written weeks apart sit on different pages, the older
+   * is reached first, and what it finds is outside the page *and newer* — so it
+   * was merged away into the newcomer, the exact inversion decision 2 exists to
+   * prevent, and no test with a single page could see it.
+   *
+   * Given this set, a match in neither the page nor the set is on a page not yet
+   * read, and so newer. Absent, the single-page premise stands. The engine
+   * cannot read the repo's cursor to work this out for itself, because the
+   * cursor is opaque by design; the set of ids a caller has already been handed
+   * is the one ordering fact both sides can see.
+   */
+  earlier?: ReadonlySet<string>
   signal?: AbortSignal
 }
 
@@ -221,12 +243,17 @@ export async function dedup<TMention, TEntity>(
     // pair still exists and the question does not arise.
     if (target === id) continue
 
-    // A match that is still itself and sits later in the page is the newer row
+    // A match that is still itself and sits later in the page — or, for a caller
+    // walking page by page, on a page it has not read yet — is the newer row
     // (decision 2). A match that has already been merged is not a candidate for
     // this at all — whatever absorbed it was examined earlier, and is therefore
     // older than the entity in hand.
     const matchPosition = position.get(match.id)
-    const newer = target === match.id && matchPosition !== undefined && matchPosition > index
+    const later =
+      matchPosition !== undefined
+        ? matchPosition > index
+        : opts.earlier !== undefined && !opts.earlier.has(match.id)
+    const newer = target === match.id && later
     const survivor = newer ? id : target
     const duplicate = newer ? target : id
 

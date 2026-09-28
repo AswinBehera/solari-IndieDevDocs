@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto"
 import { places, schema } from "@dt/db"
 import type { ScoreSet } from "@samsara/core"
 import { type DatabaseLock, lockDatabase } from "@samsara/db/testing"
+import { dedup, MemoryEntityLinks } from "@samsara/refine"
 import { eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { EXTERNAL_REF_KEY, GEO_KEY, placeDedupKeys } from "./dedup.js"
 import type { PlaceEntity } from "./entity.js"
+import { createTravelPack } from "./pack.js"
 import { PostgresPlaceRepo } from "./postgres.js"
 
 /**
@@ -555,6 +557,42 @@ describe.runIf(hasDb)("the places repo, paging", () => {
   it("refuses a cursor it did not mint rather than reporting an empty table", async () => {
     await fill(2)
     await expect(repo().page("somewhere", 5)).rejects.toThrow(/cursor/)
+  })
+
+  it("keeps the older place when dedup walks it a page at a time", async () => {
+    // The walk `refine.dedup` does, over the real keyset. The two rows sharing
+    // an OSM reference are on the first and last pages; the older is reached
+    // first, and it is the one that has to survive.
+    // No coordinate anywhere, and a reference each, so the one key that can
+    // fire is the reference — `fill`'s rows share both and would merge too.
+    const place = (i: number, ref: string): PlaceEntity => ({
+      ...resolved,
+      canonicalName: `Place ${i}`,
+      localName: null,
+      geo: null,
+      externalRef: { source: "osm", id: ref },
+    })
+    const older = await repo().upsert(place(0, "node/9"))
+    for (let i = 1; i <= 5; i++) await repo().upsert(place(i, `node/${100 + i}`))
+    const newer = await repo().upsert(place(6, "node/9"))
+
+    const pack = createTravelPack({ places: repo() })
+    const links = new MemoryEntityLinks()
+    const earlier = new Set<string>()
+    let cursor: string | null = null
+    for (;;) {
+      const page = await repo().page(cursor, 2)
+      if (page.entities.length === 0) break
+      await dedup({ pack, entities: page.entities, links, earlier })
+      for (const row of page.entities) earlier.add(row.id)
+      cursor = page.cursor
+      if (cursor === null) break
+    }
+
+    const left = await d().select({ id: places.id }).from(places)
+    expect(left.map((row) => row.id)).toContain(older)
+    expect(left.map((row) => row.id)).not.toContain(newer)
+    expect(left).toHaveLength(6)
   })
 
   it("does not skip a row when a merge removes one the caller has passed", async () => {

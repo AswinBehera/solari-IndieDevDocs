@@ -19,12 +19,14 @@ import { LlmClient, loadLlmConfig } from "@samsara/llm"
 import { createOpenRouterClient } from "@samsara/llm/openrouter"
 import { PostgresPersonaStore } from "@samsara/personas/postgres"
 import {
+  PostgresEntityLinks,
   PostgresEvidenceStore,
   PostgresEvidenceWriter,
   PostgresMentionSink,
   PostgresPendingMentions,
   PostgresResolutionCache,
 } from "@samsara/refine/postgres"
+import { createDedupHandler } from "./dedup.js"
 import { HandlerRegistry, noopHandler } from "./handlers.js"
 import { createHarvestHandler } from "./harvest.js"
 import { createPackRegistry } from "./packs.js"
@@ -148,6 +150,9 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       items: new PostgresRawItemStore(database.db),
       sink: new PostgresMentionSink(database.db),
       ...(llm ? { llm } : {}),
+      // The rest of the chain: extract queues resolve, resolve queues dedup,
+      // dedup queues score. See `chain.ts` for why each link is non-fatal.
+      queue: jobs,
     }),
   )
 
@@ -180,7 +185,13 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       // No `lookup` yet: Tier 2's provider is undecided and needs a key nobody
       // has created. Tiers 0 and 1 carry the whole corpus until then, which is
       // what ADR-0017 predicts they should mostly be doing anyway.
+      queue: jobs,
     }),
+  )
+
+  handlers.register(
+    "refine.dedup",
+    createDedupHandler({ links: new PostgresEntityLinks(database.db), queue: jobs }),
   )
 
   handlers.register(

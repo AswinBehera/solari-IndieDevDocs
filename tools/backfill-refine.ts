@@ -18,6 +18,12 @@
  * pack version and skips them. Bumping `pack.version` defeats both at once, on
  * purpose — that is how a corrected prompt asks for its corpus back.
  *
+ * **The rest of the pipeline follows on its own.** Each extraction queues the
+ * domain's `refine.resolve`, which queues `refine.dedup`, which queues
+ * `refine.score` (see `apps/worker/src/chain.ts`) — so this sweep is the only
+ * thing an operator has to start. None of those three spends: resolve runs
+ * Tiers 0 and 1 against our own tables and no runner has a Tier 2 key.
+ *
  * **It queues spend rather than spending.** Nothing here calls a model. It writes
  * rows that a runner will later act on, which is worse than spending directly in
  * one specific way: the bill arrives somewhere else, later, attributed to a job

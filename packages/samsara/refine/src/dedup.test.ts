@@ -364,6 +364,115 @@ describe("dedup", () => {
 })
 
 /**
+ * The stage run the way the job runs it: one page at a time, oldest first.
+ *
+ * Every test above hands the stage the whole table in one page, and in that
+ * shape "a match outside the page is older" is true by construction — there is
+ * no outside except rows from a previous run. A job that pages the table breaks
+ * the premise, and it breaks it in the common case rather than an edge: two
+ * duplicates written weeks apart sit on different pages, the older one is
+ * reached first, and the newer one is *outside the page and newer*. Without
+ * being told what the walk has already passed, the stage cannot tell a row on
+ * an earlier page from a row on a later one, and it merges the older row away.
+ */
+describe("dedup, walked a page at a time", () => {
+  const walk = async (
+    repo: MemoryEntityRepo<Box>,
+    links: MemoryEntityLinks,
+    opts: { size: number; tell: boolean },
+  ) => {
+    const earlier = new Set<string>()
+    let cursor: string | null = null
+    for (;;) {
+      const page: Awaited<ReturnType<typeof repo.page>> = await repo.page(cursor, opts.size)
+      if (page.entities.length === 0) break
+      await dedup({
+        pack: packOf(repo),
+        entities: page.entities,
+        links,
+        ...(opts.tell ? { earlier } : {}),
+      })
+      for (const row of page.entities) earlier.add(row.id)
+      cursor = page.cursor
+      if (cursor === null) break
+    }
+  }
+
+  it("keeps the older row when its duplicate is on a page not read yet", async () => {
+    const repo = boxRepo()
+    const links = new MemoryEntityLinks()
+    const [first, second] = (await stored(
+      repo,
+      { colour: "red", serial: "A1" },
+      { colour: "blue", serial: null },
+      { colour: "red", serial: "A1" },
+    )) as [DedupEntity<Box>, DedupEntity<Box>, DedupEntity<Box>]
+
+    await walk(repo, links, { size: 2, tell: true })
+
+    expect(repo.merges).toHaveLength(1)
+    expect(repo.merges[0]?.into).toBe(first.id)
+    expect(repo.entities.map((row) => row.id)).toEqual([first.id, second.id])
+  })
+
+  it("keeps the older row when the newer one finds it from a later page", async () => {
+    // The asymmetric version: only the newer row can see the older one, so the
+    // merge is decided on page two, and a row the walk already passed is older.
+    // A serial here finds any red box, and a colour finds nothing — so the red
+    // box without a serial has no key that answers, and the one with it does.
+    const repo = new MemoryEntityRepo<Box>({
+      matches: (key, entity) => key.kind === SERIAL && entity.colour === "red",
+    })
+    const [first, , third] = (await stored(
+      repo,
+      { colour: "red", serial: null },
+      { colour: "blue", serial: null },
+      { colour: "red", serial: "A1" },
+    )) as [DedupEntity<Box>, DedupEntity<Box>, DedupEntity<Box>]
+
+    await walk(repo, new MemoryEntityLinks(), { size: 2, tell: true })
+
+    expect(repo.merges).toEqual([{ into: first.id, from: third.id }])
+  })
+
+  it("merges the older row away when the walk does not say what it passed", async () => {
+    // The failure the option exists for, pinned so that it stays visible: the
+    // stage's default is the single-page premise, and a paging caller that
+    // forgets to pass `earlier` gets exactly the inversion P2.4 fixed within a
+    // page, back again across pages.
+    const repo = boxRepo()
+    const links = new MemoryEntityLinks()
+    const [first, , third] = (await stored(
+      repo,
+      { colour: "red", serial: "A1" },
+      { colour: "blue", serial: null },
+      { colour: "red", serial: "A1" },
+    )) as [DedupEntity<Box>, DedupEntity<Box>, DedupEntity<Box>]
+
+    await walk(repo, links, { size: 2, tell: false })
+
+    expect(repo.merges).toEqual([{ into: third.id, from: first.id }])
+  })
+
+  it("moves the newer row's evidence onto the older one across pages", async () => {
+    const repo = boxRepo()
+    const links = new MemoryEntityLinks()
+    const [first, , third] = (await stored(
+      repo,
+      { colour: "red", serial: "A1" },
+      { colour: "blue", serial: null },
+      { colour: "red", serial: "A1" },
+    )) as [DedupEntity<Box>, DedupEntity<Box>, DedupEntity<Box>]
+    links.addEvidence("boxes", third.id)
+    links.addEvidence("boxes", first.id)
+
+    await walk(repo, links, { size: 1, tell: true })
+
+    expect(links.evidence.map((row) => row.entityId)).toEqual([first.id, first.id])
+  })
+})
+
+/**
  * The page the stage is handed, which is the caller's to read.
  *
  * Here rather than beside the score stage, because the failure this contract is
