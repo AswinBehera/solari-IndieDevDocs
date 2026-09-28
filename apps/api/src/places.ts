@@ -67,3 +67,30 @@ export function placesRoutes(deps: PlacesDeps) {
 
   return routes
 }
+
+/** A slash menu's worth: the editor shows these under the cursor, not in a grid. */
+export const SEARCH_LIMIT = 8
+
+/**
+ * `GET /places?q=` — what `/place` in the Trip Document searches (P4.2).
+ *
+ * A product route rather than a Lab one, because the editor is the product. It
+ * returns the card's shape, meter and quote included, since the plan wants the
+ * local/tourist meter visible in the results; eight of them is well inside the
+ * budget the grid above measured thirty against.
+ */
+export function placeSearchRoutes(deps: PlacesDeps) {
+  const routes = new Hono<{ Bindings: Record<string, unknown> }>()
+  routes.use("*", requireAuth(deps.verifier))
+
+  routes.get("/", async (c) => {
+    const q = (c.req.query("q") ?? "").trim()
+    if (q.length === 0 || q.length > 80) {
+      throw new HTTPException(400, { message: "q must be between 1 and 80 characters" })
+    }
+    const rows = await deps.reader(c.env).search(q, SEARCH_LIMIT)
+    return c.json({ places: rows.map((r) => ({ place: r.place, evidence: r.quote })) })
+  })
+
+  return routes
+}

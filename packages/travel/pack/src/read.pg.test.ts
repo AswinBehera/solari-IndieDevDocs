@@ -217,6 +217,34 @@ describe.runIf(hasDb)("the places reader", () => {
     expect(row?.place.evidenceCount).toBe(0)
   })
 
+  it("finds a place by its roman name, in any case", async () => {
+    const id = await place("Rung Rueang", local(0.8))
+    await place("Jay Fai", local(0.9))
+    const rows = await reader().search("rung", 10)
+    expect(rows.map((r) => r.place.id)).toEqual([id])
+  })
+
+  it("finds a place by its Thai name", async () => {
+    const [row] = await d()
+      .insert(places)
+      .values({ canonicalName: "Jok Prince", localName: "โจ๊กปรินซ์", city: "Bangkok" })
+      .returning({ id: places.id })
+    const rows = await reader().search("ปรินซ์", 10)
+    expect(rows.map((r) => r.place.id)).toEqual([row?.id])
+  })
+
+  it("puts the stronger local score first among matches", async () => {
+    const low = await place("Noodle A", local(0.3))
+    const high = await place("Noodle B", local(0.9))
+    const rows = await reader().search("noodle", 10)
+    expect(rows.map((r) => r.place.id)).toEqual([high, low])
+  })
+
+  it("reads % in a query as a percent sign, not a wildcard", async () => {
+    await place("Anything")
+    expect(await reader().search("%", 10)).toEqual([])
+  })
+
   it("hands back the place as the card reads it, coordinate and scores intact", async () => {
     await place("Rung Rueang", local(0.8))
     const [row] = await reader().top(10)

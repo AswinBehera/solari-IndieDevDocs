@@ -45,6 +45,11 @@ class FakeReader implements PlaceReader {
     this.asked.push(limit)
     return this.rows.slice(0, limit)
   }
+  readonly searched: string[] = []
+  async search(query: string, limit: number) {
+    this.searched.push(query)
+    return this.rows.slice(0, limit)
+  }
 }
 
 const at = new Date("2026-09-20T00:00:00Z")

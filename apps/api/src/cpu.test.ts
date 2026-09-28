@@ -178,7 +178,12 @@ const app = createApp({
   verifier,
   dispatcher: noopDispatcher,
   lab: { stores: () => ({ personas, runs, items, experiments, mentions }) },
-  places: { reader: () => ({ top: async (limit) => placeRows.slice(0, limit) }) },
+  places: {
+    reader: () => ({
+      top: async (limit) => placeRows.slice(0, limit),
+      search: async (_q, limit) => placeRows.slice(0, limit),
+    }),
+  },
 })
 
 /**
