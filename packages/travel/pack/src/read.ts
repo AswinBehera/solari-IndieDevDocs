@@ -41,6 +41,8 @@ export interface PlaceReader {
    * first — what `/place` in the Trip Document searches (P4.2).
    */
   search(query: string, limit: number): Promise<PlaceCardRow[]>
+  /** One place as the card reads it, or null. What a Postcard's REFRESH re-reads. */
+  byId(id: string): Promise<PlaceCardRow | null>
 }
 
 /** `%` and `_` are wildcards to `ilike`; a name containing either means them literally. */
@@ -96,6 +98,12 @@ export class PostgresPlaceReader implements PlaceReader {
       .orderBy(sql`coalesce((${places.scores}->'local'->>'value')::float8, 0) desc`, places.id)
       .limit(limit)
     return await this.withQuotes(rows)
+  }
+
+  async byId(id: string): Promise<PlaceCardRow | null> {
+    const rows = await this.db.select().from(places).where(eq(places.id, id))
+    const [row] = await this.withQuotes(rows)
+    return row ?? null
   }
 
   private async withQuotes(rows: (typeof places.$inferSelect)[]): Promise<PlaceCardRow[]> {

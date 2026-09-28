@@ -46,6 +46,9 @@ class FakeReader implements PlaceReader {
     return this.rows.slice(0, limit)
   }
   readonly searched: string[] = []
+  async byId(): Promise<PlaceCardRow | null> {
+    return null
+  }
   async search(query: string, limit: number) {
     this.searched.push(query)
     return this.rows.slice(0, limit)

@@ -92,5 +92,14 @@ export function placeSearchRoutes(deps: PlacesDeps) {
     return c.json({ places: rows.map((r) => ({ place: r.place, evidence: r.quote })) })
   })
 
+  /** One place, for a Postcard's REFRESH: the same shape, read again now. */
+  routes.get("/:id", async (c) => {
+    const id = c.req.param("id")
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HTTPException(404, { message: "no such place" })
+    const row = await deps.reader(c.env).byId(id)
+    if (!row) throw new HTTPException(404, { message: "no such place" })
+    return c.json({ place: row.place, evidence: row.quote })
+  })
+
   return routes
 }

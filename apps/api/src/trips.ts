@@ -1,4 +1,4 @@
-import type { TripStore } from "@dt/db/trips"
+import { EMPTY_DOCUMENT, type TripStore } from "@dt/db/trips"
 import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { z } from "zod"
@@ -31,14 +31,33 @@ export interface TripsDeps {
 /** A generous trip document is tens of kilobytes; this is an order of magnitude over that. */
 export const MAX_DOCUMENT_BYTES = 512 * 1024
 
+/**
+ * A Postcard's body. The largest honest one is a photo card carrying its own
+ * downscaled thumbnail until there is object storage to hold it instead.
+ */
+export const MAX_POSTCARD_BYTES = 256 * 1024
+
+/** The body's bytes, capped, then parsed — never trusting `content-length`. */
+async function boundedJson(
+  req: { arrayBuffer(): Promise<ArrayBuffer> },
+  max: number,
+): Promise<unknown> {
+  const raw = await req.arrayBuffer()
+  if (raw.byteLength > max) throw new HTTPException(413, { message: "body is too large" })
+  try {
+    return JSON.parse(new TextDecoder().decode(raw))
+  } catch {
+    // Falls through to the schema, which names what is missing.
+    return null
+  }
+}
+
 const isoDate = z.iso.datetime({ offset: true }).transform((s) => new Date(s))
 const geo = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) })
 const time = z.object({ start: isoDate, end: isoDate.nullable() })
 const status = z.enum(["dreaming", "planning", "travelling", "done"])
 const kind = z.enum(["place", "price", "note", "photo", "link", "checklist"])
 const state = z.enum(["fresh", "stale", "pinned"])
-
-const EMPTY_DOCUMENT = { type: "doc", content: [{ type: "paragraph" }] }
 
 const createTrip = z.object({
   title: z.string().trim().min(1).max(200),
@@ -144,16 +163,7 @@ export function tripsRoutes(deps: TripsDeps) {
   routes.put("/trips/:id/document", auth, async (c) => {
     // The bytes themselves, not `content-length`: a chunked request has no such
     // header, and a check a client can skip by omitting a header is not a check.
-    const raw = await c.req.arrayBuffer()
-    if (raw.byteLength > MAX_DOCUMENT_BYTES) {
-      throw new HTTPException(413, { message: "document is too large to save" })
-    }
-    let json: unknown = null
-    try {
-      json = JSON.parse(new TextDecoder().decode(raw))
-    } catch {
-      // Falls through to the schema, which names what is missing.
-    }
+    const json = await boundedJson(c.req, MAX_DOCUMENT_BYTES)
     const body = parse(saveDocument, json)
     const result = await deps
       .store(c.env)
@@ -169,7 +179,7 @@ export function tripsRoutes(deps: TripsDeps) {
   })
 
   routes.post("/trips/:id/postcards", auth, async (c) => {
-    const { state, ...body } = parse(createPostcard, await c.req.json().catch(() => null))
+    const { state, ...body } = parse(createPostcard, await boundedJson(c.req, MAX_POSTCARD_BYTES))
     const card = await deps
       .store(c.env)
       .addPostcard(c.get("ownerId"), c.req.param("id"), { ...body, ...(state ? { state } : {}) })
@@ -178,7 +188,7 @@ export function tripsRoutes(deps: TripsDeps) {
   })
 
   routes.patch("/postcards/:id", auth, async (c) => {
-    const patch = present(parse(patchPostcard, await c.req.json().catch(() => null)))
+    const patch = present(parse(patchPostcard, await boundedJson(c.req, MAX_POSTCARD_BYTES)))
     const card = await deps.store(c.env).updatePostcard(c.get("ownerId"), c.req.param("id"), patch)
     if (!card) throw new HTTPException(404, { message: "no such postcard" })
     return c.json({ postcard: card })

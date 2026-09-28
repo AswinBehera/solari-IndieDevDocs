@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest"
 import { createApp } from "./app.js"
 import type { Verifier } from "./auth.js"
 import { noopDispatcher } from "./dispatch.js"
-import { MAX_DOCUMENT_BYTES } from "./trips.js"
+import { MAX_DOCUMENT_BYTES, MAX_POSTCARD_BYTES } from "./trips.js"
 
 /**
  * The Trip Document's routes. What they own is validation, the status codes, and
@@ -45,6 +45,9 @@ class FakeReader implements PlaceReader {
   readonly searched: string[] = []
   async top(): Promise<PlaceCardRow[]> {
     return []
+  }
+  async byId(): Promise<PlaceCardRow | null> {
+    return null
   }
   async search(query: string): Promise<PlaceCardRow[]> {
     this.searched.push(query)
@@ -224,6 +227,15 @@ describe("postcards", () => {
   it("will not add a postcard to someone else's trip", async () => {
     const id = await created(ALICE)
     expect((await app().request(`/trips/${id}/postcards`, post(BOB, card))).status).toBe(404)
+  })
+
+  it("refuses a postcard body too large to be one", async () => {
+    const id = await created()
+    const res = await app().request(
+      `/trips/${id}/postcards`,
+      post(ALICE, { ...card, payload: { image: "x".repeat(MAX_POSTCARD_BYTES) } }),
+    )
+    expect(res.status).toBe(413)
   })
 
   it("refuses a coordinate off the planet", async () => {

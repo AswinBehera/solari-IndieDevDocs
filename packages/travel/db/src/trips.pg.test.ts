@@ -3,7 +3,7 @@ import { type DatabaseLock, lockDatabase } from "@samsara/db/testing"
 import { sql } from "drizzle-orm"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { createDb } from "./client.js"
-import { users } from "./tables.js"
+import { trips, users } from "./tables.js"
 import { type NewTrip, PostgresTripStore } from "./trips.js"
 
 /**
@@ -72,6 +72,16 @@ describe.runIf(hasDb)("the trips store", () => {
       ])
   })
 
+  it("lists and opens a trip that was written without a document", async () => {
+    const [t] = await d()
+      .insert(trips)
+      .values({ userId: ALICE, title: "Seeded", destinationCity: "Bangkok" })
+      .returning({ id: trips.id })
+    expect((await store().list(ALICE)).map((r) => r.trip.id)).toEqual([t?.id])
+    const opened = await store().get(ALICE, t?.id as string)
+    expect(opened?.document).toMatchObject({ version: 1, content: { type: "doc" } })
+  })
+
   it("knows which owners have an account", async () => {
     expect(await store().hasAccount(ALICE)).toBe(true)
     expect(await store().hasAccount(randomUUID())).toBe(false)
@@ -125,8 +135,42 @@ describe.runIf(hasDb)("the trips store", () => {
       time: null,
       sourceRefs: [],
     })
+    // Not yet in the document, so not yet counted: the document decides.
+    expect((await store().list(ALICE))[0]).toMatchObject({ postcards: 0, withGeo: 0 })
+
+    const ids = (await store().get(ALICE, t.id))?.postcards.map((p) => p.id) ?? []
+    await store().saveDocument(
+      ALICE,
+      t.id,
+      {
+        type: "doc",
+        content: ids.map((id) => ({ type: "postcard", attrs: { postcardId: id } })),
+      },
+      1,
+    )
     const [summary] = await store().list(ALICE)
     expect(summary).toMatchObject({ postcards: 2, withGeo: 1 })
+  })
+
+  it("stops counting a card the document no longer references, and keeps its row", async () => {
+    const { trip: t } = await store().create(ALICE, trip())
+    const card = await store().addPostcard(ALICE, t.id, {
+      kind: "note",
+      placeId: null,
+      payload: {},
+      geo: null,
+      time: null,
+      sourceRefs: [],
+    })
+    const withCard = {
+      type: "doc",
+      content: [{ type: "postcard", attrs: { postcardId: card?.id } }],
+    }
+    await store().saveDocument(ALICE, t.id, withCard, 1)
+    await store().saveDocument(ALICE, t.id, { type: "doc", content: [] }, 2)
+    expect((await store().list(ALICE))[0]?.postcards).toBe(0)
+    // Still there for undo.
+    expect((await store().get(ALICE, t.id))?.postcards).toHaveLength(1)
   })
 
   it("moves a postcard to a day, and only for its owner", async () => {

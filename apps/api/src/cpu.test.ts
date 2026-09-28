@@ -182,6 +182,7 @@ const app = createApp({
     reader: () => ({
       top: async (limit) => placeRows.slice(0, limit),
       search: async (_q, limit) => placeRows.slice(0, limit),
+      byId: async () => placeRows[0] ?? null,
     }),
   },
 })

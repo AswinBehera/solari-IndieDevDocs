@@ -1,4 +1,14 @@
-import type { Geo, Postcard, PostcardKind, PostcardState, Trip, TripStatus } from "@dt/core"
+import {
+  type Geo,
+  POSTCARD_ATTR,
+  POSTCARD_NODE,
+  type Postcard,
+  type PostcardKind,
+  type PostcardState,
+  postcardIdsIn,
+  type Trip,
+  type TripStatus,
+} from "@dt/core"
 import { and, desc, eq, sql } from "drizzle-orm"
 import type { Db } from "./client.js"
 import { documents, postcards, trips, users } from "./tables.js"
@@ -93,6 +103,12 @@ export interface TripStore {
   deletePostcard(ownerId: string, postcardId: string): Promise<boolean>
 }
 
+/** What a trip's document is before anyone has typed into it. */
+export const EMPTY_DOCUMENT = { type: "doc", content: [{ type: "paragraph" }] }
+
+/** `postcardIdsIn`, as jsonpath. */
+const REFERENCED_PATH = `strict $.** ? (@.type == "${POSTCARD_NODE}").attrs.${POSTCARD_ATTR}`
+
 type TripRow = typeof trips.$inferSelect
 type PostcardRow = typeof postcards.$inferSelect
 
@@ -134,17 +150,29 @@ export class PostgresTripStore implements TripStore {
     return row !== undefined
   }
 
+  /**
+   * The counts are of Postcards the document references, not of rows.
+   *
+   * A card removed from the text keeps its row so that undo can bring it back
+   * (`postcardIdsIn` in `@dt/core` says why), which means a plain `count(*)`
+   * would keep counting cards the traveller deleted. The same rule in SQL: a
+   * jsonpath over the document's JSON for every `postcard` node's id. `strict`
+   * rather than `lax`, because lax `.**` visits each array and its elements both
+   * and returns every id twice.
+   */
   async list(ownerId: string): Promise<TripSummary[]> {
+    const referenced = sql`(select jsonb_array_elements_text(jsonb_path_query_array(${documents.content}, ${REFERENCED_PATH}::jsonpath)))`
     const rows = await this.db
       .select({
         trip: trips,
-        postcards: sql<number>`count(${postcards.id})::int`,
-        withGeo: sql<number>`count(${postcards.lat})::int`,
+        postcards: sql<number>`(select count(*)::int from ${postcards} where ${postcards.tripId} = ${trips.id} and ${postcards.id}::text in ${referenced})`,
+        withGeo: sql<number>`(select count(*)::int from ${postcards} where ${postcards.tripId} = ${trips.id} and ${postcards.lat} is not null and ${postcards.id}::text in ${referenced})`,
       })
       .from(trips)
-      .leftJoin(postcards, eq(postcards.tripId, trips.id))
+      // Left, not inner: a trip written by something other than `create` — the dev
+      // seed, a hand INSERT — may have no document yet, and should still be listed.
+      .leftJoin(documents, eq(documents.tripId, trips.id))
       .where(eq(trips.userId, ownerId))
-      .groupBy(trips.id)
       .orderBy(desc(trips.updatedAt), trips.id)
     return rows.map((r) => ({ trip: toTrip(r.trip), postcards: r.postcards, withGeo: r.withGeo }))
   }
@@ -180,9 +208,22 @@ export class PostgresTripStore implements TripStore {
     const [row] = await this.db
       .select({ trip: trips, document: documents })
       .from(trips)
-      .innerJoin(documents, eq(documents.tripId, trips.id))
+      .leftJoin(documents, eq(documents.tripId, trips.id))
       .where(and(eq(trips.id, tripId), eq(trips.userId, ownerId)))
     if (!row) return null
+    // A trip with no document gets an empty one the first time it is opened, rather
+    // than a 404 for a trip the list just showed. `create` never leaves one without.
+    const document =
+      row.document ??
+      (
+        await this.db
+          .insert(documents)
+          .values({ tripId, content: EMPTY_DOCUMENT })
+          .onConflictDoNothing()
+          .returning()
+      )[0] ??
+      (await this.db.select().from(documents).where(eq(documents.tripId, tripId)))[0]
+    if (!document) return null
     const cards = await this.db
       .select()
       .from(postcards)
@@ -191,9 +232,9 @@ export class PostgresTripStore implements TripStore {
     return {
       trip: toTrip(row.trip),
       document: {
-        content: row.document.content,
-        version: row.document.version,
-        updatedAt: row.document.updatedAt,
+        content: document.content,
+        version: document.version,
+        updatedAt: document.updatedAt,
       },
       postcards: cards.map(toPostcard),
     }
@@ -343,7 +384,10 @@ export class MemoryTripStore implements TripStore {
       .filter((t) => t.userId === ownerId)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
       .map((trip) => {
-        const cards = [...this.postcards.values()].filter((p) => p.tripId === trip.id)
+        const referenced = new Set(postcardIdsIn(this.documents.get(trip.id)?.content))
+        const cards = [...this.postcards.values()].filter(
+          (p) => p.tripId === trip.id && referenced.has(p.id),
+        )
         return { trip, postcards: cards.length, withGeo: cards.filter((p) => p.geo).length }
       })
   }
