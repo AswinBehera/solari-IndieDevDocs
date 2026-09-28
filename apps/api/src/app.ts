@@ -10,7 +10,8 @@ import { streamSSE } from "hono/streaming"
 import { requireAuth, type Verifier } from "./auth.js"
 import type { Dispatcher } from "./dispatch.js"
 import { type LabDeps, labRoutes } from "./lab.js"
-import { type PlacesDeps, placesRoutes } from "./places.js"
+import { type PlacesDeps, placeSearchRoutes, placesRoutes } from "./places.js"
+import { type TripsDeps, tripsRoutes } from "./trips.js"
 
 /**
  * The API (ADR-0014: Hono on Cloudflare Workers, free plan).
@@ -40,8 +41,10 @@ export interface AppDeps {
    * 404 on `/lab/*` rather than 500 on the first read.
    */
   lab?: Omit<LabDeps, "verifier" | "jobs">
-  /** The Place Postcard grid's read (P2.7). Optional for the reason `lab` is. */
+  /** The Place Postcard grid's read (P2.7), and `/place`'s search. Optional for the reason `lab` is. */
   places?: Omit<PlacesDeps, "verifier">
+  /** Trips, documents and Postcards (P4.1). Optional for the reason `lab` is. */
+  trips?: Omit<TripsDeps, "verifier">
   /** Injectable for tests; production gets the defaults. */
   clock?: () => number
   sleep?: (ms: number) => Promise<void>
@@ -188,6 +191,10 @@ export function createApp(deps: AppDeps) {
   // middleware never runs. `places.test.ts` counts the verifications.
   if (deps.places) {
     app.route("/lab/places", placesRoutes({ ...deps.places, verifier: deps.verifier }))
+    app.route("/places", placeSearchRoutes({ ...deps.places, verifier: deps.verifier }))
+  }
+  if (deps.trips) {
+    app.route("/", tripsRoutes({ ...deps.trips, verifier: deps.verifier }))
   }
   if (deps.lab) {
     app.route("/lab", labRoutes({ ...deps.lab, verifier: deps.verifier, jobs: deps.jobs }))

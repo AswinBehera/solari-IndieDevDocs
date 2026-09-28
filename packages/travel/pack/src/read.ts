@@ -1,7 +1,7 @@
 import type { Place, PlaceCategory } from "@dt/core"
 import { evidence, places } from "@dt/db"
 import type { ScoreSet } from "@samsara/core"
-import { and, eq, inArray, sql, type TablesRelationalConfig } from "drizzle-orm"
+import { and, eq, ilike, inArray, or, sql, type TablesRelationalConfig } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 
 /**
@@ -36,7 +36,15 @@ export interface PlaceCardRow {
 export interface PlaceReader {
   /** The strongest local scores first, at most `limit` of them. */
   top(limit: number): Promise<PlaceCardRow[]>
+  /**
+   * Places whose local or roman name contains `query`, strongest local score
+   * first — what `/place` in the Trip Document searches (P4.2).
+   */
+  search(query: string, limit: number): Promise<PlaceCardRow[]>
 }
+
+/** `%` and `_` are wildcards to `ilike`; a name containing either means them literally. */
+const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`)
 
 // The same widening `./postgres` uses, so a caller holding any drizzle Postgres
 // database — postgres-js on the worker, Hyperdrive's on the API — can pass it.
@@ -70,6 +78,27 @@ export class PostgresPlaceReader implements PlaceReader {
       .from(places)
       .orderBy(sql`coalesce((${places.scores}->'local'->>'value')::float8, 0) desc`, places.id)
       .limit(limit)
+    return await this.withQuotes(rows)
+  }
+
+  /**
+   * `ilike` on both names, not trigram: `places` has no trigram index, and at the
+   * size the table is (hundreds, a city's worth) a scan answers faster than the
+   * index would be worth maintaining. Thai has no case, so `ilike` is only doing
+   * work on the roman name, which is the one people type.
+   */
+  async search(query: string, limit: number): Promise<PlaceCardRow[]> {
+    const pattern = `%${escapeLike(query.trim())}%`
+    const rows = await this.db
+      .select()
+      .from(places)
+      .where(or(ilike(places.canonicalName, pattern), ilike(places.localName, pattern)))
+      .orderBy(sql`coalesce((${places.scores}->'local'->>'value')::float8, 0) desc`, places.id)
+      .limit(limit)
+    return await this.withQuotes(rows)
+  }
+
+  private async withQuotes(rows: (typeof places.$inferSelect)[]): Promise<PlaceCardRow[]> {
     if (rows.length === 0) return []
 
     const ids = rows.map((row) => row.id)
