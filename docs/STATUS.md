@@ -3,12 +3,13 @@
 Phase: 2 — in progress. Phase 1's acceptance week is **still draining** (six of seven days queued,
 day 0 at 60.0%), and Phase 0 is **complete, pending the gate** (below; the gate is a human review
 and does not block buildable work).
-Last completed: **P2.7, and the chain from extraction to score** (28 September 2026).
-1,246 tests across the repo, seam allowances **0 of 5** across 176 files: **1,221 passing under
-`turbo run test` plus 25 under `test:tools`, with one live test skipped**, measured end to end by
-`pnpm check` on 28 September against a local Postgres 16. That is 56 more than P2.5's 1,190.
-`pnpm check` truncates `osm_places`, so the extract has to be reloaded after every run (the
-command is at the bottom of the P2.3 entry).
+Last completed: **the Phase 4 front end — the Trip Document, its map, timeline and share link —
+built ahead of the Phase 2 gate at Aswin's request** (28 September 2026).
+1,370 tests across the repo, seam allowances **0 of 5** across 176 files: **1,345 passing under
+`turbo run test` plus 25 under `test:tools`, with one live test skipped**, measured by `pnpm test`
+and `pnpm test:tools` on 28 September against a local Postgres 16. 180 more than the 1,190 this
+session started from. `pnpm check` truncates `osm_places`, so the extract has to be reloaded
+after every run (the command is at the bottom of the P2.3 entry).
 
 **Sixteen billed sessions, about 7.8 minutes of 4,000.** P2.2 spent three of them harvesting the
 golden corpus — roughly 3.4 minutes, and that figure is softer than the ones below it: it is
@@ -28,6 +29,62 @@ Pantip sessions was waste and is counted as such**: the first run was piped to `
 not stop the capture — it had already opened the browser and billed — and it was then re-run to see
 the head of the output. The pipe cost 0.4584 minutes and produced nothing. Reading a recorder's
 output through `tail` is not free, because the spend happens before the bytes reach the pipe.
+
+## The front end — Phase 4's document, built before Phase 2's gate
+
+28 September 2026, the same session as the entry below. **Out of the plan's order, on purpose:**
+section 5 says not to start a phase before the previous gate, and the Phase 2 gate is a review of
+real places that cannot happen until a week of harvests has gone through the chain on hosted.
+Aswin asked for the front-end work to go ahead meanwhile, with decisions collected and asked
+afterwards, one at a time. Those decisions are listed in HANDOFF.md; every one of them has a
+default in the code, chosen to be the reversible one. **Zero billed sessions, zero tokens.**
+
+What exists now, all read off the design canvas (`docs/design`), all driven end to end in headless
+Chromium against the real API (`wrangler dev`) on local Postgres:
+
+- **The app shell** (TanStack Router, ADR-0002): the canvas's top bar and status strip. The strip
+  carries P0.6's API health check until something reports kernel sessions.
+- **Trips Home and onboarding (P6.1's flow, not its auth).** Three questions build one sentence;
+  the interests become the document's first line rather than a column, so P4.3 reads them as prose.
+  Sign-up is not built: a login with no `users` row gets a 403 that says so, and `pnpm db:seed`
+  makes the dev one.
+- **The Trip Document (P4.1, P4.2).** Tiptap with one custom node, `postcard`, which references a
+  Postcard row by id and draws it from `@dt/ui`. Autosave is debounced, sends the version it
+  loaded, keeps one save in flight, and **stops on a 409** rather than overwriting another tab.
+  "Day N" headings get their date as a decoration. The `/` menu: `/place` searches the table by
+  name, strongest local score first, with the meter in the results; `/note`, `/checklist`,
+  `/link`, `/price`, `/photo`. A place card is a **snapshot** with REFRESH and PIN (§6.2). A
+  photo's EXIF coordinate and time become its pin and day, read by a small JPEG reader written
+  here because no EXIF library is on PLAN §4's list; the wall-clock time is kept, not converted,
+  because a trip's days are the days on the ground.
+- **The document decides which Postcards exist.** A card deleted from the text keeps its row, so
+  undo works, and stops being counted, mapped or shared. `postcardIdsIn` in `@dt/core` is the rule;
+  the trips list applies it in SQL with a `strict` jsonpath (lax `.**` returns every id twice).
+- **Map (P4.4)** on the canvas's midnight plane, pins clustered in screen space, a click scrolls
+  the document to the card. **No basemap yet**: ADR-0018's PMTiles extract, fonts and sprites are
+  not hosted, and MapLibre cannot draw text without a glyph server, so pins are HTML markers. Two
+  bugs found by looking rather than testing: MapLibre 6's worker URL breaks under Vite's
+  pre-bundling (fixed with `?worker&url`), and MapLibre puts `position: relative` on its container,
+  which collapsed an `absolute inset-0` container to zero height and clipped every pin.
+- **Timeline (P4.5)**: by day — a card's own time first, else the "Day N" heading above it, shown
+  as derived — and dragging writes the day onto the Postcard.
+- **Share link (P4.8)**: migration 0012 adds `trips.share_token`. `/s/:token` is the same document
+  with editing off, no owner id, only referenced cards, outside the app shell. Stopping clears the
+  token; sharing again mints a new one.
+- **`/lab/places`** now leads with the acceptance numbers, filters by category on the server, and
+  carries real/wrong marks with the gate's rule on one line ("4 of 30 wrong · the gate allows 10").
+- **Paper (P4.9's feel, not its full pass):** each card tilts by a hash of its id, so it never
+  twitches on re-render, and straightens on hover.
+
+**Measured, not assumed:** `/lab/places` is capped at thirty because each place carries its
+receipts and `cpu.test.ts` put two hundred at 22 ms of CPU against the 10 ms ceiling. The editor
+and MapLibre are a lazy route chunk; the rest of the app ships 398 kB (124 kB gzipped).
+
+**Not built, and said so in the UI rather than faked:** link-to-Place conversion (P4.7), Hundred
+Eyes (Phase 3 — the Price Postcard is its pending state), intent parsing (P4.3), the nightly daemon
+the canvas's copy promises (P5.2), the kernel dashboard (P5.5), photo upload to object storage.
+
+**Before any of this reaches `main`, hosted Postgres needs migrations 0011 and 0012.**
 
 ## P2.7 and the chain — the pipeline runs itself, and the page reads what it wrote
 
