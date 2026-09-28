@@ -3,13 +3,12 @@
 Phase: 2 — in progress. Phase 1's acceptance week is **still draining** (six of seven days queued,
 day 0 at 60.0%), and Phase 0 is **complete, pending the gate** (below; the gate is a human review
 and does not block buildable work).
-Last completed: **P2.5 — the score stage, and the table it had to be given first**.
-1,190 tests across the repo, seam allowances **0 of 5** across 176 files. Measured on P2.4's
-basis: **1,165 passing under `turbo run test` plus 25 under `test:tools`, with one live test
-skipped.** That is 80 more than P2.4's 1,110, not the 105 the session that wrote P2.5 carried
-forward without running the suite end to end; the per-package split it quoted is not repeated
-here because nothing checked it. `pnpm check` truncates `osm_places`, so the extract has to be
-reloaded after every run (the command is at the bottom of the P2.3 entry).
+Last completed: **P2.7, and the chain from extraction to score** (28 September 2026).
+1,246 tests across the repo, seam allowances **0 of 5** across 176 files: **1,221 passing under
+`turbo run test` plus 25 under `test:tools`, with one live test skipped**, measured end to end by
+`pnpm check` on 28 September against a local Postgres 16. That is 56 more than P2.5's 1,190.
+`pnpm check` truncates `osm_places`, so the extract has to be reloaded after every run (the
+command is at the bottom of the P2.3 entry).
 
 **Sixteen billed sessions, about 7.8 minutes of 4,000.** P2.2 spent three of them harvesting the
 golden corpus — roughly 3.4 minutes, and that figure is softer than the ones below it: it is
@@ -29,6 +28,95 @@ Pantip sessions was waste and is counted as such**: the first run was piped to `
 not stop the capture — it had already opened the browser and billed — and it was then re-run to see
 the head of the output. The pipe cost 0.4584 minutes and produced nothing. Reading a recorder's
 output through `tail` is not free, because the spend happens before the bytes reach the pipe.
+
+## P2.7 and the chain — the pipeline runs itself, and the page reads what it wrote
+
+28 September 2026. Four things, in the order they depended on each other. **Zero billed sessions,
+zero tokens.**
+
+**1. Dedup inverted its own survivor rule the moment anything paged it.** P2.4's stage decides
+which of two duplicates survives from where the match sits in the page, and assumed that a match
+*outside* the page was older — true when the page is the whole table, which is how every one of
+its tests called it. A job that walks the table oldest-first breaks that in the common case: two
+duplicates written weeks apart sit on different pages, the older is reached first, finds the newer
+outside its page, and was merged *into* it. `DedupOptions.earlier` now carries the ids of the pages
+already walked; a match in neither the page nor that set is on a page not read yet, and newer. Absent,
+the single-page premise stands, so no existing caller changed. Reproduced before fixing, in three
+places: the stage over the memory repo, the job handler, and `PostgresPlaceRepo` over a real keyset —
+each fails without the set and passes with it. The seam: this is a generic engine fix with no pack in
+it, so it is not a P2.8 contract change.
+
+**2. `refine.dedup` is a job.** P2.4 built the stage and nothing ran it. The handler is shaped like
+`refine.score`: domain-scoped, keyset-paged, capped at a hundred pages with the cap reported rather
+than thrown. One difference is worth knowing. **A cancelled walk throws**, because the runner marks a
+normal return `succeeded` whatever the signal says, and only a throw under an aborted signal releases
+the job without charging an attempt — a walk cut off at page three must not be recorded as finished.
+`refine.resolve` and `refine.score` both return normally on abort and are therefore marked succeeded
+when cut; for them that is survivable (the next chain drains or rescores everything), so it is
+recorded here and not changed.
+
+**3. The chain: extract → resolve → dedup → score, with nothing enqueued by hand after the harvest.**
+The handoff's first open item. `chain.ts` holds the one rule: the stage that finishes queues the next
+one the pack declares — no `resolve` spec stops after extraction, no `dedupKeys` goes from resolve
+straight to score, no `score` spec stops after dedup. Three decisions:
+
+- **The window is the upstream job's id, not the harvest run's.** `resolveJobKey`'s comment suggested
+  the run id; `refine.extract`'s own key carries the pack version, so bumping it extracts a run twice,
+  and a resolve keyed on the run would collide with the first extraction's *succeeded* row and never
+  run. A job id is one per upstream job and stable across its retries.
+- **A failed enqueue is logged, not fatal.** Stronger than the harvest chain's argument: resolve,
+  dedup and score are all domain-scoped, so any later link covers a missed one.
+- **Resolve chains only when it wrote an entity or a receipt** — every extraction queues a resolve,
+  most find the queue already drained, and dedup and score each walk the whole table. **Except on a
+  retry**, whose first attempt may have committed the work and died before chaining.
+
+`tools/backfill-refine.ts` is unchanged in what it does and now says what follows it.
+
+**Run end to end against local Postgres**, with the real runner (`apps/worker/src/index.ts`): three
+Thai forum items with Google Maps links, three pending travel mentions, one `refine.resolve` queued
+by hand. The runner drained **resolve → dedup → score, 3 claimed, 3 succeeded, 362 ms**: two places
+pinned by Tier 0, one written `unresolvable` with no coordinate, three evidence rows, `local` and
+`tourist` written to all three (0.72 and 0.69 for the two Thonglor noodle shops, 0.02 local / 0.80
+tourist for the "Top 10 must-try" caption). **It also produced a finding:** those two noodle shops
+are one shop — `ก๋วยเตี๋ยวเรือทองหล่อ` and `ร้านก๋วยเตี๋ยวเรือทองหล่อ`, pinned 5.5 m apart — and dedup
+did not merge them, because the geo key compares normalised names exactly and `ร้าน` ("shop")
+survives normalisation. Not fixed: which names are the same place is the merge policy, and the
+obvious fix welds "Thep Thai" to "P Thai" through the `the` opener. **Q17.**
+
+**4. P2.7 finished: `/lab/places` reads the table.** The page was built on a fixed sample because
+no `places` row existed; the Phase 2 gate is a review of the real top thirty, so it now reads them.
+
+- **`GET /lab/places`** in `apps/api/src/places.ts`, its own file and mount because `lab.ts` holds a
+  rule that no noun in the Persona Lab is a place. **Registered before `/lab`**, because the Lab's
+  `use("*")` would otherwise match it too and verify every token twice against the 10 ms ceiling;
+  a test counts the verifications and fails with the order swapped.
+- **`PostgresPlaceReader`** in `@dt/travel-pack/read`, a separate entry point so the Worker bundle
+  takes two tables and the query builder and nothing that reaches the prompt. Two queries: the top N
+  by `scores.local` (unscored reads as zero, the card grid's own rule), then one `DISTINCT ON` over
+  those ids for the newest quoted claim with a window count riding along.
+- **`places.evidence_count` is not maintained by anything**, which is worth knowing beyond this page:
+  the repo inserts it at zero, only a merge adds to it, and evidence is written by the engine, which
+  has never heard of the column. Every real place would have shown "no evidence" beside a quote. The
+  reader counts evidence rows instead.
+- **The page is thirty, and that is a measurement.** Each place carries its explanations with their
+  receipts — eight factors, up to twenty evidence ids each, about 8 KB of JSON — and `cpu.test.ts`
+  measured 22 ms for two hundred, 6.4 ms for sixty and **3.3 ms for thirty**, against the 5 ms
+  budget. Thirty is also what the gate reads. A longer grid is a cursor.
+- **The sample moved to `/lab/places?sample`**, so invented scores are never on screen beside
+  measured ones and an empty table says it is empty.
+
+Checked in a browser, not only in tests: `wrangler dev` (workerd, so the new import is proven to
+bundle for Workers) against the seeded rows, Vite in front, headless Chromium screenshots of the
+live grid, the sample and the empty state. 401 without a token, 400 on `?limit=abc`.
+
+**Tests:** +56 — `@samsara/refine` 4, `@dt/worker` 28, `@dt/travel-pack` 9, `@dt/api` 12, and
+`@dt/web`'s first 3. `@dt/api` gained a workspace dependency on `@dt/travel-pack`; no new external
+package.
+
+**Before this is merged to `main`, migration 0011 has to be on hosted.** The worker runs from
+`main` on a cron against hosted Postgres, and until now nothing enqueued `refine.resolve` there. From
+the merge on, every extraction chains one, and resolve writes `evidence.mention_id` — a column
+hosted does not have. `pnpm db:migrate:hosted` first.
 
 ## P2.5 — the score stage, and the table it had to be given first
 
