@@ -240,6 +240,13 @@ describe.runIf(hasDb)("the places reader", () => {
     expect(rows.map((r) => r.place.id)).toEqual([high, low])
   })
 
+  it("reads one place by id, with its quote, and nothing for an unknown id", async () => {
+    const id = await place("Rung Rueang", local(0.8))
+    await claim(id, { quote: "อร่อย" })
+    expect((await reader().byId(id))?.quote?.quote).toBe("อร่อย")
+    expect(await reader().byId(randomUUID())).toBeNull()
+  })
+
   it("reads % in a query as a percent sign, not a wildcard", async () => {
     await place("Anything")
     expect(await reader().search("%", 10)).toEqual([])

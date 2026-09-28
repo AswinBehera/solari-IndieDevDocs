@@ -1,5 +1,6 @@
 import { createDb } from "./client.js"
-import { trips, users } from "./tables.js"
+import { documents, trips, users } from "./tables.js"
+import { EMPTY_DOCUMENT } from "./trips.js"
 
 /**
  * Local development seed: one user, one trip. Idempotent, so `pnpm db:seed` twice is
@@ -41,6 +42,12 @@ async function main() {
       endDate: new Date("2026-11-09T00:00:00.000Z"),
       status: "planning",
     })
+    .onConflictDoNothing()
+
+  // Every trip has its document; `TripStore.create` writes both, so the seed does too.
+  await db
+    .insert(documents)
+    .values({ tripId: DEV_TRIP_ID, content: EMPTY_DOCUMENT })
     .onConflictDoNothing()
 
   const allUsers = await db.select().from(users)
