@@ -217,6 +217,23 @@ describe.runIf(hasDb)("the places reader", () => {
     expect(row?.place.evidenceCount).toBe(0)
   })
 
+  it("filters the top by category", async () => {
+    await place("Noodles", local(0.9))
+    const [row] = await d()
+      .insert(places)
+      .values({ canonicalName: "Wat Pho", city: "Bangkok", category: "temple", scores: local(0.5) })
+      .returning({ id: places.id })
+    expect((await reader().top(10, "temple")).map((r) => r.place.id)).toEqual([row?.id])
+  })
+
+  it("counts what Phase 2's acceptance counts", async () => {
+    await place("Strong", local(0.8))
+    await place("Exactly the line", local(0.7))
+    await d().insert(places).values({ canonicalName: "Unpinned", city: "Bangkok" })
+    // Above 0.7, not at it; and `place()` gives every row a coordinate but the last.
+    expect(await reader().summary()).toEqual({ total: 3, withGeo: 2, strong: 1 })
+  })
+
   it("finds a place by its roman name, in any case", async () => {
     const id = await place("Rung Rueang", local(0.8))
     await place("Jay Fai", local(0.9))

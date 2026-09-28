@@ -15,14 +15,23 @@ import { api } from "../api"
 type DateField = "firstSeenAt" | "lastSeenAt" | "createdAt" | "updatedAt"
 export type WirePlace = Omit<Place, DateField> & Record<DateField, string>
 
+/** The numbers Phase 2's acceptance is written in; absent from older API builds. */
+export interface PlaceSummary {
+  total: number
+  withGeo: number
+  strong: number
+}
+
 export interface PlacesResponse {
   places: { place: WirePlace; evidence: CardEvidence | null }[]
+  summary?: PlaceSummary
 }
 
 export interface PlaceGridData {
   places: Place[]
   /** Quote per place id, the shape `PlaceGrid` takes. */
   evidence: Record<string, CardEvidence>
+  summary: PlaceSummary | null
 }
 
 /** One place off the wire, its four timestamps turned back into dates. */
@@ -43,14 +52,17 @@ export function fromWire(body: PlacesResponse): PlaceGridData {
     places.push(placeFromWire(row.place))
     if (row.evidence) evidence[row.place.id] = row.evidence
   }
-  return { places, evidence }
+  return { places, evidence, summary: body.summary ?? null }
 }
 
-/** Fetched once per visit: nothing here polls, for ADR-0016's Hyperdrive reason. */
-export function usePlaces() {
+/** Fetched once per visit and category: nothing here polls, for ADR-0016's Hyperdrive reason. */
+export function usePlaces(category: string | null = null) {
   return useQuery({
-    queryKey: ["lab", "places"] as const,
-    queryFn: () => api<PlacesResponse>("/lab/places"),
+    queryKey: ["lab", "places", category] as const,
+    queryFn: () =>
+      api<PlacesResponse>(
+        category ? `/lab/places?category=${encodeURIComponent(category)}` : "/lab/places",
+      ),
     select: fromWire,
   })
 }
