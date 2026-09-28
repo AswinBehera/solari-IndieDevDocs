@@ -431,3 +431,47 @@ Two things need ruling at the same time:
   force-close. The LLM equivalent is aborting the request so the socket closes; if it
   is left to garbage collection, a timed-out call keeps streaming tokens we are still
   billed for and the meter under-reads.
+
+## Q17 — dedup does not merge "X" and "ร้านX" at the same coordinate  [OPEN]
+
+Raised 2026-09-28 (Claude Code), out of the first end-to-end run of the refine chain
+against local Postgres.
+
+Three pending mentions from three items, two of them the same shop: one caption named
+`ก๋วยเตี๋ยวเรือทองหล่อ`, the other `ร้านก๋วยเตี๋ยวเรือทองหล่อ` — the same name with
+`ร้าน` ("shop") in front — and each carried a Google Maps link. Tier 0 pinned both,
+5.5 metres apart. The resolve cache keys them separately (the keys are normalised
+names, and `ร้าน` survives normalisation), so resolve wrote two places. Dedup then
+examined both and merged neither: `0 merged of 3 (3 examined, 1 keyless)`.
+
+The reason is `placeDedupKeys`' geo key. It compares *normalised* spellings for exact
+equality within 150m, and the opener is part of the normalised string. Tier 0 already
+knows these are the same name — `nameAgreement` in `tier0.ts` strips the same openers
+and scores the pair 0.9 — but dedup does not use that rule.
+
+For the Phase 2 gate this matters more than its size suggests. The gate is a human
+reading the top thirty, and two cards for one shop, both near the top because the same
+local evidence made them both, is exactly what a reader flags as "the pipeline is
+wrong".
+
+**Options I see:**
+
+a. Add the opener-stripped form to both sides of the geo key — `spellings()` in
+   `dedup.ts` and the row names in `PostgresPlaceRepo.byGeo`, through one exported
+   function so the two cannot drift. Small, and it reuses a rule the resolver already
+   applies. **The catch is in `OPENERS` itself:** it runs on text with spaces already
+   removed, and it contains `the`, `cafe`, `restaurant` and `โรงแรม` ("hotel"). So
+   "Thep Thai" normalises to `thepthai` and strips to `pthai`; a hotel and its
+   restaurant with the same name 100m apart would merge. Taken as-is, (a) trades one
+   visible duplicate for rare invisible welds, and a weld is the unrecoverable kind.
+b. (a), restricted to the Thai openers (`ร้านอาหาร`, `ร้านกาแฟ`, `ร้าน`, `คาเฟ่`) and
+   without `โรงแรม`. Catches the case this run produced, and every excluded opener
+   is one whose false positive is worse than its miss.
+c. Strip openers in the resolve cache key instead, so the two mentions share a key
+   and never become two places. Cheaper per run, but it changes resolution for every
+   key already cached, and P2.4's write-up is explicit that a change to how names
+   normalise is a change to resolution with its own golden set.
+d. Leave it and let the gate review count the duplicates first.
+
+My lean is (b). It is not done in this session because which names are "the same
+place" is the merge policy, and a merge moves evidence irreversibly.
