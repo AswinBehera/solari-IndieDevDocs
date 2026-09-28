@@ -1,10 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { RouterProvider } from "@tanstack/react-router"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-import { App } from "./App"
 import "./index.css"
-import { Lab } from "./lab/Lab"
-import { Places } from "./places/Places"
+import { router } from "./router"
 
 // TanStack Query is the only cache layer (ADR-0002): no second state library.
 const queryClient = new QueryClient({
@@ -22,33 +21,10 @@ const queryClient = new QueryClient({
 const root = document.getElementById("root")
 if (!root) throw new Error("#root is missing from index.html")
 
-/**
- * A pathname switch, not a router.
- *
- * There are two pages: the P0.6 dev shell and the Persona Lab. A router is a
- * dependency, a bundle, and a set of conventions the next person has to learn, and
- * all three are bought with one decision — which of two components to render — that
- * a string comparison already makes. The travel UI in Phase 2 will have real
- * navigation and can bring a real router with it; until then this is the honest
- * shape of the problem.
- *
- * `startsWith` rather than `===` so that `/lab/` and a trailing path both land here
- * rather than falling through to the dev shell, which would look like the Lab is
- * missing.
- */
-const path = window.location.pathname
-// `/lab/places` is checked before `/lab`, because `startsWith` would otherwise
-// swallow it into the Persona Lab — which is precisely the page it is not.
-const page = path.startsWith("/lab/places") ? (
-  <Places />
-) : path.startsWith("/lab") ? (
-  <Lab />
-) : (
-  <App />
-)
-
 createRoot(root).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>{page}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
   </StrictMode>,
 )

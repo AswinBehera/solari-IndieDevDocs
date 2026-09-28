@@ -25,19 +25,23 @@ export interface PlaceGridData {
   evidence: Record<string, CardEvidence>
 }
 
+/** One place off the wire, its four timestamps turned back into dates. */
+export function placeFromWire(p: WirePlace): Place {
+  return {
+    ...p,
+    firstSeenAt: new Date(p.firstSeenAt),
+    lastSeenAt: new Date(p.lastSeenAt),
+    createdAt: new Date(p.createdAt),
+    updatedAt: new Date(p.updatedAt),
+  }
+}
+
 export function fromWire(body: PlacesResponse): PlaceGridData {
   const places: Place[] = []
   const evidence: Record<string, CardEvidence> = {}
   for (const row of body.places) {
-    const p = row.place
-    places.push({
-      ...p,
-      firstSeenAt: new Date(p.firstSeenAt),
-      lastSeenAt: new Date(p.lastSeenAt),
-      createdAt: new Date(p.createdAt),
-      updatedAt: new Date(p.updatedAt),
-    })
-    if (row.evidence) evidence[p.id] = row.evidence
+    places.push(placeFromWire(row.place))
+    if (row.evidence) evidence[row.place.id] = row.evidence
   }
   return { places, evidence }
 }

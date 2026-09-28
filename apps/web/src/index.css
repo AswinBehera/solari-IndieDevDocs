@@ -10,3 +10,138 @@
    class used directly in `apps/web` works. The path is to the real directory,
    not the symlink, because that is what the scanner walks. */
 @source "../../../packages/travel/ui/src";
+
+/* ---- The Trip Document (P4.1) -------------------------------------------------
+   Tiptap renders plain elements with no classes, so the document's type is set
+   here against its root rather than utility by utility. Sizes are the canvas's:
+   17px prose at 1.6, 30px serif day headings with the date beside them in mono. */
+
+.card-flash > * {
+  outline: 2px solid var(--color-accent-pink);
+  outline-offset: 6px;
+  transition: outline-color 1s;
+}
+.trip-doc {
+  outline: none;
+  font-family: var(--font-body);
+  color: var(--color-ink);
+}
+.trip-doc p {
+  font-size: 17px;
+  line-height: 1.6;
+  margin: 0 0 18px;
+}
+.trip-doc h2 {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.2;
+  margin: 36px 0 12px;
+}
+.trip-doc h3 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  margin: 24px 0 8px;
+}
+.trip-doc ul,
+.trip-doc ol {
+  font-size: 17px;
+  line-height: 1.6;
+  margin: 0 0 18px;
+  padding-left: 1.4em;
+}
+.trip-doc ul {
+  list-style: disc;
+}
+.trip-doc ol {
+  list-style: decimal;
+}
+.trip-doc li p {
+  margin: 0;
+}
+.trip-doc blockquote {
+  border-left: 2px solid var(--color-accent-gold);
+  padding-left: 12px;
+  font-style: italic;
+}
+.trip-doc a {
+  color: var(--color-accent-blue);
+  text-decoration: underline;
+  text-decoration-color: var(--color-rule);
+}
+.trip-doc p.is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-ink-faint);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.trip-doc .day-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--color-ink-faint);
+  margin-left: 12px;
+  user-select: none;
+}
+.trip-doc .ProseMirror-selectednode > * {
+  outline: 2px solid var(--color-accent-pink);
+  outline-offset: 4px;
+}
+
+/* ---- Map pins (P4.4) -----------------------------------------------------------
+   HTML markers, because MapLibre draws text only from a glyph server and there is
+   none hosted yet (ADR-0018). The canvas's pin: a pink dot with a soft ring. */
+
+.map-pin {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.map-pin-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-accent-pink);
+  box-shadow: 0 0 0 5px rgb(255 45 149 / 0.25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #fff;
+  transition: transform 0.15s;
+}
+.map-pin-many {
+  width: 20px;
+  height: 20px;
+}
+.map-pin:hover .map-pin-dot {
+  transform: scale(1.15);
+}
+.map-pin-label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--color-surface);
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+}
+.maplibregl-ctrl-attrib {
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+/* The attribution stays (ODbL), dressed for the midnight plane rather than as a
+   white pill on it. */
+.maplibregl-ctrl.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  background: rgb(22 32 74 / 0.7);
+  color: rgb(244 241 234 / 0.7);
+}
+.maplibregl-ctrl-attrib a {
+  color: rgb(244 241 234 / 0.8);
+}
