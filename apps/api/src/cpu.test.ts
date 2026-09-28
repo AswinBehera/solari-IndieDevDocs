@@ -247,7 +247,10 @@ async function cpuPerRequest(run: () => Promise<unknown>): Promise<number> {
   return (d.user + d.system) / 1000 / ITERATIONS
 }
 
-describe("CPU per request against the 10 ms free-plan ceiling", () => {
+// Six hundred calls of the heaviest handler take several seconds of wall time on a
+// shared CI runner, past vitest's default 5 s. The wall time is not what is
+// asserted — CPU per request is — so the timeout is widened and the budget is not.
+describe("CPU per request against the 10 ms free-plan ceiling", { timeout: 30_000 }, () => {
   it("measures POST /jobs", async () => {
     let n = 0
     const ms = await cpuPerRequest(async () => {
