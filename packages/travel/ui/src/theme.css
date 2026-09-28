@@ -31,6 +31,23 @@
   --color-accent-pink: #ff2d95;
   --color-accent-blue: #16204a;
 
+  /* The rest of the canvas's palette, read off it for the Trip Document (P4). A
+     Postcard is paper on the page, not a panel: white, with its own shadow. */
+  --color-paper: #ffffff;
+  /* The meter's empty track. */
+  --color-track: #e6e1d5;
+  /* Temple gold: a pinned Postcard, a quote's rule. */
+  --color-accent-gold: #c9a227;
+  /* Stale, blocked, halted. */
+  --color-signal-red: #b3261e;
+  /* Healthy. */
+  --color-signal-green: #2e7d32;
+  /* A note Postcard, which is the one card that is not white. */
+  --color-note: #fff9e3;
+
+  --shadow-postcard: 0 10px 26px -14px rgb(35 36 42 / 0.35);
+  --shadow-postcard-lift: 0 14px 34px -14px rgb(22 32 74 / 0.35);
+
   --font-display: "Instrument Serif", ui-serif, Georgia, serif;
   --font-body: "Work Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "DM Mono", ui-monospace, SFMono-Regular, monospace;

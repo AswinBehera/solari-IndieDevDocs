@@ -21,6 +21,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** The parsed body, when there was one: a 409 carries the current version in it. */
+    readonly body: unknown = null,
   ) {
     super(message)
     this.name = "ApiError"
@@ -41,7 +43,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     // ("a and b must be different personas"), and replacing them with the status
     // code would throw away the only part of the response worth showing.
     const body = (await res.json().catch(() => null)) as { error?: string } | null
-    throw new ApiError(res.status, body?.error ?? `api returned ${res.status}`)
+    throw new ApiError(res.status, body?.error ?? `api returned ${res.status}`, body)
   }
+  // A 204 has no body to parse; a DELETE answers with one.
+  if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }
