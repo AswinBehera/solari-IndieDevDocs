@@ -3,14 +3,14 @@ import { placeFixture } from "@dt/core/fixtures"
 import type { CardEvidence } from "@dt/ui"
 
 /**
- * Sample Places, standing in for the API until the pipeline produces real ones.
+ * Sample Places, at `/lab/places?sample` — the card in every state at once.
  *
- * P2.8's acceptance is seven days of Bangkok harvests, and until that has run
- * there are no `places` rows anywhere — see the P2.3 write-up: every harvest run
- * in either database belongs to the `atlas` domain. Rather than ship a page that
- * renders an empty grid for weeks, this is a fixed set chosen to put **every card
- * state on the screen at once**, so the component can be reviewed now and the
- * page becomes a live view the day `/places` exists.
+ * Written as a stand-in for the API when no `places` row existed anywhere — see
+ * the P2.3 write-up: every harvest run in either database belonged to the
+ * `atlas` domain. The page reads the API now. This set stays, on its own URL,
+ * because it was chosen to put **every card state on the screen at once**, which
+ * a real top thirty will rarely do: the 290km-wrong resolution, the missing
+ * score, the place with no quote.
  *
  * They are all real Bangkok and Isan places, and the scores are invented. Nothing
  * here is a measurement of anything, which is why it lives in the app beside the

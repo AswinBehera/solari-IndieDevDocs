@@ -1,0 +1,52 @@
+import type { Place } from "@dt/core"
+import type { CardEvidence } from "@dt/ui"
+import { useQuery } from "@tanstack/react-query"
+import { api } from "../api"
+
+/**
+ * `/lab/places`, and the one conversion the wire forces on it.
+ *
+ * JSON has no dates, so the four timestamps on a `Place` arrive as ISO strings,
+ * and a card handed a string where its type says `Date` would compile and then
+ * fail the first time anything called a method on it. `fromWire` is the only
+ * place that is fixed, and it is a plain function so a test can hold it.
+ */
+
+type DateField = "firstSeenAt" | "lastSeenAt" | "createdAt" | "updatedAt"
+export type WirePlace = Omit<Place, DateField> & Record<DateField, string>
+
+export interface PlacesResponse {
+  places: { place: WirePlace; evidence: CardEvidence | null }[]
+}
+
+export interface PlaceGridData {
+  places: Place[]
+  /** Quote per place id, the shape `PlaceGrid` takes. */
+  evidence: Record<string, CardEvidence>
+}
+
+export function fromWire(body: PlacesResponse): PlaceGridData {
+  const places: Place[] = []
+  const evidence: Record<string, CardEvidence> = {}
+  for (const row of body.places) {
+    const p = row.place
+    places.push({
+      ...p,
+      firstSeenAt: new Date(p.firstSeenAt),
+      lastSeenAt: new Date(p.lastSeenAt),
+      createdAt: new Date(p.createdAt),
+      updatedAt: new Date(p.updatedAt),
+    })
+    if (row.evidence) evidence[p.id] = row.evidence
+  }
+  return { places, evidence }
+}
+
+/** Fetched once per visit: nothing here polls, for ADR-0016's Hyperdrive reason. */
+export function usePlaces() {
+  return useQuery({
+    queryKey: ["lab", "places"] as const,
+    queryFn: () => api<PlacesResponse>("/lab/places"),
+    select: fromWire,
+  })
+}
