@@ -299,6 +299,27 @@ export const evidence = pgTable(
     domainId: text("domain_id").notNull(),
     /** Opaque by design — no foreign key to a vertical's table. */
     entityId: uuid("entity_id").notNull(),
+    /**
+     * The mention this row was materialised from (P2.5).
+     *
+     * Not in plan section 3's column list, and added for one reason: something
+     * has to make writing evidence idempotent, and every other candidate is
+     * wrong in a way that only shows up later. `(domain_id, entity_id,
+     * raw_item_id)` reads like the natural key — "this artifact says this about
+     * this place" — but a merge repoints evidence onto the survivor, and two
+     * rows that were distinct before the merge collide after it, so the unique
+     * index would turn `EntityLinks.repoint` into a constraint violation at the
+     * exact moment the pipeline is least able to retry. A mention id cannot
+     * collide, because a merge does not merge mentions.
+     *
+     * It also makes the grain explicit. One evidence row is one *claim*, not one
+     * artifact: a post naming the same shop twice is two mentions and two rows,
+     * and the score factors that care about artifacts count distinct
+     * `raw_item_id` themselves rather than relying on the grain to do it.
+     */
+    mentionId: uuid("mention_id")
+      .notNull()
+      .references(() => mentions.id, { onDelete: "cascade" }),
     rawItemId: uuid("raw_item_id")
       .notNull()
       .references(() => rawItems.id, { onDelete: "cascade" }),
@@ -320,6 +341,12 @@ export const evidence = pgTable(
   (t) => [
     // Every score explanation resolves through this index. It is the hot one.
     index("evidence_domain_entity_idx").on(t.domainId, t.entityId),
+    // Load-bearing rather than an optimisation, the same way `entity_resolutions`'
+    // is: the resolve stage materialises evidence with an INSERT that relies on
+    // this conflicting instead of checking first, so a run replayed after being
+    // cut in half adds nothing and a second runner over the same mentions cannot
+    // double-count the corpus a score is computed from.
+    uniqueIndex("evidence_domain_mention_idx").on(t.domainId, t.mentionId),
   ],
 )
 

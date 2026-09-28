@@ -1,6 +1,17 @@
 import { osmPlaces, places } from "@dt/db"
-import type { DedupKey, DedupMatch, EntityRepo } from "@samsara/refine"
-import { and, between, desc, eq, inArray, ne, sql, type TablesRelationalConfig } from "drizzle-orm"
+import type { ScoreSet } from "@samsara/core"
+import type { DedupKey, DedupMatch, EntityPage, EntityRepo } from "@samsara/refine"
+import {
+  and,
+  between,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  ne,
+  sql,
+  type TablesRelationalConfig,
+} from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 import {
   asExternalRefKey,
@@ -10,7 +21,7 @@ import {
   GEO_KEY,
   metresBetween,
 } from "./dedup.js"
-import type { PlaceEntity } from "./entity.js"
+import { type PlaceEntity, placeEntity } from "./entity.js"
 import type { OsmPlaceRow } from "./osm-tags.js"
 import type { OsmSearch } from "./resolve.js"
 import type { City } from "./tier0.js"
@@ -379,6 +390,141 @@ export class PostgresPlaceRepo implements EntityRepo<PlaceEntity> {
       await tx.delete(places).where(eq(places.id, from))
     })
   }
+
+  /**
+   * Replace the whole `scores` object, and touch nothing else (P2.5).
+   *
+   * Replaced rather than merged key by key, which is the port's promise and
+   * worth restating where the SQL is: a score the pack has stopped computing
+   * must disappear. A stale `scores.tourist` sitting under a freshly written
+   * `scores.local` is a number with explanations pointing at evidence that may
+   * since have been merged onto another place — the one thing `because` exists
+   * to make impossible.
+   *
+   * `evidence_count` is deliberately not updated here even though this stage has
+   * just counted evidence rows. It is a fact about the corpus that the repo
+   * maintains, the scorer reads a capped window rather than all of it
+   * (`EVIDENCE_PER_ENTITY`), and writing a windowed count into a column that
+   * means "how many" would be worse than leaving it at whatever it is.
+   */
+  async writeScores(id: string, scores: ScoreSet): Promise<void> {
+    await this.db.update(places).set({ scores, updatedAt: new Date() }).where(eq(places.id, id))
+  }
+
+  /**
+   * A keyset page over `(first_seen_at, id)`, oldest first.
+   *
+   * The pair and not `first_seen_at` alone: a resolve job writes a batch of rows
+   * inside the same transaction and their default timestamps are identical to
+   * the microsecond, so a cursor on the timestamp alone either skips the rest of
+   * that batch or re-reads it forever. The id breaks the tie and it is the
+   * primary key, so the comparison is total.
+   *
+   * Written as a row comparison — `(a, b) > (x, y)` — rather than the unrolled
+   * `a > x or (a = x and b > y)`, because Postgres can drive an index scan from
+   * the row form directly. The index it wants is `(first_seen_at, id)`, which
+   * does not exist: `places` has one on `external_ref` and one on
+   * `(city, category)`. At the size of this table a sort is nothing, and adding
+   * an index for a job that runs once a night before there is a table worth
+   * indexing would be the guess this repository keeps declining to make.
+   *
+   * `cursor` is `<iso timestamp>|<uuid>` and the caller is told not to read it.
+   * It is parsed back through `new Date` and a split on the *first* separator,
+   * so a value this method did not mint fails as a bad date rather than as a
+   * silently empty page.
+   */
+  async page(after: string | null, limit: number): Promise<EntityPage<PlaceEntity>> {
+    const seek = after === null ? null : parseCursor(after)
+
+    const rows = await this.db
+      .select({
+        ...getTableColumns(places),
+        /**
+         * The timestamp as Postgres itself renders it, and this is the whole
+         * reason the cursor is a string.
+         *
+         * `timestamptz` keeps microseconds and a JavaScript `Date` keeps
+         * milliseconds, so a cursor that round-tripped through one would come
+         * back rounded *down* — and a keyset seek from a rounded-down timestamp
+         * re-reads the row it was supposed to start after, along with every row
+         * written in the same millisecond. That is not a lost row, it is a page
+         * loop that never ends, which is exactly how it first showed up.
+         */
+        seenText: sql<string>`${places.firstSeenAt}::text`,
+      })
+      .from(places)
+      .where(
+        seek === null
+          ? undefined
+          : // The seek values go in as strings with explicit casts: inside a raw
+            // row comparison there is no column for drizzle to infer an encoding
+            // from, and the driver refuses what it was not told how to send.
+            sql`(${places.firstSeenAt}, ${places.id}) > (${seek.at}::timestamptz, ${seek.id}::uuid)`,
+      )
+      .orderBy(places.firstSeenAt, places.id)
+      .limit(limit)
+
+    const last = rows.at(-1)
+    return {
+      entities: rows.map((row) => ({ id: row.id, entity: toEntity(row) })),
+      // A short page is the end of the table. It can also be the end by
+      // coincidence — `limit` rows left, exactly — and the next call then returns
+      // nothing, which costs one query a night and is the reason this does not
+      // fetch `limit + 1` to tell the two apart.
+      cursor: rows.length < limit || !last ? null : `${last.seenText}|${last.id}`,
+    }
+  }
+}
+
+/**
+ * The other half of `page`'s cursor. Named errors, because a bad one is a bug.
+ *
+ * The timestamp is validated by parsing but passed on as the text it arrived as,
+ * so nothing here rounds it — see `seenText` above for what rounding costs.
+ */
+function parseCursor(cursor: string): { at: string; id: string } {
+  const cut = cursor.indexOf("|")
+  const at = cursor.slice(0, cut)
+  const id = cursor.slice(cut + 1)
+  if (cut < 0 || Number.isNaN(new Date(at).getTime()) || id.length === 0) {
+    throw new Error(`not a cursor this repo minted: ${cursor}`)
+  }
+  return { at, id }
+}
+
+/**
+ * A stored row as the entity the pack's stages read.
+ *
+ * Validated through `placeEntity` rather than cast, and that is not ceremony
+ * here: `external_ref` is `jsonb` and `scores` is `jsonb`, so the database will
+ * hand back whatever was ever written — including by a migration, a backfill, or
+ * a version of this pack that had a different idea. The stages downstream read
+ * `externalRef.source` to decide a merge; a shape nobody checked deciding which
+ * of two rows survives is precisely the failure the resolve side already spends
+ * a schema to prevent, and the read side had been getting away with it only
+ * because nothing read entities back until now.
+ *
+ * It throws, naming the row. One unreadable row stalling a nightly page is a
+ * loud failure over a corrupt write; skipping it would be a quiet one, and the
+ * row would never be looked at again.
+ */
+function toEntity(row: typeof places.$inferSelect): PlaceEntity {
+  const parsed = placeEntity.safeParse({
+    canonicalName: row.canonicalName,
+    localName: row.localName,
+    city: row.city,
+    // Null together or set together — the same pairing `upsert` flattens, read
+    // back. A row with one half set is not a coordinate and must not become one.
+    geo: row.lat === null || row.lng === null ? null : { lat: row.lat, lng: row.lng },
+    externalRef: row.externalRef,
+    resolvedTier: row.resolvedTier,
+    category: row.category,
+    tags: row.tags,
+  })
+  if (!parsed.success) {
+    throw new Error(`place ${row.id} does not parse as an entity: ${parsed.error.message}`)
+  }
+  return parsed.data
 }
 
 /**

@@ -19,6 +19,8 @@ import { LlmClient, loadLlmConfig } from "@samsara/llm"
 import { createOpenRouterClient } from "@samsara/llm/openrouter"
 import { PostgresPersonaStore } from "@samsara/personas/postgres"
 import {
+  PostgresEvidenceStore,
+  PostgresEvidenceWriter,
   PostgresMentionSink,
   PostgresPendingMentions,
   PostgresResolutionCache,
@@ -29,6 +31,7 @@ import { createPackRegistry } from "./packs.js"
 import { createKeepaliveHandler } from "./personas.js"
 import { createRefineHandler } from "./refine.js"
 import { createResolveHandler } from "./resolve.js"
+import { createScoreHandler } from "./score.js"
 import { sourceRegistry } from "./sources.js"
 
 /**
@@ -168,10 +171,21 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
     createResolveHandler({
       pending: new PostgresPendingMentions(database.db),
       cache: new PostgresResolutionCache(database.db),
+      // Unconditional, unlike `lookup` below. Writing a receipt for a mention
+      // that just found its entity costs one insert against rows already in
+      // hand, and the alternative — the state this repository was in before
+      // P2.5 — is a scorer reading an empty table and reporting every place as
+      // unevidenced.
+      evidence: new PostgresEvidenceWriter(database.db),
       // No `lookup` yet: Tier 2's provider is undecided and needs a key nobody
       // has created. Tiers 0 and 1 carry the whole corpus until then, which is
       // what ADR-0017 predicts they should mostly be doing anyway.
     }),
+  )
+
+  handlers.register(
+    "refine.score",
+    createScoreHandler({ evidence: new PostgresEvidenceStore(database.db) }),
   )
 
   return {

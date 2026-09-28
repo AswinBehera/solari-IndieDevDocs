@@ -2,7 +2,7 @@ import { definePrompt } from "@samsara/llm"
 import { beforeEach, describe, expect, it } from "vitest"
 import { z } from "zod"
 import { ENVELOPE_INSTRUCTIONS } from "./extract.js"
-import { MemoryEntityRepo, MemoryResolutionCache } from "./memory.js"
+import { MemoryEntityRepo, MemoryEvidence, MemoryResolutionCache } from "./memory.js"
 import type { DomainPack, Resolution, ResolveCtx } from "./pack.js"
 import type { PendingMention } from "./ports.js"
 import { DEFAULT_RESOLVE_ATTEMPTS, resolve } from "./resolve.js"
@@ -384,5 +384,123 @@ describe("what the stage refuses to pass along", () => {
     expect(report.cached).toBe(0)
     expect(report.asked).toBe(1)
     expect(repo.entities.map((e) => e.entity.canonical)).toEqual(["first", "second"])
+  })
+})
+
+/**
+ * Evidence materialisation (P2.5), which happens here because here is the only
+ * moment a mention has just acquired an entity id.
+ *
+ * These are about the *stage's* half of the contract — which mentions get handed
+ * to the writer, and when — rather than about what a writer does with them. The
+ * skip rules and the conflict are `MemoryEvidence`'s and, for real, the
+ * `INSERT … SELECT`'s in `refine.pg.test.ts`.
+ */
+describe("the resolve stage, materialising evidence", () => {
+  /** Claims for every mention the test is about to hand in. */
+  const claimsFor = (evidence: MemoryEvidence, ...mentions: PendingMention[]): void => {
+    for (const m of mentions) {
+      evidence.add({
+        mentionId: m.id,
+        domainId: m.domainId,
+        rawItemId: m.rawItemId,
+        sourceId: m.item.sourceId,
+        sourceUrl: m.item.url,
+        language: m.item.languageGuess,
+        capturedAt: new Date("2026-01-01T00:00:00Z"),
+        extract: m.payload,
+        engagement: { views: null, likes: null, comments: null },
+      })
+    }
+  }
+
+  it("writes nothing at all when the caller grants no writer", async () => {
+    const report = await resolve({
+      pack: pack((m) => found(m.name)),
+      mentions: [mention("Chợ Bến Thành")],
+      cache,
+    })
+
+    // The state the repository was in until P2.5, and the reason the score stage
+    // had an empty table to read. Kept as a test because it is the default.
+    expect(report.evidence).toBe(0)
+  })
+
+  it("records a row for every mention that ended up pointing at an entity", async () => {
+    const evidence = new MemoryEvidence(cache)
+    const ms = [mention("Chợ Bến Thành"), mention("chợ bến thành "), mention("Bún Chả")]
+    claimsFor(evidence, ...ms)
+
+    const report = await resolve({
+      pack: pack((m) => found(m.name)),
+      mentions: ms,
+      cache,
+      evidence,
+    })
+
+    // Two keys, three mentions, three evidence rows: the grain is a claim, not
+    // an artifact and not a resolution.
+    expect(report).toMatchObject({ keys: 2, resolved: 2, evidence: 3 })
+    expect(evidence.rows.map((r) => r.mentionId).sort()).toEqual(["m1", "m2", "m3"])
+  })
+
+  it("records nothing for a mention nobody could resolve", async () => {
+    const evidence = new MemoryEvidence(cache)
+    const m = mention("Chợ Không Tên")
+    claimsFor(evidence, m)
+
+    const report = await resolve({
+      pack: pack(() => ({ outcome: "unresolvable", tier: 3 })),
+      mentions: [m],
+      cache,
+      evidence,
+    })
+
+    // No entity, so nothing for the row to be evidence *for*. A row pointing at
+    // no entity would be counted by every factor and readable by none.
+    expect(report).toMatchObject({ unresolvable: 1, evidence: 0 })
+    expect(evidence.rows).toHaveLength(0)
+  })
+
+  it("records a mention whose key was answered from the cache without resolving", async () => {
+    const evidence = new MemoryEvidence(cache)
+    const first = mention("Chợ Bến Thành")
+    claimsFor(evidence, first)
+    await resolve({ pack: pack((m) => found(m.name)), mentions: [first], cache, evidence })
+
+    // A second mention of the same name, weeks later. The pack is never asked —
+    // and this mention has had no evidence written for it, so a list built from
+    // the run's outcomes rather than from its commits would miss it entirely.
+    const second = mention("chợ bến thành")
+    claimsFor(evidence, second)
+    const report = await resolve({
+      pack: pack(() => {
+        throw new Error("the pack must not be asked")
+      }),
+      mentions: [second],
+      cache,
+      evidence,
+    })
+
+    expect(report).toMatchObject({ cached: 1, asked: 0, evidence: 1 })
+    expect(evidence.rows).toHaveLength(2)
+    expect(evidence.rows[1]?.entityId).toBe(evidence.rows[0]?.entityId)
+  })
+
+  it("adds nothing the second time the same page is run", async () => {
+    const evidence = new MemoryEvidence(cache)
+    const ms = [mention("Chợ Bến Thành"), mention("Bún Chả")]
+    claimsFor(evidence, ...ms)
+    const opts = { pack: pack((m) => found(m.name)), mentions: ms, cache, evidence }
+
+    const first = await resolve(opts)
+    const second = await resolve(opts)
+
+    // The idempotency that lets this be the last thing the stage does. A replay
+    // reporting `evidence: 0` is the conflict working, not a failure — and it is
+    // what stops a second runner doubling the corpus every score is computed on.
+    expect(first.evidence).toBe(2)
+    expect(second.evidence).toBe(0)
+    expect(evidence.rows).toHaveLength(2)
   })
 })

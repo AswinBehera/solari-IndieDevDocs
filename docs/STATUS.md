@@ -3,11 +3,13 @@
 Phase: 2 — in progress. Phase 1's acceptance week is **still draining** (six of seven days queued,
 day 0 at 60.0%), and Phase 0 is **complete, pending the gate** (below; the gate is a human review
 and does not block buildable work).
-Last completed: **P2.4 — the dedup stage, and the key that does not exist**.
-1,110 tests across the repo, seam allowances **0 of 5** across 174 files. The count is measured
-rather than carried forward, and the basis is written down here so the next session does not have
-to re-derive it: **1,085 passing under `turbo run test` plus 25 under `test:tools`, with one live
-test skipped.** P2.4's 59 are 21 in `@samsara/refine` and 38 in `@dt/travel-pack`.
+Last completed: **P2.5 — the score stage, and the table it had to be given first**.
+1,190 tests across the repo, seam allowances **0 of 5** across 176 files. Measured on P2.4's
+basis: **1,165 passing under `turbo run test` plus 25 under `test:tools`, with one live test
+skipped.** That is 80 more than P2.4's 1,110, not the 105 the session that wrote P2.5 carried
+forward without running the suite end to end; the per-package split it quoted is not repeated
+here because nothing checked it. `pnpm check` truncates `osm_places`, so the extract has to be
+reloaded after every run (the command is at the bottom of the P2.3 entry).
 
 **Sixteen billed sessions, about 7.8 minutes of 4,000.** P2.2 spent three of them harvesting the
 golden corpus — roughly 3.4 minutes, and that figure is softer than the ones below it: it is
@@ -27,6 +29,87 @@ Pantip sessions was waste and is counted as such**: the first run was piped to `
 not stop the capture — it had already opened the browser and billed — and it was then re-run to see
 the head of the output. The pipe cost 0.4584 minutes and produced nothing. Reading a recorder's
 output through `tail` is not free, because the spend happens before the bytes reach the pipe.
+
+## P2.5 — the score stage, and the table it had to be given first
+
+Closed 20 September 2026. The stage is twenty lines of arithmetic and everything interesting about
+it is a refusal.
+
+**The pack supplies factors, not a score.** Section 3 of the plan sketches `score(e, ev): ScoreSet`
+— one method per pack, returning a finished map. The plan's own P2.5 entry overrules it, and the
+reason is worth keeping: with a method, every claim this repository makes about explainability is a
+claim about code that lives somewhere else, and a pack could return `{ value: 0.9, because: [] }`
+with nothing to stop it. With a weighted list of factors, the engine computes the value *from* the
+contributions — `value = because.reduce(...)` — so the explanation is not a description of the
+calculation, it is the calculation, and the two cannot drift apart. A reading outside `[0,1]` is
+refused by name rather than clamped, because clamping would make the explanation lie.
+
+**Abstaining is not zero, and that decision runs the whole length of the file.** A factor may
+return `null`, and a factor that does is dropped from the numerator *and* the denominator: the
+score is a weighted mean of what could actually be read. A forum thread reports no view count and a
+caption arrives with no language recorded, and scoring those zero would punish a place, invisibly
+and permanently, for the shape of the surface it was found on. Carried consistently, that means a
+score whose every factor abstained is omitted rather than written as zero, and an entity with no
+evidence at all is counted as `unevidenced` and **not written** — a zero with an empty `because`
+renders identically to a place that was measured and came out badly, and product principle 3 is
+that a reader can tell those apart.
+
+**The stage had nothing to read, so P2.5 built the corpus too.** Nothing in this repository had
+ever written a row to `evidence`. That work belongs to the resolve stage rather than a fifth stage,
+because resolution is the one moment a mention has just acquired an entity id; anything later would
+have to rediscover it by scanning the two largest tables we have. So `EvidenceWriter` is an
+optional port on resolve — optional so that no existing caller changed — and migration 0011 adds
+`evidence.mention_id` with a unique index on `(domain_id, mention_id)`. **That key, and not
+`(domain_id, entity_id, raw_item_id)`:** a merge repoints evidence onto the survivor, and the
+obvious key would then collide inside `EntityLinks.repoint`. A Postgres test replays a resolve
+after a merge and proves it still writes zero.
+
+Reads come back through `EvidenceStore`, one query per page. The per-entity cap is a window
+function and not a page-wide `LIMIT`, because a `LIMIT` lets one loud place take the whole budget
+and every quiet one is then reported as unevidenced — a made-up finding produced by a query plan.
+The tie-break is on `id` so that a harvest batch landing on one `captured_at` still pages
+deterministically.
+
+**Travel's factors are eight, and the missing one is a finding.** `local` weighs native-language
+share, creator-local share, source diversity and engagement ratio; `tourist` weighs non-native
+share, visitor-creator share, listicle phrases and listicle hosts. Section 2.5's fifth — anything
+about *the creator as a person*, how often they post, whether their places cluster — is
+unbuildable here and for a reason that is not about effort: there is no creator entity, mentions
+point at places, and the only identity attached to an artifact is the persona that harvested it,
+which is **ours**. A factor weighing a persona would be scoring our own sampling. This is the same
+shape of finding P2.4 recorded about the embedding key, and it lands the same way: when a creator
+vertical exists, the factor is an addition to one file.
+
+**Both halves are wired into the runner**, which is the difference between a stage existing and a
+stage running. `refine.resolve` passes the evidence writer unconditionally — one insert against
+rows already in hand, and the alternative is the state the repository was in until now. A new
+`refine.score` job pages the entity table, scoped to a domain rather than a run for the reason
+resolve is: one place accumulates evidence from many runs over many weeks, and its score is a
+statement about all of it at once.
+
+Paging needed a port that did not exist. `EntityRepo.page` is a keyset cursor on
+`(first_seen_at, id)`, oldest first — the order dedup's survivor depends on, so P2.4 gets to share
+it rather than grow a second answer to "what is page two". An `OFFSET` was never an option: these
+stages *write* to the table they are paging, and an offset under a shifting table skips rows and
+repeats rows without saying so. **Two bugs came out of writing it, both worth recording.** The
+cursor first carried a JavaScript `Date`, which keeps milliseconds where `timestamptz` keeps
+microseconds; the seek then started from a moment slightly *before* the row it named, re-read that
+row, and looped forever. It now carries the timestamp as Postgres itself renders it. And the page
+counter was a `for` header in both job handlers, which under-reported by one on every `break` — a
+job that drained a single page logged "0 pages" beside the mentions it had just resolved.
+
+The nightly log names any factor that measured nothing anywhere. That line exists because a factor
+abstaining everywhere is not a visible failure: the stage drops it from the denominator, the score
+still comes out looking like a score, and it is computed from fewer things than the pack thinks it
+is computing from. Nothing else in the pipeline would say so.
+
+**Seam result: zero edits under `packages/samsara/` other than the fixture**, which gained
+`creatorPack.score`. The factor-list design is what makes that assertion possible at all — a
+`score()` method would have left the seam test with nothing to check but that a number came back.
+
+**Still owed here:** nothing enqueues `refine.score` yet, which is the same position `refine.resolve`
+is in — both are registered handlers waiting on a schedule or a chain, and `tools/backfill-refine.ts`
+queues extract jobs only.
 
 ## P2.4 — the dedup stage, and the key that does not exist
 

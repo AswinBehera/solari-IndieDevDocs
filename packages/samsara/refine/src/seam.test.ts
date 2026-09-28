@@ -11,10 +11,17 @@ import {
 } from "./__fixtures__/creator.js"
 import { type DedupEntity, dedup } from "./dedup.js"
 import { ENVELOPE_INSTRUCTIONS, extract, ITEMS_VARIABLE } from "./extract.js"
-import { MemoryEntityLinks, MemoryMentionSink, MemoryResolutionCache } from "./memory.js"
+import {
+  type MemoryClaim,
+  MemoryEntityLinks,
+  MemoryEvidence,
+  MemoryMentionSink,
+  MemoryResolutionCache,
+} from "./memory.js"
 import { type DomainPack, PackRegistry } from "./pack.js"
 import type { ExtractItem, PendingMention } from "./ports.js"
 import { resolve } from "./resolve.js"
+import { type ScoreEntity, score } from "./score.js"
 
 /**
  * P2.8's seam proof, or the half of it that can exist yet.
@@ -578,5 +585,224 @@ describe("a second pack, deduplicating over the same engine", () => {
     const report = await dedup({ pack: creatorPack, entities: stored(), links })
 
     expect(report).toMatchObject({ entities: 1, examined: 1, merged: 0, keyless: 0 })
+  })
+})
+
+/**
+ * P2.5, and the result is **zero edits under `packages/samsara/`** other than
+ * the fixture gaining `creatorPack.score` — which is the addition P2.8 permits.
+ *
+ * Worth recording what was at risk, because the plan's own section 3 sketches
+ * this member as `score(e, ev): ScoreSet`, one method per pack. Had it been
+ * built that way, this file could assert almost nothing: every claim about
+ * weighting, abstention and explanation would be a claim about code inside the
+ * pack, and a second pack would prove only that a second pack can also return a
+ * map. Because the engine owns the arithmetic, the two packs are demonstrably
+ * running the *same* scorer.
+ *
+ * Three engine assumptions travel could have hidden, and this fixture does not:
+ *
+ * - **A factor that reads the entity and ignores the evidence.** All eight of
+ *   travel's read the evidence. `postingCadence` reads `postsPerWeek` off the
+ *   entity, so `measure`'s first argument is used by somebody.
+ * - **A reading with no receipts.** That same factor has no particular row to
+ *   point at, and an engine that required a non-empty `evidenceIds` — or that
+ *   helpfully filled one in — would be attaching a reason to a row that did not
+ *   supply it.
+ * - **One score rather than two.** The first vertical names two, and a report or
+ *   a writer shaped around a pair would look perfectly healthy against it.
+ */
+describe("a second pack, scoring over the same engine", () => {
+  beforeEach(() => {
+    creatorRepo.entities.length = 0
+    creatorRepo.merges.length = 0
+    creatorRepo.scores.clear()
+  })
+
+  const payload = (platform: CreatorMention["platform"] = "youtube"): CreatorMention => ({
+    handle: "@chi_hai_food",
+    platform,
+    channelUrl: "https://example.invalid/c/chi-hai",
+    postsPerWeek: 3,
+    quote: "kênh này review rất thật",
+  })
+
+  const claim = (mentionId: string, over: Partial<MemoryClaim> = {}): MemoryClaim => ({
+    mentionId,
+    domainId: "creator",
+    rawItemId: `r-${mentionId}`,
+    sourceId: "fake.search",
+    sourceUrl: `https://example.invalid/${mentionId}`,
+    language: "vi",
+    capturedAt: new Date("2026-02-01T00:00:00Z"),
+    extract: payload(),
+    engagement: { views: null, likes: null, comments: null },
+    ...over,
+  })
+
+  /** Write an entity, attach evidence to it, and hand back the page. */
+  const withEvidence = async (
+    entity: CreatorEntity,
+    claims: MemoryClaim[],
+  ): Promise<{ id: string; page: ScoreEntity<CreatorEntity>[]; evidence: MemoryEvidence }> => {
+    const cache = new MemoryResolutionCache()
+    const id = await creatorRepo.upsert(entity)
+    const evidence = new MemoryEvidence(cache)
+    evidence.add(...claims)
+    await cache.commit({
+      domainId: "creator",
+      key: entity.canonicalHandle,
+      state: "resolved",
+      entityId: id,
+      tier: 0,
+      confidence: 0.9,
+      mentionIds: claims.map((c) => c.mentionId),
+      deferred: false,
+    })
+    await evidence.record(
+      "creator",
+      claims.map((c) => c.mentionId),
+    )
+    return { id, page: [{ id, entity }], evidence }
+  }
+
+  it("weighs a pack's own factors without knowing what any of them mean", async () => {
+    const { id, page, evidence } = await withEvidence(
+      {
+        canonicalHandle: "chi_hai_food",
+        platform: "youtube",
+        channelUrl: "https://example.invalid/c/chi-hai",
+        // 3.5 of 7 is exactly half, so the arithmetic below is checkable by eye.
+        postsPerWeek: 3.5,
+      },
+      [claim("m1"), claim("m2", { extract: payload("forum") })],
+    )
+
+    const report = await score({ pack: creatorPack, entities: page, evidence })
+
+    expect(report).toMatchObject({ entities: 1, scored: 1, unevidenced: 0 })
+    // 2·0.5 + 1·0.5 over 3. The engine did this, from numbers the pack supplied,
+    // and the same code did travel's.
+    expect(creatorRepo.scores.get(id)?.influence?.value).toBeCloseTo(0.5, 12)
+    expect(Object.keys(creatorRepo.scores.get(id) ?? {})).toEqual(["influence"])
+  })
+
+  it("accepts a reading that points at no evidence at all", async () => {
+    const { id, page, evidence } = await withEvidence(
+      {
+        canonicalHandle: "chi_hai_food",
+        platform: "youtube",
+        channelUrl: "https://example.invalid/c/chi-hai",
+        postsPerWeek: 7,
+      },
+      [claim("m1")],
+    )
+
+    await score({ pack: creatorPack, entities: page, evidence })
+
+    const because = creatorRepo.scores.get(id)?.influence?.because ?? []
+    const cadence = because.find((e) => e.factor === "postingCadence")
+    // Empty, and left empty. A factor reading the entity has no row to cite and
+    // the engine must not invent one.
+    expect(cadence?.evidenceIds).toEqual([])
+    expect(cadence?.contribution).toBeGreaterThan(0)
+  })
+
+  it("drops a factor the pack could not measure, without punishing the entity", async () => {
+    const { id, page, evidence } = await withEvidence(
+      {
+        canonicalHandle: "quan_com_tam",
+        platform: "forum",
+        channelUrl: null,
+        // The common case: the source never said how often they post.
+        postsPerWeek: null,
+      },
+      [claim("m1")],
+    )
+
+    const report = await score({ pack: creatorPack, entities: page, evidence })
+
+    // `videoShare` alone, at full weight. Counting the abstention as a zero over
+    // weight 2 would have made this 1/3 instead.
+    expect(creatorRepo.scores.get(id)?.influence?.value).toBe(1)
+    expect(report.scores[0]?.factors).toEqual([
+      { name: "postingCadence", measured: 0, abstained: 1 },
+      { name: "videoShare", measured: 1, abstained: 0 },
+    ])
+  })
+
+  it("leaves an entity with no evidence unwritten", async () => {
+    const id = await creatorRepo.upsert({
+      canonicalHandle: "nobody",
+      platform: "forum",
+      channelUrl: null,
+      postsPerWeek: 4,
+    })
+
+    const report = await score({
+      pack: creatorPack,
+      entities: [
+        {
+          id,
+          entity: {
+            canonicalHandle: "nobody",
+            platform: "forum",
+            channelUrl: null,
+            postsPerWeek: 4,
+          },
+        },
+      ],
+      evidence: new MemoryEvidence(),
+    })
+
+    // `postingCadence` could have answered from the entity alone, and the stage
+    // still writes nothing. Decision 3: a score over no corpus is not a score.
+    expect(report).toMatchObject({ scored: 0, unevidenced: 1 })
+    expect(creatorRepo.scores.has(id)).toBe(false)
+  })
+
+  it("runs all four stages end to end, and the score at the end has receipts", async () => {
+    const sink = new MemoryMentionSink()
+    const items = corpus()
+    await extract({
+      pack: creatorPack,
+      llm: llm(fakeChatClient((req) => creatorAnswer(req.user))),
+      items,
+      sink,
+      scope: { purpose: "refine" },
+    })
+
+    const cache = new MemoryResolutionCache()
+    const mentions = pendingFrom(sink, items)
+    const evidence = new MemoryEvidence(cache)
+    for (const m of mentions) {
+      evidence.add({
+        mentionId: m.id,
+        domainId: m.domainId,
+        rawItemId: m.rawItemId,
+        sourceId: m.item.sourceId,
+        sourceUrl: m.item.url,
+        language: m.item.languageGuess,
+        capturedAt: new Date("2026-02-01T00:00:00Z"),
+        extract: m.payload,
+        engagement: { views: null, likes: null, comments: null },
+      })
+    }
+
+    const resolved = await resolve({ pack: creatorPack, mentions, cache, evidence })
+    expect(resolved).toMatchObject({ mentions: 5, keys: 1, entities: 1, evidence: 5 })
+
+    const links = new MemoryEntityLinks(cache, evidence)
+    const page = creatorRepo.entities.map((row) => ({ id: row.id, entity: row.entity }))
+    await dedup({ pack: creatorPack, entities: page, links })
+    const report = await score({ pack: creatorPack, entities: page, evidence })
+
+    expect(report).toMatchObject({ entities: 1, scored: 1, unmeasurable: 0 })
+    const written = creatorRepo.scores.get(page[0]?.id as string)
+    // Five items, one channel, one score — and the reasons name the rows the
+    // corpus actually produced rather than anything this test invented.
+    expect(written?.influence?.because.find((e) => e.factor === "videoShare")?.evidenceIds).toEqual(
+      evidence.rows.map((r) => r.id),
+    )
   })
 })

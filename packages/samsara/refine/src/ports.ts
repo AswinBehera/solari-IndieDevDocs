@@ -301,3 +301,90 @@ export interface EntityLinks {
    */
   repoint(domainId: string, from: string, into: string): Promise<RepointCount>
 }
+
+/**
+ * One piece of evidence, as a score factor is allowed to see it.
+ *
+ * Narrowed from the row for the same reason `ExtractItem` is, and the omission
+ * that matters is `personaId`. A persona is *our* harvesting identity — which
+ * character was driving the browser when this artifact was found — and a factor
+ * able to reach it would eventually weigh it, which is a score measuring our own
+ * sampling and calling it a property of the place. Everything here is either a
+ * fact about the artifact or the pack's own payload.
+ *
+ * `extract` is `unknown` for the same reason `MentionRow.payload` is: it is the
+ * pack's mention, it has already been validated against the pack's schema, and
+ * the engine carrying it without reading it is the seam.
+ */
+export interface EvidenceRecord {
+  id: string
+  entityId: string
+  /**
+   * Which artifact this claim came from.
+   *
+   * Exposed because the grain of this table is a *claim*, not an artifact: one
+   * post naming a shop twice is two rows. A factor that means "how many separate
+   * posts" has to count distinct values of this itself, and it can only do that
+   * if it can see it.
+   */
+  rawItemId: string
+  sourceId: string
+  sourceUrl: string
+  /** What the source or a cheap detector claimed. Null is common and is not "unknown language". */
+  language: string | null
+  capturedAt: Date
+  extract: unknown
+  /**
+   * Whatever the adapter could read off the surface, and usually nothing.
+   *
+   * Three nullable numbers rather than a nullable object, because the surfaces
+   * disagree about which of them exist: a forum thread has replies and no views,
+   * a video has all three. A factor that needs one asks for it and abstains when
+   * it is null — which is the whole reason abstention is in the scoring
+   * contract, rather than treating an unknown as a zero.
+   */
+  engagement: {
+    views: number | null
+    likes: number | null
+    comments: number | null
+  }
+}
+
+/**
+ * Materialise evidence from mentions that have just resolved (P2.5).
+ *
+ * This exists because the score stage had nothing to read. `Evidence` is in plan
+ * section 3 and in the `score(e, ev)` signature, and until P2.5 nothing in the
+ * repository wrote a single row — so a scorer built against it would have been
+ * correct, tested, and identically zero in production.
+ *
+ * It takes mention ids rather than rows because every column it needs is already
+ * in the database, one join away: the mention has the entity and the payload, the
+ * raw item has the source, the URL, the language, the capture time and the
+ * engagement, and the harvest run has the persona. Passing those through the
+ * engine to write them back would be a round trip to compose a row Postgres can
+ * compose itself.
+ *
+ * Returns how many rows were written, which is not the same as the number of
+ * mention ids handed in — mentions that did not resolve have no entity to be
+ * evidence for, and mentions already recorded conflict and are skipped.
+ */
+export interface EvidenceWriter {
+  record(domainId: string, mentionIds: readonly string[]): Promise<number>
+}
+
+/**
+ * Read the evidence behind a page of entities, in one query.
+ *
+ * A map rather than a flat list, because the caller has entities and wants each
+ * one's evidence; flattening and re-grouping in the stage would put the grouping
+ * key — `entityId` — in two places that could disagree. An entity with no
+ * evidence is **absent from the map**, not present with an empty array, so that
+ * "nothing to score" is one check rather than two.
+ */
+export interface EvidenceStore {
+  forEntities(
+    domainId: string,
+    entityIds: readonly string[],
+  ): Promise<Map<string, EvidenceRecord[]>>
+}

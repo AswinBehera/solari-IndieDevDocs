@@ -1,4 +1,9 @@
-import type { LookupPort, PendingMentionReader, ResolutionCache } from "@samsara/refine"
+import type {
+  EvidenceWriter,
+  LookupPort,
+  PendingMentionReader,
+  ResolutionCache,
+} from "@samsara/refine"
 import { MENTION_LIST_LIMIT, resolve } from "@samsara/refine"
 import type { JobHandler } from "./handlers.js"
 
@@ -92,6 +97,21 @@ export interface ResolveHandlerDeps {
    * something before a key was ever bought.
    */
   lookup?: LookupPort
+  /**
+   * Where a resolved mention's evidence row goes (P2.5).
+   *
+   * Optional, and absent it nothing is written — which was the repository's
+   * state until P2.5 and the reason the score stage had an empty table to read.
+   * It is here rather than in a stage of its own because this handler is the one
+   * moment a mention has just acquired an entity id; a later stage would have to
+   * rediscover that by scanning the two largest tables we have.
+   *
+   * It stays optional because the alternative is worse: a required port makes
+   * every existing caller — the tests, the backfill tool — construct a database
+   * writer to run a stage that does not need one, and resolution is still
+   * correct without it. What is lost is receipts, which the report counts.
+   */
+  evidence?: EvidenceWriter
 }
 
 export function createResolveHandler(deps: ResolveHandlerDeps): JobHandler {
@@ -102,17 +122,30 @@ export function createResolveHandler(deps: ResolveHandlerDeps): JobHandler {
     // registered means the runner shipped without the pack.
     const pack = ctx.packs.require(input.domainId)
 
-    const totals = { mentions: 0, keys: 0, cached: 0, asked: 0, resolved: 0, unresolvable: 0 }
+    const totals = {
+      mentions: 0,
+      keys: 0,
+      cached: 0,
+      asked: 0,
+      resolved: 0,
+      unresolvable: 0,
+      evidence: 0,
+    }
     const tiers = new Map<number, number>()
     const deferrals = new Map<string, number>()
     let invalid = 0
     let pages = 0
 
-    for (; pages < MAX_PAGES; pages++) {
+    while (pages < MAX_PAGES) {
       if (ctx.signal.aborted) break
 
       const mentions = await deps.pending.pending(input.domainId, MENTION_LIST_LIMIT)
       if (mentions.length === 0) break
+      // Counted here rather than in a loop header, because every `break` below
+      // this line happens *after* a page was resolved: the header form reported
+      // one page fewer than the job did, and a job that drained a single page
+      // logged "0 pages" beside the mentions it had just resolved.
+      pages++
 
       await ctx.heartbeat(`resolving ${mentions.length} mentions for ${input.domainId}`)
 
@@ -121,6 +154,7 @@ export function createResolveHandler(deps: ResolveHandlerDeps): JobHandler {
         mentions,
         cache: deps.cache,
         ...(deps.lookup ? { lookup: deps.lookup } : {}),
+        ...(deps.evidence ? { evidence: deps.evidence } : {}),
         signal: ctx.signal,
       })
 
@@ -130,6 +164,7 @@ export function createResolveHandler(deps: ResolveHandlerDeps): JobHandler {
       totals.asked += report.asked
       totals.resolved += report.resolved
       totals.unresolvable += report.unresolvable
+      totals.evidence += report.evidence
       invalid += report.invalid
       for (const t of report.tiers) tiers.set(t.tier, (tiers.get(t.tier) ?? 0) + t.count)
       for (const d of report.deferrals)
@@ -158,7 +193,8 @@ export function createResolveHandler(deps: ResolveHandlerDeps): JobHandler {
     await ctx.heartbeat(
       `${input.domainId}: ${totals.resolved} resolved, ${totals.unresolvable} unresolvable ` +
         `from ${totals.keys} keys over ${totals.mentions} mentions ` +
-        `(${totals.cached} cached, ${totals.asked} asked, ${invalid} invalid, ${pages} pages)` +
+        `(${totals.cached} cached, ${totals.asked} asked, ${invalid} invalid, ${pages} pages, ` +
+        `${totals.evidence} evidence)` +
         (tierLine ? ` [${tierLine}]` : ""),
     )
 

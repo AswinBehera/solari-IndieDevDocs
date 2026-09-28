@@ -14,9 +14,12 @@ import { eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import type { MentionRow } from "./ports.js"
+import type { EvidenceRecord, MentionRow } from "./ports.js"
 import {
+  EVIDENCE_PER_ENTITY,
   PostgresEntityLinks,
+  PostgresEvidenceStore,
+  PostgresEvidenceWriter,
   PostgresMentionSink,
   PostgresMentionStore,
   PostgresPendingMentions,
@@ -77,6 +80,13 @@ afterAll(async () => {
 })
 
 const capturedAt = new Date("2026-09-18T10:00:00.000Z")
+
+/** A map lookup that fails the test rather than the type, since absent is meaningful. */
+const read = (map: Map<string, EvidenceRecord[]>, id: string): EvidenceRecord[] => {
+  const rows = map.get(id)
+  if (!rows) throw new Error(`no evidence for ${id}`)
+  return rows
+}
 
 describe.runIf(hasDb)("refine, against Postgres", () => {
   const d = () => db as NonNullable<typeof db>
@@ -446,11 +456,18 @@ describe.runIf(hasDb)("refine, against Postgres", () => {
     const links = () => new PostgresEntityLinks(d())
 
     const evidenceFor = async (domainId: string, entityId: string): Promise<string> => {
+      // Its own mention, because `evidence.mention_id` is a real foreign key and
+      // `(domain_id, mention_id)` is unique (P2.5). Minting one per row here is
+      // also what the writer does — one claim, one mention — so the fixture is
+      // not a shape the pipeline cannot produce.
+      const claim = row({ domainId })
+      await sink().insertMany([claim])
       const [written] = await d()
         .insert(evidence)
         .values({
           domainId,
           entityId,
+          mentionId: claim.id,
           rawItemId: itemId,
           sourceId: "fake.search",
           sourceUrl: "https://example.invalid/topic/44225687",
@@ -539,6 +556,251 @@ describe.runIf(hasDb)("refine, against Postgres", () => {
       })
       const [untouched] = await d().select().from(evidence)
       expect(untouched?.entityId).toBe(duplicate)
+    })
+  })
+
+  /**
+   * Evidence materialisation and the read behind every score (P2.5).
+   *
+   * What needs a real database here is the whole implementation. The writer is
+   * one `INSERT … SELECT` over a three-table join with an `ON CONFLICT`, and the
+   * reader is a window function — neither of them is a thing a fake can be wrong
+   * about in the same way. `MemoryEvidence` reproduces the two *rules* (an
+   * unresolved mention writes nothing, a replay writes nothing again); only this
+   * file can show that the join picks up the persona from the harvest run, that
+   * the unique index is the one being conflicted on, and that a page of entities
+   * costs one query.
+   */
+  describe("the evidence writer", () => {
+    const writer = () => new PostgresEvidenceWriter(d())
+    const cache = () => new PostgresResolutionCache(d())
+
+    /** A mention pointed at an entity the only way anything ever points one. */
+    const resolved = async (entityId: string, over: Partial<MentionRow> = {}): Promise<string> => {
+      const mention = row(over)
+      await sink().insertMany([mention])
+      await cache().commit({
+        domainId: mention.domainId,
+        key: `k-${mention.id}`,
+        state: "resolved",
+        entityId,
+        tier: 1,
+        confidence: 0.8,
+        mentionIds: [mention.id],
+        deferred: false,
+      })
+      return mention.id
+    }
+
+    it("composes a row from the mention, the item and the harvest run", async () => {
+      const entityId = randomUUID()
+      const mentionId = await resolved(entityId)
+
+      expect(await writer().record("atlas", [mentionId])).toBe(1)
+
+      const [written] = await d().select().from(evidence)
+      expect(written).toMatchObject({
+        domainId: "atlas",
+        entityId,
+        mentionId,
+        rawItemId: itemId,
+        sourceId: "fake.search",
+        sourceUrl: "https://example.invalid/topic/44225687",
+        // From `harvest_runs`, two joins away, and the reason the writer is a
+        // join rather than a loop: nothing the caller holds knows this.
+        personaId,
+        language: "vi",
+      })
+      expect(written?.capturedAt).toEqual(capturedAt)
+      // The pack's payload, carried through jsonb unread — the same seam
+      // `mentions.payload` is, with the same non-Latin fixture.
+      expect(written?.extract).toEqual({
+        localName: "Phở Hòa",
+        romanName: "Pho Hoa",
+        sentiment: "positive",
+      })
+    })
+
+    it("skips a mention that never resolved", async () => {
+      const mention = row()
+      await sink().insertMany([mention])
+
+      // Committed as unresolvable, which is what a caller hands in anyway: it
+      // cannot tell, because a cached key comes back through the same commit
+      // whether it resolved last week or was written off.
+      await cache().commit({
+        domainId: "atlas",
+        key: "unplaceable",
+        state: "unresolvable",
+        entityId: null,
+        tier: 3,
+        confidence: null,
+        mentionIds: [mention.id],
+        deferred: false,
+      })
+
+      expect(await writer().record("atlas", [mention.id])).toBe(0)
+      expect(await d().select().from(evidence)).toHaveLength(0)
+    })
+
+    it("adds nothing on a replay, and adds nothing when two runners overlap", async () => {
+      const entityId = randomUUID()
+      const a = await resolved(entityId)
+      const b = await resolved(entityId)
+
+      expect(await writer().record("atlas", [a, b])).toBe(2)
+      expect(await writer().record("atlas", [a, b])).toBe(0)
+      // The overlapping-page case: a second runner handed one mention the first
+      // already recorded and one it did not.
+      const c = await resolved(entityId)
+      expect(await writer().record("atlas", [b, c])).toBe(1)
+      expect(await d().select().from(evidence)).toHaveLength(3)
+    })
+
+    it("stays idempotent after a merge has repointed what it wrote", async () => {
+      // The reason the unique index is on `(domain_id, mention_id)` rather than
+      // on `(domain_id, entity_id, raw_item_id)`. Two rows from one item about
+      // two entities are distinct before a merge and would collide after it,
+      // turning `repoint` into a constraint violation at the worst moment.
+      const first = randomUUID()
+      const second = randomUUID()
+      const a = await resolved(first)
+      const b = await resolved(second)
+      await writer().record("atlas", [a, b])
+
+      const moved = await new PostgresEntityLinks(d()).repoint("atlas", second, first)
+
+      expect(moved.evidence).toBe(1)
+      const rows = await d().select().from(evidence)
+      expect(rows).toHaveLength(2)
+      expect(rows.every((r) => r.entityId === first)).toBe(true)
+      // And the replay still adds nothing, which it could not if the key were
+      // the entity.
+      expect(await writer().record("atlas", [a, b])).toBe(0)
+    })
+
+    it("leaves another domain's mentions alone", async () => {
+      const entityId = randomUUID()
+      const mine = await resolved(entityId)
+      const theirs = await resolved(entityId, { domainId: "cartography" })
+
+      expect(await writer().record("atlas", [mine, theirs])).toBe(1)
+      const [written] = await d().select().from(evidence)
+      expect(written?.mentionId).toBe(mine)
+    })
+
+    it("writes nothing when handed nothing", async () => {
+      expect(await writer().record("atlas", [])).toBe(0)
+    })
+
+    it("loses its rows when the item they describe is deleted", async () => {
+      // `evidence.raw_item_id` is `ON DELETE cascade`, encoding the same rule
+      // `mentions` does: a claim about an item cannot outlive it. An orphan here
+      // would be worse than an orphaned mention, because a score would keep
+      // counting it.
+      await writer().record("atlas", [await resolved(randomUUID())])
+      expect(await d().select().from(evidence)).toHaveLength(1)
+
+      await d().delete(rawItems).where(eq(rawItems.id, itemId))
+
+      expect(await d().select().from(evidence)).toHaveLength(0)
+    })
+  })
+
+  describe("the evidence store", () => {
+    const writer = () => new PostgresEvidenceWriter(d())
+    const store = () => new PostgresEvidenceStore(d())
+
+    const recorded = async (entityId: string, count: number): Promise<void> => {
+      const ids: string[] = []
+      for (let i = 0; i < count; i++) {
+        const mention = row()
+        await sink().insertMany([mention])
+        await new PostgresResolutionCache(d()).commit({
+          domainId: "atlas",
+          key: `k-${mention.id}`,
+          state: "resolved",
+          entityId,
+          tier: 1,
+          confidence: 0.8,
+          mentionIds: [mention.id],
+          deferred: false,
+        })
+        ids.push(mention.id)
+      }
+      await writer().record("atlas", ids)
+    }
+
+    it("groups a page's evidence by entity, and leaves an empty entity out", async () => {
+      const busy = randomUUID()
+      const quiet = randomUUID()
+      const nothing = randomUUID()
+      await recorded(busy, 3)
+      await recorded(quiet, 1)
+
+      const read = await store().forEntities("atlas", [busy, quiet, nothing])
+
+      expect(read.get(busy)).toHaveLength(3)
+      expect(read.get(quiet)).toHaveLength(1)
+      // Absent rather than present-and-empty, which is what lets the stage's
+      // "nothing to score" be one check rather than two.
+      expect(read.has(nothing)).toBe(false)
+    })
+
+    it("hands back the engagement numbers as three nullable fields", async () => {
+      const entityId = randomUUID()
+      await recorded(entityId, 1)
+      await d().update(evidence).set({ engagementViews: 900, engagementComments: 12 })
+
+      const [record] = read(await store().forEntities("atlas", [entityId]), entityId)
+
+      // Three numbers rather than a nullable object: the surfaces disagree about
+      // which exist, and a factor abstains on the one it cannot see rather than
+      // on the whole row.
+      expect(record?.engagement).toEqual({ views: 900, likes: null, comments: 12 })
+    })
+
+    it("caps each entity separately, so a loud entity cannot starve a quiet one", async () => {
+      // The whole reason the cap is a window function. A `LIMIT` over the page
+      // would give the newest rows across entities to whichever had the most,
+      // and report every other entity as `unevidenced`.
+      const loud = randomUUID()
+      const quiet = randomUUID()
+      await recorded(loud, EVIDENCE_PER_ENTITY + 3)
+      await recorded(quiet, 2)
+
+      const read = await store().forEntities("atlas", [loud, quiet])
+
+      expect(read.get(loud)).toHaveLength(EVIDENCE_PER_ENTITY)
+      expect(read.get(quiet)).toHaveLength(2)
+    })
+
+    it("keeps the newest rows when it caps, deterministically", async () => {
+      const entityId = randomUUID()
+      await recorded(entityId, 3)
+      const all = await d().select().from(evidence)
+      const oldest = all[0]?.id as string
+      await d()
+        .update(evidence)
+        .set({ capturedAt: new Date("2020-01-01T00:00:00Z") })
+        .where(eq(evidence.id, oldest))
+
+      const rows = read(await store().forEntities("atlas", [entityId]), entityId)
+
+      // Newest first, because a score is a claim about what the corpus says now
+      // — a place that has become a tour stop should stop reading as local.
+      expect(rows.at(-1)?.id).toBe(oldest)
+    })
+
+    it("reads nothing for another domain's entity", async () => {
+      const entityId = randomUUID()
+      await recorded(entityId, 2)
+
+      expect((await store().forEntities("cartography", [entityId])).size).toBe(0)
+    })
+
+    it("asks nothing of the database when the page is empty", async () => {
+      expect((await store().forEntities("atlas", [])).size).toBe(0)
     })
   })
 })

@@ -4,6 +4,7 @@ import { type PlaceEntity, placeEntity } from "./entity.js"
 import { type PlaceMention, placeMention } from "./mention.js"
 import { PLACE_EXTRACT_PROMPT_VERSION, placeExtractPrompt } from "./prompt.js"
 import { createResolver, type OsmSearch, placeKey } from "./resolve.js"
+import { placeScores } from "./scores.js"
 import { BANGKOK, type City } from "./tier0.js"
 
 /**
@@ -86,5 +87,6 @@ export const createTravelPack = (deps: TravelPackDeps): DomainPack<PlaceMention,
       resolve: createResolver({ city, ...(deps.osm === undefined ? {} : { osm: deps.osm }) }),
     },
     dedupKeys: placeDedupKeys,
+    score: placeScores,
   }
 }

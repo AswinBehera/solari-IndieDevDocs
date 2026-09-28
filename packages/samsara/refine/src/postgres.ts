@@ -1,9 +1,12 @@
-import { entityResolutions, evidence, mentions, rawItems } from "@samsara/db"
+import { entityResolutions, evidence, harvestRuns, mentions, rawItems } from "@samsara/db"
 import { and, asc, desc, eq, inArray, sql, type TablesRelationalConfig } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 import type {
   CachedResolution,
   EntityLinks,
+  EvidenceRecord,
+  EvidenceStore,
+  EvidenceWriter,
   MentionFilter,
   MentionRecord,
   MentionRow,
@@ -350,5 +353,202 @@ export class PostgresEntityLinks implements EntityLinks {
         resolutions: movedResolutions.length,
       }
     })
+  }
+}
+
+/**
+ * How much of one entity's evidence a single scoring pass reads.
+ *
+ * Evidence is the only table in this pipeline that grows without a ceiling —
+ * one row per claim, kept forever — and a place that goes around Thai TikTok
+ * accumulates them faster than anything else here. An unbounded read would be
+ * fine for a year and then be the query that takes the runner down, and it would
+ * do it on exactly the entity the product cares most about getting right.
+ *
+ * So the read is capped per entity, newest first, and the cap is part of what a
+ * score *means*: `scores.local` is computed over the most recent two hundred
+ * claims about a place, not over all of them. That is a sampling decision and it
+ * is written down here rather than discovered later from a slow query log. Two
+ * hundred is large enough that the shares a factor computes are stable and small
+ * enough that a page of two hundred entities is a bounded amount of memory.
+ *
+ * Newest first rather than oldest, because a score is a claim about what the
+ * corpus says *now*: a shop that has become a tour-bus stop should stop reading
+ * as local, and an oldest-first window would hold the original verdict forever.
+ */
+export const EVIDENCE_PER_ENTITY = 200
+
+/**
+ * The real `EvidenceWriter`: one `INSERT … SELECT`, and no rows through here.
+ *
+ * Every column of an evidence row is already in the database, one join away —
+ * the mention carries the domain, the entity and the pack's own payload, the
+ * raw item carries the source, the URL, the language, the capture time and the
+ * engagement, and the harvest run carries the persona. Reading those back into
+ * the engine to write them out again would be a round trip whose only purpose is
+ * to compose a row Postgres can compose itself, and it would open a window
+ * between the read and the write in which a merge could repoint the mention.
+ *
+ * Two clauses do the work that the port promises.
+ *
+ * `mentions.entity_id IS NOT NULL` drops the mentions that did not resolve. The
+ * caller hands in everything it committed, because the caller cannot tell — a
+ * key answered from the cache may have resolved to an entity last week or been
+ * written off as unresolvable, and both come back through the same commit. A
+ * row pointing at no entity would be counted by every factor and readable by
+ * none, so the filter belongs here rather than in a caller that would have to
+ * ask the cache a second time to know.
+ *
+ * `ON CONFLICT DO NOTHING` against `evidence_domain_mention_idx` makes the whole
+ * operation idempotent, which is what lets it be the last thing the resolve
+ * stage does. A run cut in half before it leaves resolutions written and
+ * evidence unwritten; the next run re-commits those mentions from the cache and
+ * records them then. A second runner over the same page adds nothing, which
+ * matters more here than anywhere else in the pipeline: double-counted evidence
+ * does not fail, it quietly changes every score computed from it.
+ */
+export class PostgresEvidenceWriter implements EvidenceWriter {
+  constructor(private readonly db: Db) {}
+
+  async record(domainId: string, mentionIds: readonly string[]): Promise<number> {
+    if (mentionIds.length === 0) return 0
+
+    const written = await this.db
+      .insert(evidence)
+      .select(
+        this.db
+          .select({
+            // Every column of `evidence`, in the order the table declares them,
+            // including the three with defaults. Drizzle's insert-select refuses
+            // anything else — "selected fields are not the same or are in a
+            // different order compared to the table definition" — and the
+            // refusal is worth more than the tidier partial list would have
+            // been: a column added to `evidence` fails this query loudly at the
+            // first call rather than silently arriving null forever.
+            id: sql<string>`gen_random_uuid()`.as("id"),
+            domainId: mentions.domainId,
+            // Non-null by the `where` below. Drizzle types the column nullable
+            // because it is, and the narrowing a `WHERE` does is not something
+            // the query builder's types can see.
+            entityId: sql<string>`${mentions.entityId}`.as("entity_id"),
+            mentionId: mentions.id,
+            rawItemId: mentions.rawItemId,
+            sourceId: rawItems.sourceId,
+            sourceUrl: rawItems.url,
+            personaId: harvestRuns.personaId,
+            // The item's guess, carried rather than improved on. A better
+            // language call is a job for whatever can read the text, and a
+            // factor weighing this should know it is weighing a guess.
+            language: rawItems.languageGuess,
+            capturedAt: rawItems.capturedAt,
+            // The pack's own mention payload, stored without being read. This is
+            // the same seam `MentionRow.payload` is: the engine carries it.
+            extract: mentions.payload,
+            rawRef: rawItems.rawRef,
+            engagementViews: rawItems.engagementViews,
+            engagementLikes: rawItems.engagementLikes,
+            engagementComments: rawItems.engagementComments,
+            createdAt: sql<Date>`now()`.as("created_at"),
+            updatedAt: sql<Date>`now()`.as("updated_at"),
+          })
+          .from(mentions)
+          .innerJoin(rawItems, eq(rawItems.id, mentions.rawItemId))
+          .innerJoin(harvestRuns, eq(harvestRuns.id, rawItems.harvestRunId))
+          .where(
+            and(
+              eq(mentions.domainId, domainId),
+              inArray(mentions.id, [...mentionIds]),
+              sql`${mentions.entityId} is not null`,
+            ),
+          ),
+      )
+      .onConflictDoNothing()
+      // `returning` rather than a row count, for the reason `PostgresEntityLinks`
+      // gives: the generic `PgDatabase` type does not expose the driver's result
+      // shape, and reaching a count through a cast stops being true when the
+      // driver changes. The list is bounded by the page of mentions.
+      .returning({ id: evidence.id })
+
+    return written.length
+  }
+}
+
+/**
+ * The real `EvidenceStore`: one query for a whole page, capped per entity.
+ *
+ * The cap is a window function rather than a `LIMIT`, and that is the only
+ * interesting thing in here. A `LIMIT` over the whole page would take the two
+ * hundred newest rows *across* entities, which on a page containing one famous
+ * place and a hundred quiet ones means the famous one takes the entire budget
+ * and the rest come back empty — every one of them then reported as
+ * `unevidenced` by a stage that was told they had nothing. `row_number() over
+ * (partition by entity_id …)` gives each entity its own window, so the page's
+ * quiet rows are unaffected by whatever the loud one is doing.
+ *
+ * The tiebreak on `id` is not decoration. Capture times collide — a harvest
+ * writes a batch of items with one timestamp — and an unordered tiebreak means
+ * the row that falls off the edge of the window is whichever the planner reached
+ * first, so a score recomputed over unchanged data could move. With the id in
+ * the ordering the window is deterministic and a score only changes when the
+ * corpus does.
+ */
+export class PostgresEvidenceStore implements EvidenceStore {
+  constructor(private readonly db: Db) {}
+
+  async forEntities(
+    domainId: string,
+    entityIds: readonly string[],
+  ): Promise<Map<string, EvidenceRecord[]>> {
+    const out = new Map<string, EvidenceRecord[]>()
+    if (entityIds.length === 0) return out
+
+    const ranked = this.db
+      .select({
+        id: evidence.id,
+        entityId: evidence.entityId,
+        rawItemId: evidence.rawItemId,
+        sourceId: evidence.sourceId,
+        sourceUrl: evidence.sourceUrl,
+        language: evidence.language,
+        capturedAt: evidence.capturedAt,
+        extract: evidence.extract,
+        views: evidence.engagementViews,
+        likes: evidence.engagementLikes,
+        comments: evidence.engagementComments,
+        rank: sql<number>`row_number() over (
+          partition by ${evidence.entityId}
+          order by ${evidence.capturedAt} desc, ${evidence.id}
+        )`.as("rank"),
+      })
+      .from(evidence)
+      .where(and(eq(evidence.domainId, domainId), inArray(evidence.entityId, [...entityIds])))
+      .as("ranked")
+
+    const rows = await this.db
+      .select()
+      .from(ranked)
+      .where(sql`${ranked.rank} <= ${EVIDENCE_PER_ENTITY}`)
+      .orderBy(ranked.entityId, ranked.rank)
+
+    for (const row of rows) {
+      const record: EvidenceRecord = {
+        id: row.id,
+        entityId: row.entityId,
+        rawItemId: row.rawItemId,
+        sourceId: row.sourceId,
+        sourceUrl: row.sourceUrl,
+        language: row.language,
+        capturedAt: row.capturedAt,
+        extract: row.extract,
+        engagement: { views: row.views, likes: row.likes, comments: row.comments },
+      }
+      const bucket = out.get(row.entityId)
+      if (bucket) bucket.push(record)
+      else out.set(row.entityId, [record])
+    }
+    // An entity with no rows is absent rather than present-and-empty, which is
+    // the port's promise and what lets the stage's "nothing to score" be one
+    // check rather than two.
+    return out
   }
 }

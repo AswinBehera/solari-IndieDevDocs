@@ -3,6 +3,7 @@ import { z } from "zod"
 import { ENVELOPE_INSTRUCTIONS, ITEMS_VARIABLE } from "../extract.js"
 import { MemoryEntityRepo } from "../memory.js"
 import type { DedupKey, DomainPack, Resolution } from "../pack.js"
+import type { EvidenceRecord } from "../ports.js"
 
 /**
  * The second pack (P2.8), and the only reason it exists is to be unlike the first.
@@ -207,4 +208,53 @@ creatorPack.dedupKeys = (entity: CreatorEntity): DedupKey[] => {
   if (entity.channelUrl !== null) keys.push({ kind: CHANNEL_KEY, value: entity.channelUrl })
   keys.push({ kind: HANDLE_KEY, value: `${entity.platform}:${entity.canonicalHandle}` })
   return keys
+}
+
+/**
+ * Two factors, and both of them unlike travel's (P2.5).
+ *
+ * The travel pack's eight factors all read the evidence and ignore the entity.
+ * That is a perfectly reasonable thing for them to do and it would make "a
+ * factor is a function of the evidence" an assumption the engine could grow
+ * without anyone noticing — the signature says `measure(entity, evidence)` and
+ * the first argument would never have been used.
+ *
+ * - **`postingCadence` reads only the entity.** It has no particular evidence
+ *   row to point at, so it returns no receipts at all, which the engine has to
+ *   accept: `Explanation.evidenceIds` permits an empty list and a stage that
+ *   invented one would be attaching a reason to a row that did not supply it.
+ * - **It abstains on a null,** and `postsPerWeek` is null for every creator
+ *   whose source never said. Over a page where it is null throughout, this score
+ *   falls back to `channelReach` alone — the abstention path, exercised by a
+ *   pack rather than by a stub.
+ * - **There is one score, not two.** Travel has `local` and `tourist`, and a
+ *   report shaped around a pair would look fine against it.
+ */
+creatorPack.score = {
+  scores: {
+    influence: [
+      {
+        name: "postingCadence",
+        weight: 2,
+        measure: (entity: CreatorEntity) => {
+          if (entity.postsPerWeek === null) return null
+          // Daily saturates. A creator posting twice a day is not twice the
+          // signal, and the weighted mean needs a number in [0,1] regardless.
+          return { value: Math.min(1, entity.postsPerWeek / 7), evidenceIds: [] }
+        },
+      },
+      {
+        name: "videoShare",
+        weight: 1,
+        measure: (_entity: CreatorEntity, evidence: readonly EvidenceRecord[]) => {
+          if (evidence.length === 0) return null
+          const video = evidence.filter((row) => {
+            const parsed = creatorMention.safeParse(row.extract)
+            return parsed.success && parsed.data.platform !== "forum"
+          })
+          return { value: video.length / evidence.length, evidenceIds: video.map((r) => r.id) }
+        },
+      },
+    ],
+  },
 }

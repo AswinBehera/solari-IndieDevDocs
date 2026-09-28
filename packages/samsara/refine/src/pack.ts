@@ -1,6 +1,7 @@
+import type { ScoreSet } from "@samsara/core"
 import type { PromptRef } from "@samsara/llm"
 import type { z } from "zod"
-import type { ExtractItem } from "./ports.js"
+import type { EvidenceRecord, ExtractItem } from "./ports.js"
 
 /**
  * The `DomainPack` contract — the identity half, and now the extract half.
@@ -283,6 +284,56 @@ export interface EntityRepo<TEntity> {
    * session.
    */
   merge(into: string, from: string): Promise<void>
+
+  /**
+   * Store this entity's scores (P2.5).
+   *
+   * On the repo rather than on a port of the engine's, because `scores` is a
+   * column in the pack's own table — the engine computes the numbers and has no
+   * idea where they live, which is the same inversion `upsert` and `merge` are
+   * already built on.
+   *
+   * It takes the whole `ScoreSet` and replaces it rather than merging key by
+   * key. A score that a pack has stopped computing should disappear, not linger
+   * at whatever it last was: one key left over from an older version of a pack,
+   * sitting beside a freshly written one, is a number with no factors behind it
+   * any more — and the one thing `because` exists to prevent is a reading that
+   * nobody can account for.
+   */
+  writeScores(id: string, scores: ScoreSet): Promise<void>
+
+  /**
+   * One page of stored entities, oldest first, after `after`.
+   *
+   * The two stages that run over *entities* rather than mentions — dedup and
+   * score — both take a page the caller read, and neither can read it: the table
+   * is the pack's, and the engine has never been told it exists. This is the
+   * method that closes that gap, and it is on the repo for the same reason
+   * `writeScores` is.
+   *
+   * **Oldest first is load-bearing and not a default.** Dedup merges a duplicate
+   * into the older row, so a page ordered by anything else would make which row
+   * survives depend on the planner. Scoring does not care about order at all, and
+   * shares this method rather than asking for a second one, because a second
+   * ordering over the same table is a second answer to "what is page two" and
+   * they would disagree the moment a row is inserted between two jobs.
+   *
+   * **`cursor` is the repo's own and opaque to everyone else.** Keyset and not an
+   * offset: these stages *write* to the table they are paging — dedup deletes
+   * rows, resolve inserts them while a score job runs — and an `OFFSET` under a
+   * shifting table skips rows and repeats rows, silently. The caller passes back
+   * what it was handed and never parses it; a null `cursor` means this page was
+   * the last one, which is a stronger statement than a short page and is what
+   * lets a caller stop without a final empty round trip.
+   */
+  page(after: string | null, limit: number): Promise<EntityPage<TEntity>>
+}
+
+/** One page from `EntityRepo.page`, shaped to pass straight into a stage. */
+export interface EntityPage<TEntity> {
+  entities: { id: string; entity: TEntity }[]
+  /** Opaque; hand it back to get the next page. Null when there is none. */
+  cursor: string | null
 }
 
 /**
@@ -322,7 +373,82 @@ export interface ResolveSpec<TMention, TEntity> {
 }
 
 /**
- * Widened as far as P2.4 has a caller. `score`, `sources` and `queries` arrive
+ * What one factor read off the evidence, or nothing.
+ *
+ * **Returning `null` is the load-bearing half of this type.** A factor that
+ * cannot be measured — engagement on a forum that reports none, a language
+ * share over evidence with no language recorded — is not a factor that measured
+ * zero. Scoring it zero silently punishes a place for the shape of the surface
+ * it was found on, and it does so invisibly, because a zero contribution in the
+ * explanation looks exactly like a factor that was measured and came out badly.
+ * A factor that abstains is left out of both the numerator and the denominator,
+ * so the score is the weighted mean of what could actually be read.
+ *
+ * `evidenceIds` is what makes the explanation checkable rather than decorative:
+ * it is the list of rows this reading came from, and `Explanation.evidenceIds`
+ * in `@samsara/core` carries it all the way to whatever renders the score. A
+ * factor that measured something over no evidence at all should abstain.
+ */
+export interface FactorReading {
+  /**
+   * Between 0 and 1 inclusive. The stage refuses anything else, by factor name.
+   *
+   * Refuses rather than clamps: a factor returning 1.4 is a bug in the pack, and
+   * clamping it would keep the score in range while making the explanation lie —
+   * the contributions would no longer sum to the value they are explaining.
+   *
+   * A factor that counts *against* a score is written as its own inverse — not
+   * as a negative value — so that every contribution is a share of the total and
+   * the arithmetic a reader can do in their head is the arithmetic the stage did.
+   */
+  value: number
+  evidenceIds: readonly string[]
+}
+
+/**
+ * One named, weighted, explainable reading.
+ *
+ * Section 2.5 sketches this member as `score(e, ev): ScoreSet` — one method
+ * returning the finished map. P2.5's own entry is the one that wins here:
+ * "generic weighted scorer producing a `ScoreSet` with `because` explanations,
+ * **from factor functions the pack supplies**". The difference is not
+ * cosmetic. With a method, the weighting, the normalisation and the explanation
+ * are all inside the pack, and "the engine is a generic weighted scorer" is a
+ * claim about a function nobody can see. With factors, the engine does the
+ * arithmetic and builds every `Explanation` itself, and a pack cannot produce a
+ * score whose reasons do not add up to it.
+ */
+export interface ScoreFactor<TEntity> {
+  /**
+   * Lands verbatim in `Explanation.factor`, which a card renders. Short, and a
+   * description of what was measured rather than of what it implies —
+   * `nativeLanguageShare`, not `probablyLocal`.
+   */
+  name: string
+  /**
+   * Strictly positive. Relative to the other factors under the same score; the
+   * stage divides by the total weight of the factors that did not abstain, so
+   * these do not have to sum to anything.
+   */
+  weight: number
+  measure(entity: TEntity, evidence: readonly EvidenceRecord[]): FactorReading | null
+}
+
+/**
+ * The pack's scores, each as an ordered list of factors.
+ *
+ * The keys become the keys of the stored `ScoreSet`, and the engine never
+ * interprets one — it cannot, and the seam check would fail the build if this
+ * file so much as named one of the first vertical's. Plan section 2.5 puts the
+ * boundary in one sentence: a score's *name* belongs to the pack, and what
+ * reaches the engine is a key in a generic map.
+ */
+export interface ScoreSpec<TEntity> {
+  scores: Record<string, readonly ScoreFactor<TEntity>[]>
+}
+
+/**
+ * Widened as far as P2.5 has a caller. `score`, `sources` and `queries` arrive
  * in P2.5 and Phase 3, each with the stage that calls it. Callers
  * should already type against this name so that the widening is a change in one
  * file rather than in every consumer.
@@ -366,6 +492,17 @@ export interface DomainPack<TMention = unknown, TEntity = unknown> extends Domai
    * this contract is already written this way.
    */
   dedupKeys?(entity: TEntity): readonly DedupKey[]
+
+  /**
+   * How this pack's scores are built, and the reasons that come with them (P2.5).
+   *
+   * Data rather than a method, for the reason `ScoreFactor` gives. Optional for
+   * the reason `resolve` is, and it depends on `resolve` for the reason
+   * `dedupKeys` does: there is nothing to score that resolution did not write,
+   * and the stage refuses by name rather than reporting a clean run over an
+   * empty table.
+   */
+  score?: ScoreSpec<TEntity>
 }
 
 /**

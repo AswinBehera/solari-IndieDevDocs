@@ -1,8 +1,11 @@
-import type { ResolutionState } from "@samsara/core"
-import type { DedupKey, DedupMatch, EntityRepo } from "./pack.js"
+import type { ResolutionState, ScoreSet } from "@samsara/core"
+import type { DedupKey, DedupMatch, EntityPage, EntityRepo } from "./pack.js"
 import type {
   CachedResolution,
   EntityLinks,
+  EvidenceRecord,
+  EvidenceStore,
+  EvidenceWriter,
   MentionFilter,
   MentionRecord,
   MentionRow,
@@ -189,6 +192,17 @@ export class MemoryEntityRepo<TEntity> implements EntityRepo<TEntity> {
   readonly entities: { id: string; entity: TEntity }[] = []
   /** Every merge, in order, so a test can assert the direction and not just the count. */
   readonly merges: { into: string; from: string }[] = []
+  /**
+   * Scores by entity id (P2.5).
+   *
+   * Beside the entities rather than on them, because `TEntity` is the pack's own
+   * shape and this fake has no way to put a field on it. The one real repo does
+   * write a column on the row; what both agree on is that the last write wins
+   * and a key that stopped being computed stops being stored.
+   */
+  readonly scores = new Map<string, ScoreSet>()
+  /** Mint order by id, so a page survives a merge splicing the array. See `page`. */
+  private readonly order = new Map<string, number>()
   private minted = 0
 
   constructor(private readonly options: MemoryEntityRepoOptions<TEntity> = {}) {}
@@ -200,6 +214,7 @@ export class MemoryEntityRepo<TEntity> implements EntityRepo<TEntity> {
     // every engine pointer still on its way to the survivor would land on it.
     this.minted++
     const id = `entity-${this.minted}`
+    this.order.set(id, this.minted)
     this.entities.push({ id, entity })
     return id
   }
@@ -227,7 +242,119 @@ export class MemoryEntityRepo<TEntity> implements EntityRepo<TEntity> {
     if (duplicate && this.options.fold)
       target.entity = this.options.fold(target.entity, duplicate.entity)
     this.entities.splice(index, 1)
+    this.scores.delete(from)
     this.merges.push({ into, from })
+  }
+
+  async writeScores(id: string, scores: ScoreSet): Promise<void> {
+    if (!this.entities.some((row) => row.id === id))
+      throw new Error(`cannot score ${id}: no such entity`)
+    this.scores.set(id, scores)
+  }
+
+  /**
+   * Insertion order, keyset on the mint counter rather than on the array index.
+   *
+   * The index would be the obvious thing and it breaks on exactly the case these
+   * pages exist for: `merge` splices a row out, every row after it shifts down
+   * one, and a caller holding a cursor into the middle then skips a row it has
+   * never seen. The counter is the same one `upsert` mints from and it is never
+   * reused, so a cursor stays valid across a merge that removed the row it names.
+   */
+  async page(after: string | null, limit: number): Promise<EntityPage<TEntity>> {
+    const from = after === null ? 0 : Number(after)
+    if (!Number.isFinite(from)) throw new Error(`not a cursor this repo minted: ${after}`)
+
+    const rows = this.entities
+      .map((row) => ({ row, seq: this.order.get(row.id) ?? 0 }))
+      .filter((r) => r.seq > from)
+      .sort((a, b) => a.seq - b.seq)
+      .slice(0, limit)
+
+    const last = rows.at(-1)
+    return {
+      entities: rows.map((r) => ({ id: r.row.id, entity: r.row.entity })),
+      // Null on a short page, which for a fake is also the exhausted page: the
+      // real repo cannot know that without an extra row, so it says the same
+      // thing the same way and callers cannot come to depend on the difference.
+      cursor: rows.length < limit || !last ? null : String(last.seq),
+    }
+  }
+}
+
+/**
+ * What an artifact said, before anyone knows which entity it said it about.
+ *
+ * Every field of an evidence row except `id` and `entityId`, which is exactly
+ * the split the real implementation has: those two are the only things the
+ * writer's `INSERT … SELECT` does not read straight off the joined artifact.
+ */
+export interface MemoryClaim extends Omit<EvidenceRecord, "id" | "entityId"> {
+  mentionId: string
+  domainId: string
+}
+
+/**
+ * The evidence ports, in memory, over a list of claims (P2.5).
+ *
+ * The one collaborator is a `MemoryResolutionCache`, and it is not there for
+ * convenience: `record` has to skip a mention that did not resolve, and the only
+ * thing in this file that knows whether one did is the fake the resolve stage
+ * commits to. Handing the writer a separate copy of that answer would let a test
+ * prove evidence is written for resolved mentions while the thing the stage
+ * actually wrote said `unresolvable`.
+ *
+ * The claims themselves are added by hand, because the real writer composes a
+ * row from a join — `mentions ⋈ raw_items ⋈ harvest_runs` — and a fake that
+ * invented the artifact half would be asserting something about a table it has
+ * no copy of. What it does reproduce is the pair of behaviours the stage depends
+ * on and the SQL gets from a `WHERE` and an `ON CONFLICT`: an unresolved mention
+ * writes nothing, and a second call over the same mentions writes nothing again.
+ */
+export class MemoryEvidence implements EvidenceWriter, EvidenceStore {
+  readonly rows: (EvidenceRecord & { domainId: string; mentionId: string })[] = []
+  readonly claims: MemoryClaim[] = []
+  private minted = 0
+
+  constructor(private readonly cache?: MemoryResolutionCache) {}
+
+  add(...claims: MemoryClaim[]): void {
+    this.claims.push(...claims)
+  }
+
+  async record(domainId: string, mentionIds: readonly string[]): Promise<number> {
+    let written = 0
+    for (const mentionId of mentionIds) {
+      const claim = this.claims.find((c) => c.mentionId === mentionId && c.domainId === domainId)
+      if (!claim) continue
+      const entityId = this.cache?.mentions.get(mentionId)?.entityId ?? null
+      // The `WHERE mentions.entity_id IS NOT NULL` half. A mention nobody could
+      // place has nothing to be evidence *for*, and a row pointing at no entity
+      // would be counted by every factor and readable by none.
+      if (entityId === null) continue
+      // The `ON CONFLICT DO NOTHING` half, on `(domainId, mentionId)`.
+      if (this.rows.some((r) => r.domainId === domainId && r.mentionId === mentionId)) continue
+      this.minted++
+      const { mentionId: _, domainId: __, ...rest } = claim
+      this.rows.push({ ...rest, id: `evidence-${this.minted}`, domainId, mentionId, entityId })
+      written++
+    }
+    return written
+  }
+
+  async forEntities(
+    domainId: string,
+    entityIds: readonly string[],
+  ): Promise<Map<string, EvidenceRecord[]>> {
+    const wanted = new Set(entityIds)
+    const out = new Map<string, EvidenceRecord[]>()
+    for (const row of this.rows) {
+      if (row.domainId !== domainId || !wanted.has(row.entityId)) continue
+      const bucket = out.get(row.entityId)
+      if (bucket) bucket.push(row)
+      else out.set(row.entityId, [row])
+    }
+    return out
   }
 }
 
@@ -246,9 +373,19 @@ export class MemoryEntityRepo<TEntity> implements EntityRepo<TEntity> {
 export class MemoryEntityLinks implements EntityLinks {
   readonly evidence: { id: string; domainId: string; entityId: string }[] = []
 
-  constructor(private readonly cache?: MemoryResolutionCache) {}
+  constructor(
+    private readonly cache?: MemoryResolutionCache,
+    /**
+     * P2.5's evidence fake, when a test has one. Its rows are repointed beside
+     * this class's own, because from a merge's point of view they are the same
+     * table — and a test that materialised evidence properly and then watched a
+     * merge leave it on the dead entity would be the failure this port exists
+     * to prevent.
+     */
+    private readonly evidenceRows?: MemoryEvidence,
+  ) {}
 
-  /** Put an evidence row on an entity, since no stage does it yet. */
+  /** Put an evidence row on an entity, without going through the writer. */
   addEvidence(
     domainId: string,
     entityId: string,
@@ -260,7 +397,7 @@ export class MemoryEntityLinks implements EntityLinks {
   async repoint(domainId: string, from: string, into: string): Promise<RepointCount> {
     const count: RepointCount = { evidence: 0, mentions: 0, resolutions: 0 }
 
-    for (const row of this.evidence) {
+    for (const row of [...this.evidence, ...(this.evidenceRows?.rows ?? [])]) {
       if (row.domainId === domainId && row.entityId === from) {
         row.entityId = into
         count.evidence++

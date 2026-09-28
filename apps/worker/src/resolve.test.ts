@@ -12,6 +12,7 @@ import { definePrompt } from "@samsara/llm"
 import {
   type DomainPack,
   ENVELOPE_INSTRUCTIONS,
+  type EvidenceWriter,
   ITEMS_VARIABLE,
   MENTION_LIST_LIMIT,
   MemoryEntityRepo,
@@ -91,12 +92,28 @@ class FakeQueue implements PendingMentionReader {
   }
 }
 
+/**
+ * An evidence writer that records what it was asked to write down.
+ *
+ * Counting mention ids and not rows, because that is the argument the handler
+ * forwards; whether two mentions of one shop become one row or two is settled in
+ * `PostgresEvidenceWriter` and tested against a real database.
+ */
+class FakeEvidence implements EvidenceWriter {
+  readonly asked: string[][] = []
+  async record(_domainId: string, mentionIds: readonly string[]): Promise<number> {
+    this.asked.push([...mentionIds])
+    return mentionIds.length
+  }
+}
+
 function harness(
   behaviour: {
     pages?: PendingMention[][]
     resolution?: (m: Mention) => Resolution<Entity>
     registerPack?: boolean
     aborted?: boolean
+    evidence?: EvidenceWriter
   } = {},
 ) {
   const repo = new MemoryEntityRepo<Entity>()
@@ -134,7 +151,11 @@ function harness(
   }
 
   const queue = new FakeQueue(behaviour.pages ?? [page(0, 3)])
-  const handler = createResolveHandler({ pending: queue, cache: new MemoryResolutionCache() })
+  const handler = createResolveHandler({
+    pending: queue,
+    cache: new MemoryResolutionCache(),
+    ...(behaviour.evidence ? { evidence: behaviour.evidence } : {}),
+  })
 
   const packs = new PackRegistry()
   if (behaviour.registerPack !== false) packs.register(pack)
@@ -289,5 +310,27 @@ describe("the idempotency key", () => {
     // wrong shape entirely.
     expect(resolveJobKey("atlas", "2026-W38")).not.toBe(resolveJobKey("atlas", "2026-W39"))
     expect(resolveJobKey("atlas", "2026-W38")).toBe(resolveJobKey("atlas", "2026-W38"))
+  })
+})
+
+describe("the evidence writer, which is why a resolved mention leaves a receipt", () => {
+  it("is handed every page's resolved mentions and reports the total", async () => {
+    const evidence = new FakeEvidence()
+    // Two pages, and the first has to be full: a short page is the end of the
+    // queue, which is the loop's own rule and not something to work around here.
+    const { handler, ctx, notes } = harness({
+      evidence,
+      pages: [page(0, MENTION_LIST_LIMIT), page(MENTION_LIST_LIMIT, 2)],
+    })
+    await handler(ctx(PAYLOAD))
+    expect(evidence.asked.map((ids) => ids.length)).toEqual([MENTION_LIST_LIMIT, 2])
+    expect(notes.join("\n")).toContain(`${MENTION_LIST_LIMIT + 2} evidence`)
+  })
+
+  it("resolves exactly the same without one, because receipts are not resolution", async () => {
+    const { handler, ctx, repo, notes } = harness({ pages: [page(0, 3)] })
+    await handler(ctx(PAYLOAD))
+    expect(repo.entities).toHaveLength(3)
+    expect(notes.join("\n")).toContain("0 evidence")
   })
 })

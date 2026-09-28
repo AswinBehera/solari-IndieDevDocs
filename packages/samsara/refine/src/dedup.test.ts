@@ -252,6 +252,16 @@ describe("dedup", () => {
         merges.push({ into, from })
         tombstoned.add(from)
       },
+      // P2.5's member. This repo exists to tombstone rather than delete; scoring
+      // never comes near it, and throwing is more honest than a no-op that would
+      // let a future test believe it had written something.
+      async writeScores() {
+        throw new Error("this repo does not score")
+      },
+      // Likewise: the stage is handed its page, never reads one.
+      async page() {
+        throw new Error("this repo does not page")
+      },
     }
     const links = new MemoryEntityLinks()
     const entities: DedupEntity<Box>[] = []
@@ -350,5 +360,56 @@ describe("dedup", () => {
     expect(first.merged).toBe(1)
     expect(again).toMatchObject({ merged: 0, evidence: 0 })
     expect(links.evidence).toHaveLength(1)
+  })
+})
+
+/**
+ * The page the stage is handed, which is the caller's to read.
+ *
+ * Here rather than beside the score stage, because the failure this contract is
+ * shaped against is a *merge*: dedup removes rows from under a caller that is
+ * paging the same table, and an offset — or an index, which is what the fake
+ * would naturally use — skips whatever moved down into the gap.
+ */
+describe("EntityRepo.page, which both entity-shaped stages read their work from", () => {
+  const boxes = async (n: number) => {
+    const repo = new MemoryEntityRepo<Box>()
+    for (let i = 0; i < n; i++) await repo.upsert({ colour: `c${i}`, serial: `S${i}` })
+    return repo
+  }
+
+  it("walks the whole table in order, one page at a time", async () => {
+    const repo = await boxes(7)
+    const seen: string[] = []
+    let cursor: string | null = null
+    for (;;) {
+      const page: Awaited<ReturnType<typeof repo.page>> = await repo.page(cursor, 3)
+      seen.push(...page.entities.map((row) => row.id))
+      cursor = page.cursor
+      if (cursor === null) break
+    }
+    expect(seen).toEqual(repo.entities.map((row) => row.id))
+  })
+
+  it("ends on a short page, so a caller stops without a final empty read", async () => {
+    const repo = await boxes(2)
+    await expect(repo.page(null, 3)).resolves.toMatchObject({ cursor: null })
+  })
+
+  it("skips nothing when a merge removes a row the caller has already passed", async () => {
+    const repo = await boxes(6)
+    const first = await repo.page(null, 3)
+    // The stage's own effect, mid-walk: entity 1 folded into entity 2 and gone.
+    await repo.merge(first.entities[1]?.id ?? "", first.entities[0]?.id ?? "")
+
+    const second = await repo.page(first.cursor, 3)
+    // The three rows after the cursor, none of them pulled forward into the gap
+    // the merge left behind.
+    expect(second.entities.map((row) => row.id)).toEqual(["entity-4", "entity-5", "entity-6"])
+  })
+
+  it("refuses a cursor it did not mint rather than returning an empty page", async () => {
+    const repo = await boxes(2)
+    await expect(repo.page("somewhere", 3)).rejects.toThrow(/cursor/)
   })
 })

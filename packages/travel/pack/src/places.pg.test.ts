@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto"
 import { places, schema } from "@dt/db"
+import type { ScoreSet } from "@samsara/core"
 import { type DatabaseLock, lockDatabase } from "@samsara/db/testing"
 import { eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/postgres-js"
@@ -357,5 +359,211 @@ describe.runIf(hasDb)("the places repo, merging", () => {
     await expect(repo().merge(survivor, "00000000-0000-4000-8000-000000000000")).rejects.toThrow(
       /cannot merge/,
     )
+  })
+})
+
+describe.runIf(hasDb)("the places repo, scoring", () => {
+  const d = () => db as NonNullable<typeof db>
+  const repo = () => new PostgresPlaceRepo(d())
+
+  beforeEach(async () => {
+    await d().execute(sql`truncate table places restart identity cascade`)
+  })
+
+  const row = async (id: string) => (await d().select().from(places).where(eq(places.id, id)))[0]
+
+  const set = (value: number, factor: string): ScoreSet => ({
+    local: { value, because: [{ factor, contribution: value, evidenceIds: [] }] },
+  })
+
+  it("starts empty rather than at zero, because a resolver has no explanations", async () => {
+    const id = await repo().upsert(resolved)
+
+    // `{}` is not `{ local: { value: 0 } }`. An unscored place and a place that
+    // scored badly must not render the same, which is the whole of decision 3.
+    expect((await row(id))?.scores).toEqual({})
+  })
+
+  it("stores the value and its explanations through jsonb intact", async () => {
+    const id = await repo().upsert(resolved)
+    const scores: ScoreSet = {
+      local: {
+        value: 0.75,
+        because: [
+          { factor: "nativeLanguageShare", contribution: 0.5, evidenceIds: [randomUUID()] },
+          { factor: "sourceDiversity", contribution: 0.25, evidenceIds: [] },
+        ],
+      },
+    }
+
+    await repo().writeScores(id, scores)
+
+    // Read back whole, because `because` is what the card renders and a jsonb
+    // round trip that reordered or re-typed it would show up nowhere else.
+    expect((await row(id))?.scores).toEqual(scores)
+  })
+
+  it("replaces the whole set, so a key the pack stopped computing disappears", async () => {
+    const id = await repo().upsert(resolved)
+    await repo().writeScores(id, {
+      ...set(0.9, "nativeLanguageShare"),
+      tourist: { value: 0.2, because: [] },
+    })
+
+    await repo().writeScores(id, set(0.4, "nativeLanguageShare"))
+
+    // A stale `tourist` under a fresh `local` would be a number with no factors
+    // behind it, pointing at evidence that may since have moved.
+    expect((await row(id))?.scores).toEqual(set(0.4, "nativeLanguageShare"))
+  })
+
+  it("touches nothing else on the row", async () => {
+    const id = await repo().upsert(resolved)
+    const before = await row(id)
+
+    await repo().writeScores(id, set(0.5, "sourceDiversity"))
+    const after = await row(id)
+
+    // `evidence_count` especially: the scorer reads a capped window, and writing
+    // a windowed count into a column that means "how many" would be worse than
+    // leaving it.
+    expect(after?.evidenceCount).toBe(before?.evidenceCount)
+    expect(after?.lastSeenAt).toEqual(before?.lastSeenAt)
+    expect(after?.canonicalName).toBe(before?.canonicalName)
+    expect(after?.updatedAt.getTime()).toBeGreaterThanOrEqual(before?.updatedAt.getTime() as number)
+  })
+
+  it("survives a merge without inheriting the duplicate's numbers", async () => {
+    const survivor = await repo().upsert(resolved)
+    const duplicate = await repo().upsert({ ...resolved, canonicalName: "Kuay Tiew Rua" })
+    await repo().writeScores(survivor, set(0.9, "nativeLanguageShare"))
+    await repo().writeScores(duplicate, set(0.1, "nativeLanguageShare"))
+
+    await repo().merge(survivor, duplicate)
+
+    // Left alone by the fold, deliberately: the explanations point at evidence
+    // the engine has just repointed, and recomputing is the score stage's job.
+    // Guessing here would attach a `because` to the wrong receipts.
+    expect((await row(survivor))?.scores).toEqual(set(0.9, "nativeLanguageShare"))
+  })
+})
+
+/**
+ * `page`, which is how both entity-shaped stages get their work.
+ *
+ * What needs a real database here is the keyset itself. The rows a resolve job
+ * writes share a `first_seen_at` to the microsecond — it is a column default
+ * evaluated inside one transaction — so "does the tie-break work" is a question
+ * about what Postgres actually stores, and an in-memory fake that mints a
+ * distinct timestamp per row cannot ask it.
+ */
+describe.runIf(hasDb)("the places repo, paging", () => {
+  const d = () => db as NonNullable<typeof db>
+  const repo = () => new PostgresPlaceRepo(d())
+
+  beforeEach(async () => {
+    await d().execute(sql`truncate table places restart identity cascade`)
+  })
+
+  /** `n` rows, all with the default `first_seen_at`, which is the hard case. */
+  const fill = async (n: number): Promise<string[]> => {
+    const ids: string[] = []
+    for (let i = 0; i < n; i++) {
+      ids.push(await repo().upsert({ ...resolved, canonicalName: `Place ${i}` }))
+    }
+    return ids
+  }
+
+  const walk = async (limit: number): Promise<string[]> => {
+    const seen: string[] = []
+    let cursor: string | null = null
+    for (;;) {
+      const page = await repo().page(cursor, limit)
+      seen.push(...page.entities.map((row) => row.id))
+      cursor = page.cursor
+      if (cursor === null) break
+    }
+    return seen
+  }
+
+  it("walks every row exactly once, at full timestamp precision", async () => {
+    // Seven rows written in quick succession. The failure this guards is a
+    // cursor that loses microseconds on the way out and seeks from a moment
+    // slightly *before* the row it names, which re-reads that row forever.
+    const ids = await fill(7)
+    const seen = await walk(3)
+    expect(seen.length).toBe(7)
+    expect(new Set(seen)).toEqual(new Set(ids))
+  })
+
+  it("breaks a tie on the id when rows share a timestamp exactly", async () => {
+    // One resolve job's batch: the column default is evaluated once inside one
+    // transaction, so these are equal to the microsecond and the timestamp alone
+    // cannot order them.
+    const firstSeenAt = new Date("2026-02-01T00:00:00.000Z")
+    await d()
+      .insert(places)
+      .values(
+        Array.from({ length: 5 }, (_, i) => ({
+          canonicalName: `Batch ${i}`,
+          city: "Bangkok",
+          firstSeenAt,
+          lastSeenAt: firstSeenAt,
+        })),
+      )
+
+    const seen = await walk(2)
+    const rows = await d().select({ id: places.id }).from(places).orderBy(places.id)
+    expect(seen).toEqual(rows.map((row) => row.id))
+  })
+
+  it("orders oldest first, which is the order dedup's survivor depends on", async () => {
+    await fill(5)
+    const seen = await walk(2)
+    const rows = await d()
+      .select({ id: places.id })
+      .from(places)
+      .orderBy(places.firstSeenAt, places.id)
+    expect(seen).toEqual(rows.map((row) => row.id))
+  })
+
+  it("ends on a short page without another round trip", async () => {
+    await fill(2)
+    const page = await repo().page(null, 5)
+    expect(page.entities).toHaveLength(2)
+    expect(page.cursor).toBeNull()
+  })
+
+  it("returns an empty, finished page against an empty table", async () => {
+    await expect(repo().page(null, 5)).resolves.toEqual({ entities: [], cursor: null })
+  })
+
+  it("reads a row back as the entity the resolver wrote", async () => {
+    await repo().upsert(resolved)
+    const page = await repo().page(null, 5)
+    expect(page.entities[0]?.entity).toEqual(resolved)
+  })
+
+  it("reads a row with no coordinate back as one null, not two", async () => {
+    // The pairing `upsert` flattens into two columns, read back. A row with one
+    // half set is not a coordinate and must not come back looking like one.
+    await repo().upsert({ ...resolved, geo: null, externalRef: null, resolvedTier: null })
+    const page = await repo().page(null, 5)
+    expect(page.entities[0]?.entity.geo).toBeNull()
+  })
+
+  it("refuses a cursor it did not mint rather than reporting an empty table", async () => {
+    await fill(2)
+    await expect(repo().page("somewhere", 5)).rejects.toThrow(/cursor/)
+  })
+
+  it("does not skip a row when a merge removes one the caller has passed", async () => {
+    const ids = await fill(6)
+    const first = await repo().page(null, 3)
+    await repo().merge(first.entities[1]?.id ?? "", first.entities[0]?.id ?? "")
+
+    const second = await repo().page(first.cursor, 3)
+    const tail = ids.filter((id) => !first.entities.some((row) => row.id === id))
+    expect(new Set(second.entities.map((row) => row.id))).toEqual(new Set(tail))
   })
 })

@@ -1,5 +1,5 @@
 import type { DomainPack, ResolveCtx, ResolveSpec } from "./pack.js"
-import type { PendingMention, ResolutionCache, ResolutionCommit } from "./ports.js"
+import type { EvidenceWriter, PendingMention, ResolutionCache, ResolutionCommit } from "./ports.js"
 
 /**
  * The resolve stage: pending Mentions in, entities out, and a cache in between
@@ -76,6 +76,23 @@ export interface ResolveOptions<TMention, TEntity> {
   cache: ResolutionCache
   /** Granted by the caller, not built here. See `LookupPort` for why it is optional. */
   lookup?: ResolveCtx["lookup"]
+  /**
+   * Where evidence gets materialised, if the caller grants one (P2.5).
+   *
+   * Here rather than in a stage of its own, because this is the only moment in
+   * the pipeline at which a mention has just acquired an entity id, and evidence
+   * is precisely "this artifact said this about that entity". A fifth stage
+   * would have had to find those mentions again by scanning for rows that have
+   * an entity and no evidence — a query across the two largest tables we have,
+   * to recover a fact this stage already holds.
+   *
+   * Optional, and absent it nothing is written. That is the state the repository
+   * was in until P2.5, and it is why the score stage was reading an empty table.
+   * Optional rather than required so that the golden-set tests and P2.8's
+   * throwaway pack can resolve without standing up a writer, and so that adding
+   * it changed no existing caller.
+   */
+  evidence?: EvidenceWriter
   signal?: AbortSignal
 }
 
@@ -100,6 +117,15 @@ export interface ResolveReport {
   invalid: number
   /** Entities written through the pack's repo. */
   entities: number
+  /**
+   * Evidence rows materialised (P2.5). Zero when no writer was granted.
+   *
+   * Not the same number as the mentions that resolved. A replayed run re-commits
+   * mentions it has already recorded and those conflict and are skipped, so a
+   * second pass over the same page reporting `evidence: 0` is the idempotency
+   * working rather than a failure.
+   */
+  evidence: number
   /**
    * Which tier answered, and how often. **This is P2.3's acceptance criterion**,
    * which is why it is a field and not a log line: if tier 2 carries more than a
@@ -172,6 +198,7 @@ export async function resolve<TMention, TEntity>(
     deferred: 0,
     invalid: 0,
     entities: 0,
+    evidence: 0,
     tiers: [],
     deferrals: [],
   }
@@ -201,6 +228,22 @@ export async function resolve<TMention, TEntity>(
   report.keys = groups.size
   if (groups.size === 0) return report
 
+  /**
+   * Every mention this run left pointing at an entity, in commit order.
+   *
+   * Collected rather than derived, and collected from the *commit* rather than
+   * from the outcome, because the two disagree in the case that matters: a key
+   * answered from the cache is never resolved by this run and its mentions are
+   * still committed onto the entity it resolved to last week. Those mentions
+   * have had no evidence written for them and a list built from `outcome`
+   * would miss every one.
+   */
+  const evidenced: string[] = []
+  const commit = async (entry: ResolutionCommit): Promise<void> => {
+    await cache.commit(entry)
+    if (entry.entityId !== null) evidenced.push(...entry.mentionIds)
+  }
+
   const known = await cache.read(pack.id, [...groups.keys()])
 
   for (const [key, group] of groups) {
@@ -214,7 +257,7 @@ export async function resolve<TMention, TEntity>(
     if (cached && cached.state !== "pending") {
       report.cached++
       if (cached.tier !== null) tiers.set(cached.tier, (tiers.get(cached.tier) ?? 0) + 1)
-      await cache.commit(
+      await commit(
         commitOf(pack.id, key, group.ids, {
           state: cached.state,
           entityId: cached.entityId,
@@ -237,7 +280,7 @@ export async function resolve<TMention, TEntity>(
        */
       report.exhausted++
       report.unresolvable++
-      await cache.commit(commitOf(pack.id, key, group.ids, { state: "unresolvable" }))
+      await commit(commitOf(pack.id, key, group.ids, { state: "unresolvable" }))
       continue
     }
 
@@ -263,7 +306,7 @@ export async function resolve<TMention, TEntity>(
        * its attempt count from. Without it a key that can never be looked up
        * would be attempted forever, one fresh row at a time.
        */
-      await cache.commit(commitOf(pack.id, key, group.ids, { deferred: true }))
+      await commit(commitOf(pack.id, key, group.ids, { deferred: true }))
       continue
     }
 
@@ -274,7 +317,7 @@ export async function resolve<TMention, TEntity>(
       // entry asks for exactly this, so that a name nobody can place is visible
       // rather than absent. Absent is indistinguishable from never extracted.
       const entityId = outcome.entity === undefined ? null : await write(outcome.entity)
-      await cache.commit(
+      await commit(
         commitOf(pack.id, key, group.ids, {
           state: "unresolvable",
           entityId,
@@ -289,14 +332,14 @@ export async function resolve<TMention, TEntity>(
       // The entity failed the pack's own schema. Not the pack's fault and not
       // the engine's to paper over: counted as invalid and left pending, so a
       // fixed resolver gets the key back rather than finding it written off.
-      await cache.commit(commitOf(pack.id, key, group.ids, { deferred: true }))
+      await commit(commitOf(pack.id, key, group.ids, { deferred: true }))
       report.deferred++
       deferrals.set("provider", (deferrals.get("provider") ?? 0) + 1)
       continue
     }
     report.resolved++
     tiers.set(outcome.tier, (tiers.get(outcome.tier) ?? 0) + 1)
-    await cache.commit(
+    await commit(
       commitOf(pack.id, key, group.ids, {
         state: "resolved",
         entityId,
@@ -304,6 +347,21 @@ export async function resolve<TMention, TEntity>(
         confidence: outcome.confidence,
       }),
     )
+  }
+
+  /**
+   * One call, after the loop, rather than one per key.
+   *
+   * Evidence is idempotent on `(domain_id, mention_id)`, so this is safe to
+   * replay and safe to lose: a runner cut in half between the last commit and
+   * this line leaves the resolutions written and the evidence unwritten, and the
+   * next run re-commits those mentions from the cache and records them then.
+   * That is the same "what survives being cut in half" argument ADR-0014 makes
+   * about the dedup stage's ordering, and it is why the write that can be
+   * repeated goes last.
+   */
+  if (opts.evidence && evidenced.length > 0) {
+    report.evidence = await opts.evidence.record(pack.id, evidenced)
   }
 
   report.tiers = [...tiers.entries()]

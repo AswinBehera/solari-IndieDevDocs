@@ -10,6 +10,7 @@ export * from "./osm-tags.js"
 export * from "./pack.js"
 export * from "./prompt.js"
 export * from "./resolve.js"
+export * from "./scores.js"
 export * from "./tier0.js"
 
 export const PACKAGE = "@dt/travel-pack" as const
