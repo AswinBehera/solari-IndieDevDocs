@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./postgres": "./src/postgres.ts"
+    "./postgres": "./src/postgres.ts",
+    "./read": "./src/read.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

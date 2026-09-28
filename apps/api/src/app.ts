@@ -10,6 +10,7 @@ import { streamSSE } from "hono/streaming"
 import { requireAuth, type Verifier } from "./auth.js"
 import type { Dispatcher } from "./dispatch.js"
 import { type LabDeps, labRoutes } from "./lab.js"
+import { type PlacesDeps, placesRoutes } from "./places.js"
 
 /**
  * The API (ADR-0014: Hono on Cloudflare Workers, free plan).
@@ -39,6 +40,8 @@ export interface AppDeps {
    * 404 on `/lab/*` rather than 500 on the first read.
    */
   lab?: Omit<LabDeps, "verifier" | "jobs">
+  /** The Place Postcard grid's read (P2.7). Optional for the reason `lab` is. */
+  places?: Omit<PlacesDeps, "verifier">
   /** Injectable for tests; production gets the defaults. */
   clock?: () => number
   sleep?: (ms: number) => Promise<void>
@@ -179,6 +182,13 @@ export function createApp(deps: AppDeps) {
   // one thing to gate or drop; and a deployment with no `lab` in its deps simply
   // has no such routes, which is the difference between "not configured" and
   // "configured and broken".
+  // Before `/lab`, and the order is load-bearing: the Lab's `use("*")` would
+  // otherwise match `/lab/places` too and verify every token twice, against a
+  // 10 ms CPU ceiling. Registered first, this route answers and the Lab's
+  // middleware never runs. `places.test.ts` counts the verifications.
+  if (deps.places) {
+    app.route("/lab/places", placesRoutes({ ...deps.places, verifier: deps.verifier }))
+  }
   if (deps.lab) {
     app.route("/lab", labRoutes({ ...deps.lab, verifier: deps.verifier, jobs: deps.jobs }))
   }

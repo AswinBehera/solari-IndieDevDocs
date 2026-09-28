@@ -1,6 +1,7 @@
 // @dt/api — Hono on Cloudflare Workers (ADR-0014). Thin: validates, enqueues, reads.
 
 import { createDb } from "@dt/db"
+import { PostgresPlaceReader } from "@dt/travel-pack/read"
 import {
   PostgresDriftExperimentStore,
   PostgresHarvestRunStore,
@@ -63,6 +64,14 @@ export default {
               // the worker writes mentions, the API must never be able to.
               mentions: new PostgresMentionStore(db),
             }
+          },
+        },
+        // The Place Postcard grid (P2.7). Its own connection, per request, for
+        // the same Hyperdrive reason as the two above.
+        places: {
+          reader: (bindings) => {
+            const e = bindings as Env
+            return new PostgresPlaceReader(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
           },
         },
         // Built on first use, not at boot. `/health` is unauthenticated and must

@@ -1,3 +1,4 @@
+import type { PlaceCardRow } from "@dt/travel-pack/read"
 import type { HarvestRunRecord, RawItemRow } from "@samsara/harvest/ports"
 import {
   MemoryDriftExperimentStore,
@@ -11,6 +12,7 @@ import { describe, expect, it } from "vitest"
 import { createApp } from "./app.js"
 import type { Verifier } from "./auth.js"
 import { noopDispatcher } from "./dispatch.js"
+import { MAX_LIMIT } from "./places.js"
 
 /**
  * P0.5's first acceptance criterion: **CPU per request against the free plan's
@@ -126,11 +128,57 @@ for (const [runId, offset] of [
 }
 await items.insertMany(labItems)
 
+/**
+ * The Place grid at its widest page, each place carrying a full explanation.
+ *
+ * Eight factors a score, two scores, and a 200-character quote — the most the
+ * pack writes — so what is measured is the serialisation of the largest page the
+ * route will hand back, not of the thirty a gate review reads.
+ */
+const because = (score: string) =>
+  Array.from({ length: 8 }, (_, i) => ({
+    factor: `${score} factor ${i}`,
+    contribution: 0.05,
+    evidenceIds: Array.from(
+      { length: 10 },
+      (_, j) => `00000000-0000-4000-8000-${String(j).padStart(12, "0")}`,
+    ),
+  }))
+const placeRows: PlaceCardRow[] = Array.from({ length: MAX_LIMIT }, (_, i) => ({
+  place: {
+    id: `00000000-0000-4000-9000-${String(i).padStart(12, "0")}`,
+    canonicalName: "Rung Rueang Pork Noodle",
+    localName: "ก๋วยเตี๋ยวหมูรุ่งเรือง",
+    city: "Bangkok",
+    geo: { lat: 13.7304, lng: 100.5707 },
+    externalRef: { source: "osm", id: `node/${i}` },
+    resolvedTier: 1,
+    category: "food",
+    tags: ["noodles"],
+    scores: {
+      local: { value: 0.8, because: because("local") },
+      tourist: { value: 0.2, because: because("tourist") },
+    },
+    firstSeenAt: capturedAt,
+    lastSeenAt: capturedAt,
+    evidenceCount: 40,
+    createdAt: capturedAt,
+    updatedAt: capturedAt,
+  },
+  quote: {
+    quote: "อร่อยมาก ".repeat(22).slice(0, 200),
+    sourceId: "pantip.forum",
+    sourceUrl: "https://pantip.com/topic/42000000",
+    language: "th",
+  },
+}))
+
 const app = createApp({
   jobs: () => store,
   verifier,
   dispatcher: noopDispatcher,
   lab: { stores: () => ({ personas, runs, items, experiments, mentions }) },
+  places: { reader: () => ({ top: async (limit) => placeRows.slice(0, limit) }) },
 })
 
 /**
@@ -275,6 +323,18 @@ describe("CPU per request against the 10 ms free-plan ceiling", () => {
     // Fourteen `overlapAt` calls and fourteen `meanRankShift` calls over two
     // hundred strings each. If this ever approaches the ceiling the fix is fewer
     // days or a smaller k — both are already columns — not a bigger budget.
+    expect(ms).toBeLessThan(BUDGET_MS)
+  })
+
+  it("measures GET /lab/places at the widest page it allows", async () => {
+    const ms = await cpuPerRequest(async () => {
+      const res = await app.request(`/lab/places?limit=${MAX_LIMIT}`, { headers: AUTH })
+      await res.json()
+    })
+    console.log(`GET  /lab/places  ${ms.toFixed(3)} ms CPU/request (ceiling ${CEILING_MS} ms)`)
+    // All serialisation: the ordering and the quote are chosen in SQL. Measured
+    // at 22 ms for two hundred places, which is how `MAX_LIMIT` came to be thirty;
+    // if this approaches the ceiling again the fix is a cursor, not a bigger budget.
     expect(ms).toBeLessThan(BUDGET_MS)
   })
 

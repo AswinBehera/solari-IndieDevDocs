@@ -32,6 +32,9 @@ importers:
       '@dt/db':
         specifier: workspace:*
         version: link:../../packages/travel/db
+      '@dt/travel-pack':
+        specifier: workspace:*
+        version: link:../../packages/travel/pack
       '@samsara/core':
         specifier: workspace:*
         version: link:../../packages/samsara/core
