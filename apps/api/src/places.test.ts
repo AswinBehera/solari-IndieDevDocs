@@ -41,13 +41,18 @@ const jobs = {
 class FakeReader implements PlaceReader {
   readonly asked: number[] = []
   constructor(private readonly rows: PlaceCardRow[] = []) {}
-  async top(limit: number) {
+  readonly categories: (string | undefined)[] = []
+  async top(limit: number, category?: string) {
     this.asked.push(limit)
+    this.categories.push(category)
     return this.rows.slice(0, limit)
   }
   readonly searched: string[] = []
   async byId(): Promise<PlaceCardRow | null> {
     return null
+  }
+  async summary() {
+    return { total: 0, withGeo: 0, strong: 0 }
   }
   async search(query: string, limit: number) {
     this.searched.push(query)
@@ -149,6 +154,24 @@ describe("GET /lab/places", () => {
     const res = await app.request(`/lab/places?limit=${limit}`, { headers: AUTH })
     expect(res.status).toBe(400)
     expect(reader.asked).toHaveLength(0)
+  })
+
+  it("passes a category through, and refuses one that does not exist", async () => {
+    const { app, reader } = build()
+    expect((await app.request("/lab/places?category=temple", { headers: AUTH })).status).toBe(200)
+    expect(reader.categories).toEqual(["temple"])
+    const res = await app.request("/lab/places?category=casino", { headers: AUTH })
+    expect(res.status).toBe(400)
+  })
+
+  it("carries the acceptance numbers beside the page", async () => {
+    const { app } = build()
+    const res = await app.request("/lab/places", { headers: AUTH })
+    expect(((await res.json()) as { summary: unknown }).summary).toEqual({
+      total: 0,
+      withGeo: 0,
+      strong: 0,
+    })
   })
 
   it("verifies the token once, even with the Lab mounted over the same prefix", async () => {

@@ -33,9 +33,23 @@ export interface PlaceCardRow {
   quote: PlaceQuote | null
 }
 
+/**
+ * The numbers Phase 2's acceptance is written in: how many places, how many with
+ * a coordinate, and how many with `scores.local` above 0.7.
+ */
+export interface PlaceSummary {
+  total: number
+  withGeo: number
+  strong: number
+}
+
+/** The threshold the acceptance names: "at least 30 with scores.local above 0.7". */
+export const STRONG_LOCAL = 0.7
+
 export interface PlaceReader {
-  /** The strongest local scores first, at most `limit` of them. */
-  top(limit: number): Promise<PlaceCardRow[]>
+  /** The strongest local scores first, at most `limit` of them, optionally of one category. */
+  top(limit: number, category?: PlaceCategory): Promise<PlaceCardRow[]>
+  summary(): Promise<PlaceSummary>
   /**
    * Places whose local or roman name contains `query`, strongest local score
    * first — what `/place` in the Trip Document searches (P4.2).
@@ -74,13 +88,25 @@ type Db = PgDatabase<PgQueryResultHKT, Record<string, unknown>, TablesRelational
 export class PostgresPlaceReader implements PlaceReader {
   constructor(private readonly db: Db) {}
 
-  async top(limit: number): Promise<PlaceCardRow[]> {
+  async top(limit: number, category?: PlaceCategory): Promise<PlaceCardRow[]> {
     const rows = await this.db
       .select()
       .from(places)
+      .where(category ? eq(places.category, category) : undefined)
       .orderBy(sql`coalesce((${places.scores}->'local'->>'value')::float8, 0) desc`, places.id)
       .limit(limit)
     return await this.withQuotes(rows)
+  }
+
+  async summary(): Promise<PlaceSummary> {
+    const [row] = await this.db
+      .select({
+        total: sql<number>`count(*)::int`,
+        withGeo: sql<number>`count(${places.lat})::int`,
+        strong: sql<number>`(count(*) filter (where (${places.scores}->'local'->>'value')::float8 > ${STRONG_LOCAL}))::int`,
+      })
+      .from(places)
+    return row ?? { total: 0, withGeo: 0, strong: 0 }
   }
 
   /**

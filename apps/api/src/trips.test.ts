@@ -49,6 +49,9 @@ class FakeReader implements PlaceReader {
   async byId(): Promise<PlaceCardRow | null> {
     return null
   }
+  async summary() {
+    return { total: 0, withGeo: 0, strong: 0 }
+  }
   async search(query: string): Promise<PlaceCardRow[]> {
     this.searched.push(query)
     return []

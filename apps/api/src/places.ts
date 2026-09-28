@@ -52,6 +52,29 @@ function parseLimit(raw: string | undefined): number {
   return Math.min(n, MAX_LIMIT)
 }
 
+/** The reader's own word for a category, so this file needs no second package. */
+type PlaceCategory = NonNullable<Parameters<PlaceReader["top"]>[1]>
+
+const CATEGORIES = [
+  "food",
+  "drink",
+  "market",
+  "temple",
+  "nature",
+  "nightlife",
+  "shop",
+  "other",
+] as const
+
+/** One of `placeCategory`'s values, or absent for all of them. */
+function parseCategory(raw: string | undefined): PlaceCategory | undefined {
+  if (raw === undefined || raw === "") return undefined
+  if (!(CATEGORIES as readonly string[]).includes(raw)) {
+    throw new HTTPException(400, { message: `category must be one of ${CATEGORIES.join(", ")}` })
+  }
+  return raw as PlaceCategory
+}
+
 export function placesRoutes(deps: PlacesDeps) {
   const routes = new Hono<{ Bindings: Record<string, unknown> }>()
 
@@ -59,10 +82,17 @@ export function placesRoutes(deps: PlacesDeps) {
 
   routes.get("/", async (c) => {
     const limit = parseLimit(c.req.query("limit"))
-    const rows = await deps.reader(c.env).top(limit)
+    const category = parseCategory(c.req.query("category"))
+    const reader = deps.reader(c.env)
+    // Both at once: one is the page, the other is the headline over it, and
+    // neither waits on the other.
+    const [rows, summary] = await Promise.all([reader.top(limit, category), reader.summary()])
     // `quote` becomes `evidence` on the way out because that is the card's word
     // for it (`CardEvidence`); the reader's word is about where it came from.
-    return c.json({ places: rows.map((r) => ({ place: r.place, evidence: r.quote })) })
+    return c.json({
+      places: rows.map((r) => ({ place: r.place, evidence: r.quote })),
+      summary,
+    })
   })
 
   return routes

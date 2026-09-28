@@ -29,12 +29,15 @@ export function PlaceCard({
   place,
   evidence,
   bbox,
+  children,
 }: {
   place: Place
   /** One quote, or none. The API picks which; the card does not rank evidence. */
   evidence?: CardEvidence | null
   /** The frame the locator draws in — usually the city's bbox. */
   bbox: Bbox
+  /** Anything the page adds under the meters, like a reviewer's verdict. */
+  children?: ReactNode
 }) {
   const name = names(place)
   const [local, tourist] = meters(place)
@@ -63,6 +66,7 @@ export function PlaceCard({
         <Bar meter={local} tint="bg-accent-pink" />
         <Bar meter={tourist} tint="bg-accent-blue" />
       </div>
+      {children}
     </article>
   )
 }
@@ -220,23 +224,23 @@ export function PlaceGrid({
   evidence,
   bbox,
   empty,
+  footer,
 }: {
   places: readonly Place[]
   /** Quote per place id. A place with no entry renders without one. */
   evidence?: Readonly<Record<string, CardEvidence>>
   bbox: Bbox
   empty?: ReactNode
+  /** Drawn at the foot of each card; the grid itself adds nothing there. */
+  footer?: (place: Place) => ReactNode
 }) {
   if (places.length === 0) return <>{empty}</>
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {[...places].sort(byLocalScore).map((place) => (
-        <PlaceCard
-          key={place.id}
-          place={place}
-          evidence={evidence?.[place.id] ?? null}
-          bbox={bbox}
-        />
+        <PlaceCard key={place.id} place={place} evidence={evidence?.[place.id] ?? null} bbox={bbox}>
+          {footer?.(place)}
+        </PlaceCard>
       ))}
     </div>
   )

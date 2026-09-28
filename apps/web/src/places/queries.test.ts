@@ -46,6 +46,12 @@ describe("fromWire", () => {
     expect(evidence.a?.quote).toBe("อร่อยมาก")
   })
 
+  it("carries the summary through, or null from an API that sends none", () => {
+    const summary = { total: 9, withGeo: 8, strong: 7 }
+    expect(fromWire({ places: [], summary }).summary).toEqual(summary)
+    expect(fromWire({ places: [] }).summary).toBeNull()
+  })
+
   it("keeps the order it was given, which the grid re-sorts anyway", () => {
     const { places } = fromWire({ places: [wire("b", false), wire("a", true)] })
     expect(places.map((p) => p.id)).toEqual(["b", "a"])

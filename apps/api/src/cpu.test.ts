@@ -183,6 +183,7 @@ const app = createApp({
       top: async (limit) => placeRows.slice(0, limit),
       search: async (_q, limit) => placeRows.slice(0, limit),
       byId: async () => placeRows[0] ?? null,
+      summary: async () => ({ total: 412, withGeo: 390, strong: 61 }),
     }),
   },
 })
