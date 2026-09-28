@@ -3,6 +3,7 @@ import {
   createRoute,
   createRouter,
   lazyRouteComponent,
+  Outlet,
 } from "@tanstack/react-router"
 import { Lab } from "./lab/Lab"
 import { Onboarding } from "./onboarding/Onboarding"
@@ -20,23 +21,35 @@ import { TripsHome } from "./trips/TripsHome"
  * the route tree on disk, and seven routes read fine as a list.
  */
 
-const root = createRootRoute({ component: Shell })
+// The root draws nothing of its own: the app's pages sit inside the shell, and
+// the share page (P4.8) is read by someone with no account and no business
+// seeing the app's navigation.
+const root = createRootRoute({ component: Outlet })
+const app = createRoute({ getParentRoute: () => root, id: "app", component: Shell })
 
 const routes = [
-  createRoute({ getParentRoute: () => root, path: "/", component: TripsHome }),
-  createRoute({ getParentRoute: () => root, path: "/onboarding", component: Onboarding }),
+  createRoute({ getParentRoute: () => app, path: "/", component: TripsHome }),
+  createRoute({ getParentRoute: () => app, path: "/onboarding", component: Onboarding }),
   // Lazy: the editor and the map are most of the bundle, and the trips list, the
   // onboarding and the lab have no use for either.
   createRoute({
-    getParentRoute: () => root,
+    getParentRoute: () => app,
     path: "/trips/$tripId",
     component: lazyRouteComponent(() => import("./trip/TripDocument"), "TripDocument"),
   }),
-  createRoute({ getParentRoute: () => root, path: "/lab", component: Lab }),
-  createRoute({ getParentRoute: () => root, path: "/lab/places", component: Places }),
+  createRoute({ getParentRoute: () => app, path: "/lab", component: Lab }),
+  createRoute({ getParentRoute: () => app, path: "/lab/places", component: Places }),
 ]
 
-export const router = createRouter({ routeTree: root.addChildren(routes) })
+const share = createRoute({
+  getParentRoute: () => root,
+  path: "/s/$token",
+  component: lazyRouteComponent(() => import("./share/SharePage"), "SharePage"),
+})
+
+export const router = createRouter({
+  routeTree: root.addChildren([app.addChildren(routes), share]),
+})
 
 declare module "@tanstack/react-router" {
   interface Register {

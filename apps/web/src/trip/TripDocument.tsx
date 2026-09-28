@@ -5,7 +5,14 @@ import { EditorContent, type Editor as TiptapEditor, useEditor } from "@tiptap/r
 import { StarterKit } from "@tiptap/starter-kit"
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { ApiError, api } from "../api"
-import { dayToIso, type TripRecord, usePatchTrip, useTrip } from "../trips/api"
+import {
+  dayToIso,
+  shareTrip,
+  type TripRecord,
+  unshareTrip,
+  usePatchTrip,
+  useTrip,
+} from "../trips/api"
 import { dateRange, statusTag } from "../trips/format"
 import { Failure } from "../trips/TripsHome"
 import { CardStore, useCards } from "./cards"
@@ -30,7 +37,7 @@ import { TimelineView } from "./TimelineView"
  * the map at once.
  */
 export function TripDocument() {
-  const { tripId } = useParams({ from: "/trips/$tripId" })
+  const { tripId } = useParams({ from: "/app/trips/$tripId" })
   const trip = useTrip(tripId)
   if (trip.isPending) return <p className="p-10 text-ink-faint text-sm">Opening the document…</p>
   if (trip.isError) {
@@ -213,6 +220,7 @@ function Loaded({ record }: { record: TripRecord }) {
             }
           />
           <span className={tag.className.replace(/border-\S+/, "")}>{tag.label}</span>
+          <ShareControl tripId={tripId} initial={record.shareToken} />
         </div>
         <TitleEditor
           value={trip.title}
@@ -429,5 +437,72 @@ function Rail({
         )}
       </div>
     </aside>
+  )
+}
+
+/**
+ * The read-only link (P4.8), from the document's meta line: SHARE mints it, the
+ * link is shown with a copy button, and STOP turns it off for everyone at once.
+ */
+function ShareControl({ tripId, initial }: { tripId: string; initial: string | null }) {
+  const [token, setToken] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const url = token ? `${window.location.origin}/s/${token}` : null
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true)
+    try {
+      await fn()
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (!url) {
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => run(async () => setToken(await shareTrip(tripId)))}
+        className="ml-auto tracking-[.08em] hover:text-ink disabled:opacity-50"
+      >
+        SHARE
+      </button>
+    )
+  }
+  return (
+    <span className="ml-auto flex items-center gap-3">
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="max-w-[220px] truncate text-accent-blue normal-case"
+      >
+        {url.replace(/^https?:\/\//, "")}
+      </a>
+      <button
+        type="button"
+        onClick={async () => {
+          await navigator.clipboard?.writeText(url)
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1500)
+        }}
+        className="hover:text-ink"
+      >
+        {copied ? "COPIED" : "COPY"}
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() =>
+          run(async () => {
+            await unshareTrip(tripId)
+            setToken(null)
+          })
+        }
+        className="hover:text-signal-red disabled:opacity-50"
+      >
+        STOP
+      </button>
+    </span>
   )
 }

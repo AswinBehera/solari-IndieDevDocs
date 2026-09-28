@@ -200,5 +200,34 @@ export function tripsRoutes(deps: TripsDeps) {
     return c.body(null, 204)
   })
 
+  /** Mint (or hand back) the trip's read-only link (P4.8). */
+  routes.post("/trips/:id/share", auth, async (c) => {
+    const token = await deps.store(c.env).share(c.get("ownerId"), c.req.param("id"))
+    if (!token) throw notFound()
+    return c.json({ token })
+  })
+
+  /** Stop sharing. The link stops working at once; sharing again mints a new one. */
+  routes.delete("/trips/:id/share", auth, async (c) => {
+    const done = await deps.store(c.env).unshare(c.get("ownerId"), c.req.param("id"))
+    if (!done) throw notFound()
+    return c.body(null, 204)
+  })
+
+  /**
+   * The link itself, and the one unauthenticated read in this file: the token is
+   * the key, the way an unlisted document works. It returns no owner id and only
+   * the Postcards the document still references. A token that is not 22 base64url
+   * characters is refused before the database is asked.
+   */
+  routes.get("/share/:token", async (c) => {
+    const token = c.req.param("token")
+    if (!/^[A-Za-z0-9_-]{22}$/.test(token))
+      throw new HTTPException(404, { message: "no such link" })
+    const shared = await deps.store(c.env).byShareToken(token)
+    if (!shared) throw new HTTPException(404, { message: "no such link" })
+    return c.json(shared)
+  })
+
   return routes
 }

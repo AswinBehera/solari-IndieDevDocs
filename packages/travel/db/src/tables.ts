@@ -60,9 +60,18 @@ export const trips = pgTable(
     startDate: timestamp("start_date", { withTimezone: true }),
     endDate: timestamp("end_date", { withTimezone: true }),
     status: tripStatusEnum("status").notNull().default("dreaming"),
+    /**
+     * The read-only link's secret (P4.8). Null means not shared; clearing it is
+     * how sharing stops, and a new one is minted the next time — so a link that
+     * leaked is revoked by sharing again, not by hoping nobody kept it.
+     */
+    shareToken: text("share_token"),
     ...timestamps,
   },
-  (t) => [index("trips_user_status_idx").on(t.userId, t.status)],
+  (t) => [
+    index("trips_user_status_idx").on(t.userId, t.status),
+    uniqueIndex("trips_share_token_idx").on(t.shareToken),
+  ],
 )
 
 export const documents = pgTable(

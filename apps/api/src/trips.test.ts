@@ -274,6 +274,37 @@ describe("postcards", () => {
   })
 })
 
+describe("the read-only link", () => {
+  it("is minted by the owner, read by anyone, and stops when unshared", async () => {
+    const id = await created()
+    expect((await app().request(`/trips/${id}/share`, post(BOB, {}))).status).toBe(404)
+    const res = await app().request(`/trips/${id}/share`, post(ALICE, {}))
+    const { token } = (await res.json()) as { token: string }
+
+    // No authorization header at all.
+    const shared = await app().request(`/share/${token}`)
+    expect(shared.status).toBe(200)
+    const body = (await shared.json()) as { trip: Record<string, unknown> }
+    expect(body.trip.title).toBe(TRIP.title)
+    expect(body.trip).not.toHaveProperty("userId")
+
+    expect((await app().request(`/trips/${id}`, as(ALICE))).status).toBe(200)
+    expect(
+      ((await (await app().request(`/trips/${id}`, as(ALICE))).json()) as { shareToken: string })
+        .shareToken,
+    ).toBe(token)
+
+    const off = await app().request(`/trips/${id}/share`, as(ALICE, { method: "DELETE" }))
+    expect(off.status).toBe(204)
+    expect((await app().request(`/share/${token}`)).status).toBe(404)
+  })
+
+  it("refuses a malformed token before looking it up", async () => {
+    expect((await app().request("/share/x")).status).toBe(404)
+    expect((await app().request(`/share/${"a".repeat(23)}`)).status).toBe(404)
+  })
+})
+
 describe("GET /places, what /place searches", () => {
   it("passes the query to the reader, trimmed", async () => {
     const res = await app().request("/places?q=%20rung%20", as(ALICE))

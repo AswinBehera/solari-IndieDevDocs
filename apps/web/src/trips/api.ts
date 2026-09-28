@@ -32,6 +32,8 @@ export interface TripRecord {
   trip: Trip
   document: { content: unknown; version: number; updatedAt: Date }
   postcards: Postcard[]
+  /** The read-only link's secret, or null when not shared (P4.8). */
+  shareToken: string | null
 }
 
 const date = (s: string) => new Date(s)
@@ -60,12 +62,23 @@ export function recordFromWire(r: {
   trip: WireTrip
   document: { content: unknown; version: number; updatedAt: string }
   postcards: WirePostcard[]
+  shareToken?: string | null
 }): TripRecord {
   return {
     trip: tripFromWire(r.trip),
     document: { ...r.document, updatedAt: date(r.document.updatedAt) },
     postcards: r.postcards.map(postcardFromWire),
+    shareToken: r.shareToken ?? null,
   }
+}
+
+/** Mint the read-only link, or hand back the one that exists. */
+export async function shareTrip(id: string): Promise<string> {
+  return (await api<{ token: string }>(`/trips/${id}/share`, { method: "POST", body: "{}" })).token
+}
+
+export async function unshareTrip(id: string): Promise<void> {
+  await api<unknown>(`/trips/${id}/share`, { method: "DELETE" })
 }
 
 /** A calendar day as the API stores it: midnight UTC. `"2026-11-14"` in, ISO out. */
@@ -111,6 +124,7 @@ export function useTrip(id: string) {
         trip: WireTrip
         document: { content: unknown; version: number; updatedAt: string }
         postcards: WirePostcard[]
+        shareToken: string | null
       }>(`/trips/${id}`),
     select: recordFromWire,
     // The editor owns the document once it is open; a background refetch landing

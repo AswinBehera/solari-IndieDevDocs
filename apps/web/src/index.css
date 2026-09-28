@@ -77,6 +77,12 @@
   height: 0;
   pointer-events: none;
 }
+/* Read-only (the share page): the empty paragraphs a writer leaves between
+   cards are room to type, and to a reader they are only gaps. */
+.trip-doc[contenteditable="false"] p:has(> br.ProseMirror-trailingBreak:only-child),
+.trip-doc[contenteditable="false"] p:empty {
+  display: none;
+}
 .trip-doc .day-label {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -137,11 +143,16 @@
 }
 /* The attribution stays (ODbL), dressed for the midnight plane rather than as a
    white pill on it. */
-.maplibregl-ctrl.maplibregl-ctrl-attrib,
-.maplibregl-ctrl-attrib.maplibregl-compact {
-  background: rgb(22 32 74 / 0.7);
+/* Scoped under the map so they outrank MapLibre's own rules, whose stylesheet
+   arrives later with the lazy route and would otherwise win at equal weight. */
+.maplibregl-map .maplibregl-ctrl.maplibregl-ctrl-attrib,
+.maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact {
+  background-color: rgb(22 32 74 / 0.7);
   color: rgb(244 241 234 / 0.7);
 }
-.maplibregl-ctrl-attrib a {
+.maplibregl-map .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button {
+  background-color: rgb(244 241 234 / 0.5);
+}
+.maplibregl-map .maplibregl-ctrl-attrib a {
   color: rgb(244 241 234 / 0.8);
 }
