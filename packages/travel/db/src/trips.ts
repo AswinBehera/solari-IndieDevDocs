@@ -47,6 +47,27 @@ export interface TripRecord {
   trip: Trip
   document: TripDocumentRecord
   postcards: Postcard[]
+  /** The read-only link's secret, or null when the trip is not shared (P4.8). */
+  shareToken: string | null
+}
+
+/**
+ * A trip as its read-only link shows it (P4.8): no owner id, and only the
+ * Postcards the document references — a card deleted from the text stays deleted
+ * for everyone the link reaches, whatever its row still says.
+ */
+export interface SharedTrip {
+  trip: Omit<Trip, "userId">
+  document: TripDocumentRecord
+  postcards: Postcard[]
+}
+
+/** 128 bits, base64url: long enough that a link cannot be guessed, short enough to paste. */
+export function newShareToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  let bin = ""
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
 export interface NewTrip {
@@ -101,6 +122,12 @@ export interface TripStore {
     patch: PostcardPatch,
   ): Promise<Postcard | null>
   deletePostcard(ownerId: string, postcardId: string): Promise<boolean>
+  /** Mint the trip's link if it has none, and return it. Null when not the owner's. */
+  share(ownerId: string, tripId: string): Promise<string | null>
+  /** Stop sharing: the old link stops working at once. False when not the owner's. */
+  unshare(ownerId: string, tripId: string): Promise<boolean>
+  /** The trip behind a link, for anyone holding it. No owner scope: the token is the key. */
+  byShareToken(token: string): Promise<SharedTrip | null>
 }
 
 /** What a trip's document is before anyone has typed into it. */
@@ -200,6 +227,7 @@ export class PostgresTripStore implements TripStore {
         trip: toTrip(trip),
         document: { content: doc.content, version: doc.version, updatedAt: doc.updatedAt },
         postcards: [],
+        shareToken: null,
       }
     })
   }
@@ -237,7 +265,39 @@ export class PostgresTripStore implements TripStore {
         updatedAt: document.updatedAt,
       },
       postcards: cards.map(toPostcard),
+      shareToken: row.trip.shareToken,
     }
+  }
+
+  async share(ownerId: string, tripId: string): Promise<string | null> {
+    // `coalesce` keeps an existing token: sharing twice hands back the same link
+    // rather than silently breaking the one already sent.
+    const [row] = await this.db
+      .update(trips)
+      .set({ shareToken: sql`coalesce(${trips.shareToken}, ${newShareToken()})` })
+      .where(and(eq(trips.id, tripId), eq(trips.userId, ownerId)))
+      .returning({ token: trips.shareToken })
+    return row?.token ?? null
+  }
+
+  async unshare(ownerId: string, tripId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(trips)
+      .set({ shareToken: null })
+      .where(and(eq(trips.id, tripId), eq(trips.userId, ownerId)))
+      .returning({ id: trips.id })
+    return rows.length > 0
+  }
+
+  async byShareToken(token: string): Promise<SharedTrip | null> {
+    const [row] = await this.db
+      .select({ trip: trips })
+      .from(trips)
+      .where(eq(trips.shareToken, token))
+    if (!row) return null
+    const opened = await this.get(row.trip.userId, row.trip.id)
+    if (!opened) return null
+    return publicView(opened)
   }
 
   async update(ownerId: string, tripId: string, patch: TripPatch): Promise<Trip | null> {
@@ -361,6 +421,7 @@ export class MemoryTripStore implements TripStore {
   readonly trips = new Map<string, Trip>()
   readonly documents = new Map<string, TripDocumentRecord>()
   readonly postcards = new Map<string, Postcard>()
+  readonly shareTokens = new Map<string, string>()
   private n = 0
 
   constructor(private readonly clock: () => Date = () => new Date()) {}
@@ -399,7 +460,7 @@ export class MemoryTripStore implements TripStore {
     this.trips.set(trip.id, trip)
     const document = { content, version: 1, updatedAt: now }
     this.documents.set(trip.id, document)
-    return { trip, document: { ...document }, postcards: [] }
+    return { trip, document: { ...document }, postcards: [], shareToken: null }
   }
 
   async get(ownerId: string, tripId: string): Promise<TripRecord | null> {
@@ -407,7 +468,33 @@ export class MemoryTripStore implements TripStore {
     const document = this.documents.get(tripId)
     if (!trip || !document) return null
     const cards = [...this.postcards.values()].filter((p) => p.tripId === tripId)
-    return { trip, document: { ...document }, postcards: cards }
+    return {
+      trip,
+      document: { ...document },
+      postcards: cards,
+      shareToken: this.shareTokens.get(tripId) ?? null,
+    }
+  }
+
+  async share(ownerId: string, tripId: string): Promise<string | null> {
+    if (!this.owned(ownerId, tripId)) return null
+    const token = this.shareTokens.get(tripId) ?? newShareToken()
+    this.shareTokens.set(tripId, token)
+    return token
+  }
+
+  async unshare(ownerId: string, tripId: string): Promise<boolean> {
+    if (!this.owned(ownerId, tripId)) return false
+    this.shareTokens.delete(tripId)
+    return true
+  }
+
+  async byShareToken(token: string): Promise<SharedTrip | null> {
+    const tripId = [...this.shareTokens.entries()].find(([, t]) => t === token)?.[0]
+    const trip = tripId ? this.trips.get(tripId) : undefined
+    if (!trip) return null
+    const opened = await this.get(trip.userId, trip.id)
+    return opened ? publicView(opened) : null
   }
 
   async update(ownerId: string, tripId: string, patch: TripPatch): Promise<Trip | null> {
@@ -470,5 +557,16 @@ export class MemoryTripStore implements TripStore {
     const card = this.postcards.get(postcardId)
     if (!card || !this.owned(ownerId, card.tripId)) return false
     return this.postcards.delete(postcardId)
+  }
+}
+
+/** What a link may show: no owner, and only what the document still references. */
+function publicView(record: TripRecord): SharedTrip {
+  const { userId: _owner, ...trip } = record.trip
+  const referenced = new Set(postcardIdsIn(record.document.content))
+  return {
+    trip,
+    document: record.document,
+    postcards: record.postcards.filter((p) => referenced.has(p.id)),
   }
 }

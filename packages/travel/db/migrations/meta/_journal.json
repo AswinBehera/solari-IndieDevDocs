@@ -85,6 +85,13 @@
       "when": 1789910985857,
       "tag": "0011_add_evidence_mention_id",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790614454024,
+      "tag": "0012_add_trip_share_token",
+      "breakpoints": true
     }
   ]
 }

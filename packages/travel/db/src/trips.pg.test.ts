@@ -204,6 +204,51 @@ describe.runIf(hasDb)("the trips store", () => {
     expect((await store().get(ALICE, t.id))?.postcards).toEqual([])
   })
 
+  it("shares a trip by a token that finds it without an owner, and stops", async () => {
+    const { trip: t } = await store().create(ALICE, trip())
+    expect(await store().share(BOB, t.id)).toBeNull()
+    const token = (await store().share(ALICE, t.id)) as string
+    expect(token).toMatch(/^[A-Za-z0-9_-]{22}$/)
+    // Sharing again keeps the link already sent.
+    expect(await store().share(ALICE, t.id)).toBe(token)
+    expect((await store().get(ALICE, t.id))?.shareToken).toBe(token)
+
+    const shared = await store().byShareToken(token)
+    expect(shared?.trip.title).toBe(t.title)
+    expect(shared?.trip).not.toHaveProperty("userId")
+
+    expect(await store().unshare(ALICE, t.id)).toBe(true)
+    expect(await store().byShareToken(token)).toBeNull()
+  })
+
+  it("shows a link only the cards the document still references", async () => {
+    const { trip: t } = await store().create(ALICE, trip())
+    const kept = await store().addPostcard(ALICE, t.id, {
+      kind: "note",
+      placeId: null,
+      payload: { text: "kept" },
+      geo: null,
+      time: null,
+      sourceRefs: [],
+    })
+    await store().addPostcard(ALICE, t.id, {
+      kind: "note",
+      placeId: null,
+      payload: { text: "deleted from the text" },
+      geo: null,
+      time: null,
+      sourceRefs: [],
+    })
+    await store().saveDocument(
+      ALICE,
+      t.id,
+      { type: "doc", content: [{ type: "postcard", attrs: { postcardId: kept?.id } }] },
+      1,
+    )
+    const token = (await store().share(ALICE, t.id)) as string
+    expect((await store().byShareToken(token))?.postcards.map((p) => p.id)).toEqual([kept?.id])
+  })
+
   it("renames a trip for its owner only", async () => {
     const { trip: t } = await store().create(ALICE, trip())
     expect(await store().update(BOB, t.id, { title: "Mine now" })).toBeNull()
