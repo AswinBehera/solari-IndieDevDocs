@@ -271,7 +271,20 @@ importers:
         specifier: ^3.4.9
         version: 3.4.9
 
-  packages/samsara/probe: {}
+  packages/samsara/probe:
+    dependencies:
+      '@samsara/core':
+        specifier: workspace:*
+        version: link:../core
+      '@samsara/db':
+        specifier: workspace:*
+        version: link:../db
+      '@samsara/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@4.20260702.1)(postgres@3.4.9)
 
   packages/samsara/refine:
     dependencies:
