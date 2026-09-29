@@ -33,6 +33,19 @@ export const DEFAULT_CEILINGS: Record<MeterId, number> = {
   "geocode.calls": 800,
 }
 
+/**
+ * Lifetime ceilings: what may ever be spent, not what may be spent today. The day
+ * ceilings above reset at midnight UTC and would let a prepaid balance drain over a
+ * week of normal days. Only the metered-in-money meters have one; a meter absent
+ * here is counted in `global.total` but never refused by it.
+ *
+ * Set 29 September 2026 against the operator's cap of $16 of Solari spend.
+ */
+export const DEFAULT_TOTALS: Partial<Record<MeterId, number>> = {
+  /** ~$16 at ~$0.002/browser-minute (the rate above). */
+  "solari.minutes": 8_000,
+}
+
 /** Env var name per meter. Keeps the mapping in one place rather than inline. */
 const ENV_VAR: Record<MeterId, string> = {
   "solari.minutes": "BUDGET_SOLARI_MINUTES",
@@ -62,6 +75,28 @@ export function ceilingsFrom(env: Record<string, string | undefined>): Record<Me
     const parsed = ceilingValue.safeParse(raw)
     if (!parsed.success) {
       throw new Error(`${ENV_VAR[meter]} must be a positive number, got ${JSON.stringify(raw)}`)
+    }
+    out[meter] = parsed.data
+  }
+  return out
+}
+
+/**
+ * Read lifetime ceilings from `<ENV_VAR>_TOTAL` (for example
+ * `BUDGET_SOLARI_MINUTES_TOTAL`), falling back to `DEFAULT_TOTALS`. Same rules as
+ * `ceilingsFrom`: an unparseable value throws.
+ */
+export function totalsFrom(
+  env: Record<string, string | undefined>,
+): Partial<Record<MeterId, number>> {
+  const out = { ...DEFAULT_TOTALS }
+  for (const meter of meterId.options) {
+    const name = `${ENV_VAR[meter]}_TOTAL`
+    const raw = env[name]
+    if (raw === undefined || raw === "") continue
+    const parsed = ceilingValue.safeParse(raw)
+    if (!parsed.success) {
+      throw new Error(`${name} must be a positive number, got ${JSON.stringify(raw)}`)
     }
     out[meter] = parsed.data
   }

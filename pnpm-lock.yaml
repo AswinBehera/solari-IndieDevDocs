@@ -75,6 +75,9 @@ importers:
       '@dt/core':
         specifier: workspace:*
         version: link:../../packages/travel/core
+      '@dt/travel-pack':
+        specifier: workspace:*
+        version: link:../../packages/travel/pack
       '@dt/ui':
         specifier: workspace:*
         version: link:../../packages/travel/ui

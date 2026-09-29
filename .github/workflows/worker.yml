@@ -120,6 +120,7 @@ jobs:
           BUDGET_LLM_INPUT_TOKENS: ${{ vars.BUDGET_LLM_INPUT_TOKENS }}
           BUDGET_LLM_OUTPUT_TOKENS: ${{ vars.BUDGET_LLM_OUTPUT_TOKENS }}
           BUDGET_GEOCODE_CALLS: ${{ vars.BUDGET_GEOCODE_CALLS }}
+          BUDGET_SOLARI_MINUTES_TOTAL: ${{ vars.BUDGET_SOLARI_MINUTES_TOTAL }}
           # Finish inside the grace period GitHub gives a cancelled run, with room
           # to close browser sessions and hand the claims back.
           WORKER_BUDGET_MS: "240000"

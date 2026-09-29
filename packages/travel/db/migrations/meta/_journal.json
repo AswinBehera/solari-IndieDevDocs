@@ -92,6 +92,20 @@
       "when": 1790614454024,
       "tag": "0012_add_trip_share_token",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790695250495,
+      "tag": "0013_add_job_last_cause",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790695496772,
+      "tag": "0014_add_budget_total_window",
+      "breakpoints": true
     }
   ]
 }

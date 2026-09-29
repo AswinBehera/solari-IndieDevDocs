@@ -30,8 +30,10 @@ export type MeterId = z.infer<typeof meterId>
  * - `owner.day`   — one caller's spend today, so one caller cannot exhaust the rest.
  * - `purpose.run` — one unit of work, so a runaway loop is caught inside a run
  *                   rather than at the end of a day.
+ * - `global.total` — everything ever spent. The day windows reset at midnight; a
+ *                   prepaid balance does not, so this is the one that protects it.
  */
-export const budgetWindow = z.enum(["global.day", "owner.day", "purpose.run"])
+export const budgetWindow = z.enum(["global.day", "owner.day", "purpose.run", "global.total"])
 export type BudgetWindow = z.infer<typeof budgetWindow>
 
 /**

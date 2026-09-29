@@ -452,7 +452,7 @@ export const budgetCounters = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     meter: meterIdEnum("meter").notNull(),
     window: budgetWindowEnum("window").notNull(),
-    /** The value the window is sliced by: a date, `<ownerId>:<date>`, or `<purpose>:<runId>`. */
+    /** The value the window is sliced by: a date, `<ownerId>:<date>`, `<purpose>:<runId>`, or `all`. */
     windowKey: text("window_key").notNull(),
     amount: doublePrecision("amount").notNull().default(0),
     ...timestamps,
@@ -494,6 +494,9 @@ export const jobs = pgTable(
     leaseUntil: timestamp("lease_until", { withTimezone: true }),
     claimedBy: text("claimed_by"),
     lastError: text("last_error"),
+    /** The Error's name and message behind `last_error`. Never served by the API or
+     *  logged (the repo's Actions logs are public); read only with database access. */
+    lastCause: text("last_cause"),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     ...timestamps,

@@ -1,4 +1,5 @@
 import { POSTCARD_ATTR } from "@dt/core"
+import { parseStayUrl } from "@dt/travel-pack/price/parse"
 import {
   type ChecklistItem,
   ChecklistPostcard,
@@ -201,6 +202,12 @@ function useCardProbe({ id, url, payload, editable, store }: PriceProps) {
   })
 }
 
+/** The API's own rule, run on paste, so an unsupported link is refused before Check. */
+function stayUrlRefusal(url: string): string | null {
+  const r = parseStayUrl(url, new Date())
+  return r.ok ? null : `${r.reason.charAt(0).toUpperCase()}${r.reason.slice(1)}.`
+}
+
 function PriceCheckPanel(props: PriceProps) {
   const { check, start } = useCardProbe(props)
   return <PriceTable check={check} {...(start ? { onCheck: start } : {})} />
@@ -219,6 +226,7 @@ function PricePostcardLive(props: PriceProps & { host: string | null }) {
         ? {
             onChangeUrl: (u: string) =>
               props.store.editPayload(props.id, { ...props.payload, url: u, probeId: null }),
+            validateUrl: stayUrlRefusal,
           }
         : {})}
     />

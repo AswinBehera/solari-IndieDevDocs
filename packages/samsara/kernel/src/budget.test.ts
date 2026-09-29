@@ -1,7 +1,7 @@
 import { meterId } from "@samsara/core"
 import { describe, expect, it } from "vitest"
 import { BudgetGuard, dayKey, keysFor } from "./budget.js"
-import { DEFAULT_CEILINGS, loadCeilings } from "./ceilings.js"
+import { DEFAULT_CEILINGS, loadCeilings, loadTotals } from "./ceilings.js"
 import { MemoryCounterStore } from "./stores/memory.js"
 
 const AT = new Date("2026-09-11T10:00:00.000Z")
@@ -68,11 +68,11 @@ describe("a meter sitting exactly on its ceiling is exhausted", () => {
 
 describe("windows", () => {
   it("counts global spend always, owner and run only when scoped", () => {
-    expect(keysFor("geocode.calls", {}, AT)).toHaveLength(1)
-    expect(keysFor("geocode.calls", { ownerId: "u1" }, AT)).toHaveLength(2)
+    expect(keysFor("geocode.calls", {}, AT)).toHaveLength(2)
+    expect(keysFor("geocode.calls", { ownerId: "u1" }, AT)).toHaveLength(3)
     expect(
       keysFor("geocode.calls", { ownerId: "u1", purpose: "harvest", runId: "r1" }, AT),
-    ).toHaveLength(3)
+    ).toHaveLength(4)
   })
 
   it("keys the day in UTC so a runner's timezone cannot shift the window", () => {
@@ -117,6 +117,40 @@ describe("windows", () => {
   })
 })
 
+describe("lifetime total", () => {
+  // The day windows reset; a prepaid balance does not. A week of days each under
+  // the day ceiling can still spend more than the balance holds.
+  it("refuses once the total is spent, even on a fresh day", async () => {
+    const store = new MemoryCounterStore()
+    const guard = new BudgetGuard({
+      store,
+      ceilings: DEFAULT_CEILINGS,
+      totals: { "solari.minutes": 100 },
+      clock,
+    })
+    store.seed({ meter: "solari.minutes", window: "global.total", windowKey: "all" }, 100)
+    const refused = await guard.check("solari.minutes", 1, {})
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.error.message).toContain("global.total")
+  })
+
+  it("counts a meter with no total but never refuses on it", async () => {
+    const store = new MemoryCounterStore()
+    const guard = guardWith(store)
+    store.seed({ meter: "geocode.calls", window: "global.total", windowKey: "all" }, 1e9)
+    expect((await guard.check("geocode.calls", 1, {})).ok).toBe(true)
+  })
+
+  it("reads totals from <VAR>_TOTAL and throws on a bad one", () => {
+    expect(loadTotals({})["solari.minutes"]).toBe(8_000)
+    expect(loadTotals({ BUDGET_SOLARI_MINUTES_TOTAL: "500" })["solari.minutes"]).toBe(500)
+    expect(() => loadTotals({ BUDGET_SOLARI_MINUTES_TOTAL: "lots" })).toThrow(
+      /BUDGET_SOLARI_MINUTES_TOTAL/,
+    )
+  })
+})
+
 describe("accounting", () => {
   it("records a spend against every window the scope touches", async () => {
     const store = new MemoryCounterStore()
@@ -126,7 +160,7 @@ describe("accounting", () => {
     await guard.record("geocode.calls", 3, scope)
 
     const totals = await store.read(keysFor("geocode.calls", scope, AT))
-    expect([...totals.values()]).toEqual([3, 3, 3])
+    expect([...totals.values()]).toEqual([3, 3, 3, 3])
   })
 
   it("counts what a failed operation spent, not only a successful one", async () => {
@@ -143,7 +177,7 @@ describe("accounting", () => {
     // The point is that the counter is not left at zero: a repeatedly-failing job
     // that spends real calls must move its meter, or it can loop forever for free.
     const totals = await store.read(keysFor("geocode.calls", {}, AT))
-    expect([...totals.values()]).toEqual([2])
+    expect([...totals.values()]).toEqual([2, 2])
   })
 
   it("books the actual cost a successful operation reports", async () => {
@@ -157,7 +191,7 @@ describe("accounting", () => {
 
     expect(result.ok).toBe(true)
     const totals = await store.read(keysFor("llm.input.tokens", {}, AT))
-    expect([...totals.values()]).toEqual([4_210])
+    expect([...totals.values()]).toEqual([4_210, 4_210])
   })
 
   it("refuses before running the callback at all", async () => {

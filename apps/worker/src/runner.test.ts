@@ -98,6 +98,8 @@ describe("the drain loop", () => {
     // rendered in a browser out of a public repository — and a thrown Error can
     // quote a page, a URL, or a connection string.
     expect(row?.lastError).toBe("internal: unhandled kernel error")
+    // The thrown text is kept, but only in the column nothing serves.
+    expect(row?.lastCause).toContain("boom")
   })
 
   it("fails terminally when a claimable type has no handler behind it", async () => {

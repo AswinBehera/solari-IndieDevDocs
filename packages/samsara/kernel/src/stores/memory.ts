@@ -82,6 +82,7 @@ interface MemoryJobRow {
   leaseUntil: Date | null
   claimedBy: string | null
   lastError: string | null
+  lastCause: string | null
   createdAt: Date
 }
 
@@ -124,6 +125,7 @@ export class MemoryJobStore implements JobStore {
       leaseUntil: null,
       claimedBy: null,
       lastError: null,
+      lastCause: null,
       createdAt: at,
     })
     this.append(id, "queued", null)
@@ -200,6 +202,7 @@ export class MemoryJobStore implements JobStore {
     const retryable = failure.kind === "upstream" || failure.kind === "internal"
     const willRetry = retryable && r.attempts < r.maxAttempts
     r.lastError = `${failure.kind}: ${failure.message}`
+    r.lastCause = failure.cause?.slice(0, 500) ?? null
     r.leaseUntil = null
     r.claimedBy = null
     if (willRetry) {

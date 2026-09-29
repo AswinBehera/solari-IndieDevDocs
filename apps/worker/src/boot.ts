@@ -9,7 +9,14 @@ import {
   PostgresHarvestRunStore,
   PostgresRawItemStore,
 } from "@samsara/harvest/postgres"
-import { BudgetGuard, Kernel, type Logger, loadCeilings, SessionRegistry } from "@samsara/kernel"
+import {
+  BudgetGuard,
+  Kernel,
+  type Logger,
+  loadCeilings,
+  loadTotals,
+  SessionRegistry,
+} from "@samsara/kernel"
 import { jsonLogger } from "@samsara/kernel/node"
 import {
   PostgresCounterStore,
@@ -74,6 +81,7 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
   const guard = new BudgetGuard({
     store: new PostgresCounterStore(database.db),
     ceilings: loadCeilings(env),
+    totals: loadTotals(env),
   })
 
   // Optional on purpose. The whole of Phase 0's work — claim, drain, lease,

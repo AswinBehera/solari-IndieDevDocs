@@ -53,12 +53,17 @@ export interface SpendScope {
 export const dayKey = (at: Date): string => at.toISOString().slice(0, 10)
 
 /**
- * Which counters a given spend touches. `global.day` always; the other two only
+ * Which counters a given spend touches. `global.day` and `global.total` always
+ * (the total is counted even when it has no ceiling, so setting one later starts
+ * from real usage rather than zero); the other two only
  * when the scope carries what they slice by. A missing owner is not an error — the
  * system opens sessions for itself — it simply means that window does not apply.
  */
 export function keysFor(meter: MeterId, scope: SpendScope, at: Date): CounterKey[] {
-  const keys: CounterKey[] = [{ meter, window: "global.day", windowKey: dayKey(at) }]
+  const keys: CounterKey[] = [
+    { meter, window: "global.day", windowKey: dayKey(at) },
+    { meter, window: "global.total", windowKey: "all" },
+  ]
   if (scope.ownerId) {
     keys.push({ meter, window: "owner.day", windowKey: `${scope.ownerId}:${dayKey(at)}` })
   }
@@ -76,6 +81,11 @@ export interface BudgetGuardOptions {
    * take the whole day, and a single run may not take a whole caller's day.
    */
   windowFractions?: Partial<Record<BudgetWindow, number>>
+  /**
+   * Lifetime ceilings, per meter. The day ceilings reset; these never do, which is
+   * what a prepaid provider balance needs. A meter with none is counted, not capped.
+   */
+  totals?: Partial<Record<MeterId, number>>
   clock?: () => Date
 }
 
@@ -83,22 +93,26 @@ const DEFAULT_FRACTIONS: Record<BudgetWindow, number> = {
   "global.day": 1,
   "owner.day": 0.25,
   "purpose.run": 0.05,
+  "global.total": 1,
 }
 
 export class BudgetGuard {
   private readonly store: CounterStore
   private readonly ceilings: Record<MeterId, number>
   private readonly fractions: Record<BudgetWindow, number>
+  private readonly totals: Partial<Record<MeterId, number>>
   private readonly clock: () => Date
 
   constructor(opts: BudgetGuardOptions) {
     this.store = opts.store
     this.ceilings = opts.ceilings
     this.fractions = { ...DEFAULT_FRACTIONS, ...opts.windowFractions }
+    this.totals = opts.totals ?? {}
     this.clock = opts.clock ?? (() => new Date())
   }
 
   ceilingFor(meter: MeterId, window: BudgetWindow): number {
+    if (window === "global.total") return this.totals[meter] ?? Number.POSITIVE_INFINITY
     return this.ceilings[meter] * this.fractions[window]
   }
 

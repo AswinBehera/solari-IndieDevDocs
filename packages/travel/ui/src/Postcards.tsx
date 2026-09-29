@@ -342,7 +342,9 @@ export function PriceTable({ check, onCheck }: { check: PriceCheck; onCheck?: ()
           onClick={onCheck}
           className="border border-ink px-3 py-1.5 font-mono text-[11px] tracking-[.08em] hover:bg-ink hover:text-surface"
         >
-          CHECK PRICES IN 8 COUNTRIES
+          {/* Seven, not the eight viewpoints: the proxy pool has no `th` and that row
+              fails by name (kernel `countries.ts`). */}
+          CHECK PRICES IN 7 COUNTRIES
         </button>
       )}
       {check.state === "starting" && (
@@ -506,6 +508,7 @@ export function PricePostcard({
   url,
   host,
   onChangeUrl,
+  validateUrl,
   check = { state: "idle" },
   onCheck,
 }: {
@@ -513,10 +516,14 @@ export function PricePostcard({
   url: string
   host: string | null
   onChangeUrl?: (url: string) => void
+  /** Why a pasted URL cannot be checked, or null if it can. Refusing on paste
+   *  beats refusing after the reader has pressed Check and waited. */
+  validateUrl?: (url: string) => string | null
   check?: PriceCheck
   onCheck?: () => void
 }) {
   const [draft, setDraft] = useState(url)
+  const [refusal, setRefusal] = useState<string | null>(null)
   return (
     <div
       style={tilted(id, 0.4)}
@@ -531,15 +538,28 @@ export function PricePostcard({
           className="mt-3"
           onSubmit={(e) => {
             e.preventDefault()
-            onChangeUrl(draft.trim())
+            const next = draft.trim()
+            const why = validateUrl?.(next) ?? null
+            setRefusal(why)
+            if (!why) onChangeUrl(next)
           }}
         >
           <input
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              setRefusal(null)
+            }}
             placeholder="Paste a Booking or Agoda URL, then Enter"
+            aria-label="Hotel page URL"
+            aria-invalid={refusal ? true : undefined}
             className="w-full bg-transparent font-mono text-accent-blue text-xs placeholder:text-ink-faint focus:outline-none"
           />
+          {refusal && (
+            <p role="alert" className="mt-2 text-signal-red text-xs">
+              {refusal}
+            </p>
+          )}
         </form>
       ) : (
         <p className="mt-3 truncate font-mono text-accent-blue text-xs">{url}</p>

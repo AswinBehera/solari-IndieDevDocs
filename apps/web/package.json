@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@dt/core": "workspace:*",
+    "@dt/travel-pack": "workspace:*",
     "@dt/ui": "workspace:*",
     "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-router": "^1.170.40",

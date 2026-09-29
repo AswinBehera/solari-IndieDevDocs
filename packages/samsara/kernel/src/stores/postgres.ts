@@ -294,6 +294,7 @@ export class PostgresJobStore implements JobStore {
         leaseUntil: null,
         claimedBy: null,
         lastError: null,
+        lastCause: null,
         updatedAt: at,
       })
       .where(eq(jobs.id, id))
@@ -325,6 +326,10 @@ export class PostgresJobStore implements JobStore {
     // The class and the kernel's own message, never the provider's text. This
     // column is read back by the API and rendered in a browser.
     const lastError = `${failure.kind}: ${failure.message}`
+    // The cause goes in a column nothing serves, because a class alone has hidden the
+    // real reason three times ("unhandled kernel error" for an unset model, a
+    // redirect, a missing key). Capped: it is a diagnosis, not a transcript.
+    const lastCause = failure.cause?.slice(0, 500) ?? null
 
     if (willRetry) {
       await this.db
@@ -334,6 +339,7 @@ export class PostgresJobStore implements JobStore {
           leaseUntil: null,
           claimedBy: null,
           lastError,
+          lastCause,
           runAfter: new Date(at.getTime() + jobRetryDelayMs(row.attempts)),
           updatedAt: at,
         })
@@ -348,6 +354,7 @@ export class PostgresJobStore implements JobStore {
           leaseUntil: null,
           claimedBy: null,
           lastError,
+          lastCause,
           updatedAt: at,
         })
         .where(eq(jobs.id, id))
