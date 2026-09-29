@@ -1,3 +1,33 @@
+# STATUS addendum — 29 September 2026 (read this first)
+
+Built and pushed in one session: **P5.5** kernel dashboard (`/lab/kernel`), **P4.3** intent parsing
+(`trip.intent`), **P3.1-P3.3** probe engine (`@samsara/probe`), **P3.2** Booking and Agoda price probes
+(validated live), **P3.4 + P4.7 (hotel links)** live price table on Price and Link cards, **P3.5** watch
+mode (`PUT /probes/:id/watch`, `probe.sweep`), **P5.1** persona keepalive sweep, **P5.2** daily trip sweep.
+The worker now enqueues four idempotent daily sweeps (`persona`, `probe`, `trip`) on its first tick.
+
+**Live findings, measured.** One Booking property (Mandarin Oriental Bangkok), seven countries, 54 s:
+US paid about $546, every other country about $580 (IN about $493 on Agoda). Booking priced 7 of 7
+reachable countries; Agoda 6 of 7 (DE showed no price). **`th` is not in the provider's proxy pool**, so
+a probe is 7 of 8 countries by construction; it is reported as failed by name, never substituted.
+Selectors were wrong on the first live run (a text scan read an unrelated $493; Agoda ignored the date
+parameters until `los=` was used), which is why the payload records `source` and `context`.
+
+**P3.6 flights spike: viable.** One session, US egress, Google Flights `?q=Flights to BKK from SFO on ...`
+rendered real fares ($815 to $933) with no consent wall. No adapter is written; that is the follow-up.
+
+**Hosted database.** Migrations 0011 and 0012 applied. The 14 harvest runs were labelled `atlas`; they
+were relabelled `travel` (the pack that reads them). `worker.yml` had no `LLM_MODEL_EXTRACT`, so every
+`refine.extract` failed by name on hosted; it now defaults to the bake-off's route. The backfill was run
+with `--commit` and drained by a local worker; see the counts in the commit message of the next commit.
+
+**Not built, and why.** P5.3 email digest (needs a Resend or SMTP account), P5.4 seeded persona (gated by
+the plan on architect sign-off), P6.1 real auth (no Supabase project), P6.2 Stripe (keys and plan
+decisions), P6.3 landing page, P6.4 Tokyo adapters (billed live scraping of Tabelog, and the pipeline's
+extract is Thailand-only), P6.5 legal copy (needs a human to own it), P6.6 instrumentation (needs an
+account). P4.6 photo upload to storage and the PMTiles basemap are unchanged. P3.4's sparkline waits on
+the notification table. Screenshots are on local disk, so the web app cannot show them yet.
+
 # STATUS
 
 Phase: 2 — in progress. Phase 1's acceptance week is **still draining** (six of seven days queued,

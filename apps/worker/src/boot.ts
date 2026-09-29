@@ -36,6 +36,7 @@ import { HandlerRegistry, noopHandler } from "./handlers.js"
 import { createHarvestHandler } from "./harvest.js"
 import { createIntentHandler } from "./intent.js"
 import { createPackRegistry } from "./packs.js"
+import { createPersonaSweepHandler } from "./persona-sweep.js"
 import { createKeepaliveHandler } from "./personas.js"
 import { createProbeHandler } from "./probe.js"
 import { createProbeSweepHandler } from "./probe-sweep.js"
@@ -177,6 +178,9 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       rates: dailyFx(),
     }),
   )
+
+  // P5.1: keepalives for personas idle 36-72 h. Queues only.
+  handlers.register("persona.sweep", createPersonaSweepHandler({ personas, queue: jobs }))
 
   // P3.5: daily re-probe of watched targets. Queues only.
   handlers.register(
