@@ -9,11 +9,13 @@ import {
   PhotoPostcard,
   PlacePostcard,
   PricePostcard,
+  PriceTable,
 } from "@dt/ui"
 import { NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react"
 import { useState } from "react"
 import { type CardStore, useCard } from "../cards"
 import { frameFor, placeFromPayload, readPlace, snapshotOf } from "../places"
+import { usePriceCheck } from "../probe"
 
 /**
  * One Postcard block in the document: the node holds an id, this draws the card
@@ -123,15 +125,26 @@ export function Card({
     }
     case "link": {
       const url = text("url")
+      const kind = linkKind(url)
       return (
         <LinkPostcard
           id={id}
           url={url}
-          kind={linkKind(url)}
+          kind={kind}
           {...(editable
             ? { onChangeUrl: (u: string) => store.editPayload(id, { ...payload, url: u }) }
             : {})}
-        />
+        >
+          {(kind === "booking" || kind === "agoda") && (
+            <PriceCheckPanel
+              id={id}
+              url={url}
+              payload={payload}
+              editable={editable}
+              store={store}
+            />
+          )}
+        </LinkPostcard>
       )
     }
     case "photo":
@@ -156,15 +169,58 @@ export function Card({
         host = null
       }
       return (
-        <PricePostcard
+        <PricePostcardLive
           id={id}
           url={url}
           host={host}
-          {...(editable
-            ? { onChangeUrl: (u: string) => store.editPayload(id, { ...payload, url: u }) }
-            : {})}
+          payload={payload}
+          editable={editable}
+          store={store}
         />
       )
     }
   }
+}
+
+interface PriceProps {
+  id: string
+  url: string
+  payload: Record<string, unknown>
+  editable: boolean
+  store: CardStore
+}
+
+/** The probe id lives in the card's own payload, so reopening reads it and spends nothing. */
+function useCardProbe({ id, url, payload, editable, store }: PriceProps) {
+  const probeId = typeof payload.probeId === "string" ? payload.probeId : null
+  return usePriceCheck({
+    url,
+    probeId,
+    editable,
+    onStarted: (p) => store.editPayload(id, { ...payload, probeId: p }),
+  })
+}
+
+function PriceCheckPanel(props: PriceProps) {
+  const { check, start } = useCardProbe(props)
+  return <PriceTable check={check} {...(start ? { onCheck: start } : {})} />
+}
+
+function PricePostcardLive(props: PriceProps & { host: string | null }) {
+  const { check, start } = useCardProbe(props)
+  return (
+    <PricePostcard
+      id={props.id}
+      url={props.url}
+      host={props.host}
+      check={check}
+      {...(start ? { onCheck: start } : {})}
+      {...(props.editable
+        ? {
+            onChangeUrl: (u: string) =>
+              props.store.editPayload(props.id, { ...props.payload, url: u, probeId: null }),
+          }
+        : {})}
+    />
+  )
 }

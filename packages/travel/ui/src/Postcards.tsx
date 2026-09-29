@@ -15,7 +15,9 @@ import {
   type LinkKind,
   linkLine,
   localPercent,
+  type PriceRow,
   photoLine,
+  priceSpread,
   sourceBadge,
   stateTag,
   whyRows,
@@ -315,16 +317,85 @@ export function ChecklistPostcard({
   )
 }
 
+/** Where a price check stands, as the card shows it. */
+export type PriceCheck =
+  | { state: "idle" }
+  | { state: "starting" }
+  | { state: "running"; rows: PriceRow[] }
+  | { state: "done"; rows: PriceRow[] }
+  | { state: "error"; message: string }
+
+/**
+ * What each country is shown for one property (P3.4). Cheapest is highlighted only
+ * where a converted figure backs it, and the note says why prices differ without
+ * promising a saving: a price is what a site displays to a visitor, and booking
+ * from another country may not be possible or honoured.
+ */
+export function PriceTable({ check, onCheck }: { check: PriceCheck; onCheck?: () => void }) {
+  const rows = check.state === "running" || check.state === "done" ? check.rows : []
+  const spread = priceSpread(rows)
+  return (
+    <div className="mt-4">
+      {check.state === "idle" && onCheck && (
+        <button
+          type="button"
+          onClick={onCheck}
+          className="border border-ink px-3 py-1.5 font-mono text-[11px] tracking-[.08em] hover:bg-ink hover:text-surface"
+        >
+          CHECK PRICES IN 8 COUNTRIES
+        </button>
+      )}
+      {check.state === "starting" && (
+        <p className="font-mono text-[11px] text-ink-muted tracking-[.06em]">STARTING…</p>
+      )}
+      {check.state === "error" && <p className="text-[#B3261E] text-sm">{check.message}</p>}
+      {rows.length > 0 && (
+        <ul className="divide-y divide-rule border-rule border-y">
+          {rows.map((r) => (
+            <li key={r.country} className="flex items-center gap-3 py-1.5 font-mono text-[12px]">
+              <span className="w-8 text-ink-muted uppercase">{r.country}</span>
+              <span className={r.status === "price" ? "" : "text-ink-faint"}>{r.label}</span>
+              {r.usd !== null && (
+                <span className="ml-auto text-ink-muted">≈ ${r.usd.toFixed(0)}</span>
+              )}
+              {r.cheapest && (
+                <span className="border border-accent-gold px-1.5 text-[10px] text-accent-gold tracking-[.1em]">
+                  CHEAPEST
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {check.state === "running" && (
+        <p className="mt-2 font-mono text-[11px] text-ink-muted tracking-[.06em]">
+          {rows.length} OF 8 COUNTRIES BACK · READING THE REST
+        </p>
+      )}
+      {check.state === "done" && (
+        <p className="mt-2 text-ink-muted text-sm">
+          {spread ? `${spread} ` : ""}
+          Sites show a price to each visitor; booking from another country may not be possible or
+          honoured, and taxes or member rates can differ.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function LinkPostcard({
   id,
   url,
   kind,
   onChangeUrl,
+  children,
 }: {
   id: string
   url: string
   kind: LinkKind
   onChangeUrl?: (url: string) => void
+  /** The price panel, for a hotel link. */
+  children?: ReactNode
 }) {
   const [draft, setDraft] = useState(url)
   return (
@@ -362,6 +433,7 @@ export function LinkPostcard({
         )}
       </div>
       {url && <p className="mt-2.5 text-ink-muted text-sm">{linkLine(kind)}</p>}
+      {children}
     </div>
   )
 }
@@ -424,11 +496,15 @@ export function PricePostcard({
   url,
   host,
   onChangeUrl,
+  check = { state: "idle" },
+  onCheck,
 }: {
   id: string
   url: string
   host: string | null
   onChangeUrl?: (url: string) => void
+  check?: PriceCheck
+  onCheck?: () => void
 }) {
   const [draft, setDraft] = useState(url)
   return (
@@ -461,12 +537,20 @@ export function PricePostcard({
       <div className="mt-5 flex items-center gap-3">
         <span className="h-px w-10 bg-accent-blue" aria-hidden />
         <span className="font-mono text-[10px] text-accent-gold tracking-[.1em]">
-          CHEAPEST · PENDING
+          {check.state === "done"
+            ? "PRICES BY COUNTRY"
+            : check.state === "running"
+              ? "READING"
+              : "NOT CHECKED YET"}
         </span>
       </div>
-      <p className="mt-2 text-ink-muted text-sm">
-        No eye has read this yet. When one does, this card shows what each country is shown.
-      </p>
+      {url && (onCheck || check.state !== "idle") ? (
+        <PriceTable check={check} {...(onCheck ? { onCheck } : {})} />
+      ) : (
+        <p className="mt-2 text-ink-muted text-sm">
+          {url ? "Nobody has checked this yet." : "Paste a property URL to check it."}
+        </p>
+      )}
     </div>
   )
 }

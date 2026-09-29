@@ -128,7 +128,7 @@ export function linkLine(kind: LinkKind): string {
       return "YouTube video. Reading it into a Place is not wired up yet; it stays as a link."
     case "booking":
     case "agoda":
-      return "A hotel page. Watching its price across countries arrives with Hundred Eyes."
+      return "A hotel page. Check what each country is shown for it."
     case "maps":
       return "A map link."
     default:
@@ -150,4 +150,67 @@ export function checklistCount(items: readonly ChecklistItem[]): string {
 /** What a photo's metadata gave us: "GEO ✓ · NO TIME". */
 export function photoLine(geo: unknown, takenAt: string | null): string {
   return `${geo ? "GEO ✓" : "NO GEO"} · ${takenAt ? "TIME ✓" : "NO TIME"}`
+}
+
+/** One country's line in the price table, from what `/probes/:id` returns. */
+export interface PriceRow {
+  country: string
+  /** What was shown, exactly as the site displayed it, or the reason there is no figure. */
+  label: string
+  usd: number | null
+  status: "price" | "no_price" | "blocked"
+  cheapest: boolean
+}
+
+export interface ObservationWire {
+  country: string
+  payload: unknown
+}
+
+/**
+ * Rows for the table: priced countries cheapest first, then the ones with no figure.
+ *
+ * Only a normalised `usd` competes for "cheapest". A row with a price the FX source
+ * could not convert is shown but never highlighted, because a highlight is a claim
+ * and an unconverted figure cannot back it.
+ */
+export function priceRows(observations: readonly ObservationWire[]): PriceRow[] {
+  const rows: PriceRow[] = observations.map((o) => {
+    const p = (o.payload ?? {}) as {
+      status?: PriceRow["status"]
+      displayed?: string | null
+      usd?: number | null
+      wall?: string | null
+    }
+    const status = p.status ?? "no_price"
+    const label =
+      status === "price"
+        ? (p.displayed ?? "").replace(/\s+/g, " ").trim()
+        : status === "blocked"
+          ? `blocked${p.wall ? ` (${p.wall})` : ""}`
+          : "no price shown"
+    return {
+      country: o.country,
+      label,
+      usd: status === "price" && typeof p.usd === "number" ? p.usd : null,
+      status,
+      cheapest: false,
+    }
+  })
+  rows.sort(
+    (a, b) => (a.usd ?? Infinity) - (b.usd ?? Infinity) || a.country.localeCompare(b.country),
+  )
+  const first = rows.find((r) => r.usd !== null)
+  if (first) first.cheapest = true
+  return rows
+}
+
+/** "Highest is 7% above the lowest", or null when fewer than two countries have a figure. */
+export function priceSpread(rows: readonly PriceRow[]): string | null {
+  const usd = rows.map((r) => r.usd).filter((n): n is number => n !== null)
+  if (usd.length < 2) return null
+  const lo = Math.min(...usd)
+  const hi = Math.max(...usd)
+  const pct = Math.round(((hi - lo) / lo) * 100)
+  return pct === 0 ? "Same price everywhere we could read." : `Highest is ${pct}% above the lowest.`
 }

@@ -6,6 +6,8 @@ import {
   linkLine,
   localPercent,
   photoLine,
+  priceRows,
+  priceSpread,
   sourceBadge,
   stateTag,
   whyRows,
@@ -115,5 +117,29 @@ describe("checklistCount and photoLine", () => {
   it("says what the photo's metadata gave", () => {
     expect(photoLine({ lat: 1, lng: 2 }, null)).toBe("GEO ✓ · NO TIME")
     expect(photoLine(null, "2026-11-15T09:00:00Z")).toBe("NO GEO · TIME ✓")
+  })
+})
+
+describe("priceRows", () => {
+  const obs = [
+    { country: "us", payload: { status: "price", displayed: "$546", usd: 546 } },
+    { country: "in", payload: { status: "price", displayed: "Rs. 47,377", usd: 493.15 } },
+    { country: "de", payload: { status: "no_price" } },
+    { country: "jp", payload: { status: "price", displayed: "¥91,414", usd: null } },
+    { country: "au", payload: { status: "blocked", wall: "captcha" } },
+  ]
+  it("orders priced rows cheapest first and highlights only a converted cheapest", () => {
+    const rows = priceRows(obs)
+    expect(rows.map((r) => r.country)).toEqual(["in", "us", "au", "de", "jp"])
+    expect(rows.filter((r) => r.cheapest).map((r) => r.country)).toEqual(["in"])
+  })
+  it("names the reason for a row with no figure", () => {
+    const rows = priceRows(obs)
+    expect(rows.find((r) => r.country === "au")?.label).toBe("blocked (captcha)")
+    expect(rows.find((r) => r.country === "de")?.label).toBe("no price shown")
+  })
+  it("reports the spread honestly, and nothing for fewer than two figures", () => {
+    expect(priceSpread(priceRows(obs))).toBe("Highest is 11% above the lowest.")
+    expect(priceSpread(priceRows(obs.slice(0, 1)))).toBeNull()
   })
 })
