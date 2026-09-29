@@ -28,7 +28,13 @@ import {
   runProbe,
   type ScreenshotArchive,
 } from "../packages/samsara/probe/src/index.js"
-import { priceAdapter } from "../packages/travel/pack/src/price/index.js"
+import { createJevJudge, createPriceAdapter } from "../packages/travel/pack/src/price/index.js"
+
+// With TYPESAFE_API_KEY set, each page is also judged by Jev (one call per country).
+const env = process.env
+const priceAdapter = createPriceAdapter(
+  env.TYPESAFE_API_KEY ? { judge: createJevJudge(env.TYPESAFE_API_KEY) } : {},
+)
 
 const [url, countriesArg, outDir] = process.argv.slice(2)
 if (!url || !outDir) {
@@ -90,13 +96,14 @@ try {
           usd?: number | null
           title?: string
           wall?: string | null
+          judge?: { wall: number; property: number; priceVisible: number } | null
         }
       | undefined
     console.log(
       r.country,
       r.outcome,
       p
-        ? `${p.status} | ${p.displayed ?? "-"} | via ${p.source ?? "-"} | usd ${p.usd ?? "-"} | wall ${p.wall ?? "-"} | ${p.title}`
+        ? `${p.status} | ${p.displayed ?? "-"} | via ${p.source ?? "-"} | usd ${p.usd ?? "-"} | wall ${p.wall ?? "-"} | judge ${p.judge ? `w${p.judge.wall.toFixed(2)} p${p.judge.property.toFixed(2)} $${p.judge.priceVisible.toFixed(2)}` : "-"} | ${p.title}`
         : r.failure,
     )
   }

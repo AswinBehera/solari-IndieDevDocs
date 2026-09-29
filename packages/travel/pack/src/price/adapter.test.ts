@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { type PricePage, type PricePayload, priceAdapter } from "./adapter.js"
+import { createPriceAdapter, type PricePage, type PricePayload, priceAdapter } from "./adapter.js"
+import type { PageVerdict } from "./jev.js"
 import { parseStayUrl } from "./parse.js"
 
 const NOW = new Date("2026-09-29T00:00:00Z")
@@ -95,5 +96,52 @@ describe("the price probe", () => {
     expect(priceAdapter.normalise?.({ ...base, currency: "MYR" }, { USD: 1 })).toMatchObject({
       usd: null,
     })
+  })
+})
+
+describe("the price probe with a page judge", () => {
+  const judged = (verdict: PageVerdict | null, p: PricePage) => {
+    const url = "https://www.booking.com/hotel/th/x.html"
+    return createPriceAdapter({ judge: async () => verdict }).probe(
+      { page: p, country: "jp", signal: new AbortController().signal },
+      { url, parsed: parsed(url) },
+    )
+  }
+  it("calls a wall the regex cannot read a wall when the judge is sure", async () => {
+    const r = await judged(
+      { wall: 0.97, property: 0.02, priceVisible: 0.01 },
+      page({
+        title: "アクセスが拒否されました",
+        body: "ご利用のネットワークからのアクセスは制限されています",
+      }),
+    )
+    expect(r.payload).toMatchObject({ status: "blocked", wall: "judge" })
+    expect(r.payload.judge?.wall).toBe(0.97)
+  })
+  it("drops a text-scan figure on a page the judge says shows no stay price", async () => {
+    const r = await judged(
+      { wall: 0.02, property: 0.95, priceVisible: 0.05 },
+      page({ body: "Guests paid on average US$ 129 last year" }),
+    )
+    expect(r.payload).toMatchObject({ status: "no_price", source: null })
+  })
+  it("keeps an element price whatever the judge thinks of the text", async () => {
+    const r = await judged(
+      { wall: 0.02, property: 0.95, priceVisible: 0.05 },
+      page({ elements: ["THB 4,500"] }),
+    )
+    expect(r.payload).toMatchObject({ status: "price", amount: 4500, source: "element" })
+  })
+  it("leaves the regex standing when the judge does not answer", async () => {
+    const r = await judged(null, page({ elements: ["THB 4,500"] }))
+    expect(r.payload).toMatchObject({ status: "price", judge: null })
+  })
+  it("treats a page the judge is sure is not a property as off the property", async () => {
+    const r = await judged(
+      { wall: 0.02, property: 0.05, priceVisible: 0.9 },
+      page({ elements: ["THB 4,500"] }),
+    )
+    expect(r.payload.status).toBe("no_price")
+    expect(r.notes).toBe("redirected off the property page")
   })
 })

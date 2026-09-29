@@ -1,7 +1,7 @@
 import { createDb } from "@dt/db"
 import { PostgresTripStore } from "@dt/db/trips"
 import { PostgresOsmSearch, PostgresPlaceRepo } from "@dt/travel-pack/postgres"
-import { priceAdapter } from "@dt/travel-pack/price"
+import { createJevJudge, createPriceAdapter } from "@dt/travel-pack/price"
 import { MemoryPacer } from "@samsara/harvest"
 import { FilesystemCaptureArchive } from "@samsara/harvest/node"
 import {
@@ -167,7 +167,11 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
   )
 
   // P3.1: one URL from every country. The adapter is the price one; a second probe
-  // source is a line here.
+  // source is a line here. With a TypeSafe key, Jev judges each page (wall, property,
+  // price visible) on top of the regex checks; without one, the regex stands alone.
+  const priceAdapter = createPriceAdapter(
+    env.TYPESAFE_API_KEY ? { judge: createJevJudge(env.TYPESAFE_API_KEY) } : {},
+  )
   handlers.register(
     "probe.run",
     createProbeHandler({

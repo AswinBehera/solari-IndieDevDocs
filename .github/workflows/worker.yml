@@ -108,6 +108,8 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SOLARI_API_KEY: ${{ secrets.SOLARI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Optional: the Jev page judge on price probes. Unset, probes use the regex only.
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
           # The route the 18 September bake-off chose (STATUS, P2.1; `.env.example`).
           # Defaulted here because an unset model makes every `refine.extract` fail,
           # and a repository variable of the same name overrides it.
