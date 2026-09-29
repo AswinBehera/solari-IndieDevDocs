@@ -108,6 +108,12 @@ export interface TripStore {
   create(ownerId: string, input: NewTrip): Promise<TripRecord>
   get(ownerId: string, tripId: string): Promise<TripRecord | null>
   update(ownerId: string, tripId: string, patch: TripPatch): Promise<Trip | null>
+  /**
+   * Trips in a status, across every owner, oldest-updated first. **The one method
+   * here that is not owner-scoped**, because its caller is the nightly sweep (P5.2),
+   * which acts for the system and never hands what it reads to a user.
+   */
+  listByStatus(status: Trip["status"], limit: number): Promise<Trip[]>
   /** Null when the trip is not the owner's. */
   saveDocument(
     ownerId: string,
@@ -202,6 +208,16 @@ export class PostgresTripStore implements TripStore {
       .where(eq(trips.userId, ownerId))
       .orderBy(desc(trips.updatedAt), trips.id)
     return rows.map((r) => ({ trip: toTrip(r.trip), postcards: r.postcards, withGeo: r.withGeo }))
+  }
+
+  async listByStatus(status: Trip["status"], limit: number): Promise<Trip[]> {
+    const rows = await this.db
+      .select()
+      .from(trips)
+      .where(eq(trips.status, status))
+      .orderBy(trips.updatedAt, trips.id)
+      .limit(limit)
+    return rows.map(toTrip)
   }
 
   async create(ownerId: string, input: NewTrip): Promise<TripRecord> {
@@ -451,6 +467,13 @@ export class MemoryTripStore implements TripStore {
         )
         return { trip, postcards: cards.length, withGeo: cards.filter((p) => p.geo).length }
       })
+  }
+
+  async listByStatus(status: Trip["status"], limit: number): Promise<Trip[]> {
+    return [...this.trips.values()]
+      .filter((t) => t.status === status)
+      .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())
+      .slice(0, limit)
   }
 
   async create(ownerId: string, input: NewTrip): Promise<TripRecord> {

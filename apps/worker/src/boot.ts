@@ -42,6 +42,7 @@ import { createRefineHandler } from "./refine.js"
 import { createResolveHandler } from "./resolve.js"
 import { createScoreHandler } from "./score.js"
 import { sourceRegistry } from "./sources.js"
+import { createSweepHandler } from "./sweep.js"
 
 /**
  * Everything the runner needs, assembled once at boot.
@@ -173,6 +174,17 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       archive: new FilesystemScreenshotArchive(env.CAPTURE_ARCHIVE_DIR ?? ".captures"),
       adapters: new Map<string, ProbeAdapter>([[priceAdapter.id, priceAdapter as ProbeAdapter]]),
       rates: dailyFx(),
+    }),
+  )
+
+  // P5.2: the daily sweep. Queues harvests; spends nothing itself.
+  handlers.register(
+    "trip.sweep",
+    createSweepHandler({
+      trips: new PostgresTripStore(database.db),
+      personas,
+      queue: jobs,
+      maxTrips: Number(env.TRIP_SWEEP_MAX ?? 3),
     }),
   )
 

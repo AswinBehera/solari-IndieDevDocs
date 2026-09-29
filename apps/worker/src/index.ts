@@ -5,6 +5,7 @@
 import { now } from "@samsara/kernel"
 import { boot } from "./boot.js"
 import { drain } from "./runner.js"
+import { dayOf, sweepJobKey } from "./sweep.js"
 
 export * from "./boot.js"
 export * from "./handlers.js"
@@ -65,6 +66,14 @@ export async function main(): Promise<number> {
     // Rows the *previous* run left open. Under ADR-0014 a cancelled runner is
     // routine, so this is a normal startup step, not recovery.
     await app.registry.reconcile()
+    // One sweep a day: the key is the UTC date, so the every-15-minute cron queues it
+    // once and every later tick is a no-op. Opt-out, not opt-in, but `TRIP_SWEEP_MAX=0`
+    // makes it queue nothing.
+    await app.jobs.enqueue({
+      type: "trip.sweep",
+      domainId: "travel",
+      idempotencyKey: sweepJobKey(dayOf(new Date())),
+    })
 
     const summary = await drain(
       {
