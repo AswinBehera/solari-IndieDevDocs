@@ -15,6 +15,7 @@
     "record": "tsx --env-file-if-exists=../../.env src/record-capture.ts"
   },
   "dependencies": {
+    "@dt/core": "workspace:*",
     "@dt/db": "workspace:*",
     "@dt/travel-pack": "workspace:*",
     "@samsara/core": "workspace:*",

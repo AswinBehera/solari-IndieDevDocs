@@ -8,6 +8,7 @@ import {
   PostgresHarvestRunStore,
   PostgresRawItemStore,
 } from "@samsara/harvest/postgres"
+import { PostgresOpsReader } from "@samsara/kernel/ops"
 import { PostgresJobStore } from "@samsara/kernel/postgres"
 import { PostgresPersonaStore } from "@samsara/personas/postgres"
 import { PostgresMentionStore } from "@samsara/refine/postgres"
@@ -73,6 +74,13 @@ export default {
           reader: (bindings) => {
             const e = bindings as Env
             return new PostgresPlaceReader(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
+          },
+        },
+        // The ops dashboard (P5.5), per request like everything above.
+        kernel: {
+          reader: (bindings) => {
+            const e = bindings as Env
+            return new PostgresOpsReader(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
           },
         },
         // Trips, documents and Postcards (P4.1), per request like everything above.

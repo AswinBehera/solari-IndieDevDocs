@@ -130,6 +130,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@dt/core':
+        specifier: workspace:*
+        version: link:../../packages/travel/core
       '@dt/db':
         specifier: workspace:*
         version: link:../../packages/travel/db

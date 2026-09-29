@@ -71,3 +71,44 @@ export function postcardIdsIn(content: unknown): string[] {
   walk(content)
   return out
 }
+
+/**
+ * The document's prose, one line per block, with Postcards left out.
+ *
+ * What intent parsing (P4.3) reads: the traveller's own words. A Postcard's body
+ * is a snapshot of something the pipeline wrote, not something they said, so it
+ * would only teach the model that a place's opening hours are the trip's dates.
+ */
+export function documentText(content: unknown): string {
+  const lines: string[] = []
+  const inline = (node: unknown): string => {
+    if (Array.isArray(node)) return node.map(inline).join("")
+    if (typeof node !== "object" || node === null) return ""
+    const n = node as { type?: unknown; text?: unknown; content?: unknown }
+    if (n.type === POSTCARD_NODE) return ""
+    if (typeof n.text === "string") return n.text
+    return inline(n.content)
+  }
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const child of node) walk(child)
+      return
+    }
+    if (typeof node !== "object" || node === null) return
+    const n = node as { type?: unknown; content?: unknown }
+    if (n.type === POSTCARD_NODE) return
+    const children = Array.isArray(n.content) ? n.content : []
+    // A block holding text is a line; a block holding blocks is walked.
+    const isTextBlock = children.some(
+      (c) => typeof c === "object" && c !== null && "text" in c && !("content" in c),
+    )
+    if (isTextBlock) {
+      const text = inline(n.content).trim()
+      if (text) lines.push(text)
+    } else {
+      walk(n.content)
+    }
+  }
+  walk(content)
+  return lines.join("\n")
+}

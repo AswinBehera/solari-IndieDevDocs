@@ -34,6 +34,7 @@ const NAV: NavGroup[] = [
     items: [
       { to: "/lab", label: "Personas" },
       { to: "/lab/places", label: "Places" },
+      { to: "/lab/kernel", label: "Kernel" },
     ],
   },
 ]

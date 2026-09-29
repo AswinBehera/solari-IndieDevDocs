@@ -185,6 +185,50 @@ describe("the document", () => {
     expect(await res.json()).toEqual({ version: 2 })
   })
 
+  it("queues one intent job per trip per hour, and a queue that throws does not fail the save", async () => {
+    const queued: { type: string; idempotencyKey?: string | null }[] = []
+    const spy = {
+      ...jobs,
+      async enqueue(i: (typeof queued)[number]) {
+        queued.push(i)
+        return { id: "j", deduped: false }
+      },
+    }
+    const at = new Date("2026-09-29T10:15:00Z")
+    const withQueue = (q: typeof jobs) =>
+      createApp({
+        jobs: () => q,
+        verifier,
+        dispatcher: noopDispatcher,
+        trips: { store: () => store, clock: () => at },
+        places: { reader: () => reader },
+      })
+    const id = await created()
+    const put = (a: ReturnType<typeof withQueue>, version: number) =>
+      a.request(
+        `/trips/${id}/document`,
+        as(ALICE, {
+          method: "PUT",
+          body: JSON.stringify({ content: { type: "doc", content: [] }, version }),
+        }),
+      )
+
+    expect((await put(withQueue(spy as never), 1)).status).toBe(200)
+    expect(queued).toHaveLength(1)
+    expect(queued[0]?.type).toBe("trip.intent")
+    expect(queued[0]?.idempotencyKey).toBe(
+      `trip.intent:${id}:${Math.floor(at.getTime() / 3_600_000)}`,
+    )
+
+    const broken = {
+      ...jobs,
+      async enqueue() {
+        throw new Error("down")
+      },
+    }
+    expect((await put(withQueue(broken as never), 2)).status).toBe(200)
+  })
+
   it("refuses a stale version with a 409 carrying the current one", async () => {
     const id = await created()
     await save(id, 1)

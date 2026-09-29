@@ -9,6 +9,7 @@ import { HTTPException } from "hono/http-exception"
 import { streamSSE } from "hono/streaming"
 import { requireAuth, type Verifier } from "./auth.js"
 import type { Dispatcher } from "./dispatch.js"
+import { type KernelDeps, kernelRoutes } from "./kernel.js"
 import { type LabDeps, labRoutes } from "./lab.js"
 import { type PlacesDeps, placeSearchRoutes, placesRoutes } from "./places.js"
 import { type TripsDeps, tripsRoutes } from "./trips.js"
@@ -43,6 +44,8 @@ export interface AppDeps {
   lab?: Omit<LabDeps, "verifier" | "jobs">
   /** The Place Postcard grid's read (P2.7), and `/place`'s search. Optional for the reason `lab` is. */
   places?: Omit<PlacesDeps, "verifier">
+  /** The ops dashboard (P5.5). Optional for the reason `lab` is. */
+  kernel?: Omit<KernelDeps, "verifier">
   /** Trips, documents and Postcards (P4.1). Optional for the reason `lab` is. */
   trips?: Omit<TripsDeps, "verifier">
   /** Injectable for tests; production gets the defaults. */
@@ -189,12 +192,15 @@ export function createApp(deps: AppDeps) {
   // otherwise match `/lab/places` too and verify every token twice, against a
   // 10 ms CPU ceiling. Registered first, this route answers and the Lab's
   // middleware never runs. `places.test.ts` counts the verifications.
+  if (deps.kernel) {
+    app.route("/lab/kernel", kernelRoutes({ ...deps.kernel, verifier: deps.verifier }))
+  }
   if (deps.places) {
     app.route("/lab/places", placesRoutes({ ...deps.places, verifier: deps.verifier }))
     app.route("/places", placeSearchRoutes({ ...deps.places, verifier: deps.verifier }))
   }
   if (deps.trips) {
-    app.route("/", tripsRoutes({ ...deps.trips, verifier: deps.verifier }))
+    app.route("/", tripsRoutes({ ...deps.trips, verifier: deps.verifier, jobs: deps.jobs }))
   }
   if (deps.lab) {
     app.route("/lab", labRoutes({ ...deps.lab, verifier: deps.verifier, jobs: deps.jobs }))

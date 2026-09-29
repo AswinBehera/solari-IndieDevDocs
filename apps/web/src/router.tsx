@@ -5,6 +5,7 @@ import {
   lazyRouteComponent,
   Outlet,
 } from "@tanstack/react-router"
+import { Kernel } from "./kernel/Kernel"
 import { Lab } from "./lab/Lab"
 import { Onboarding } from "./onboarding/Onboarding"
 import { Places } from "./places/Places"
@@ -39,6 +40,7 @@ const routes = [
   }),
   createRoute({ getParentRoute: () => app, path: "/lab", component: Lab }),
   createRoute({ getParentRoute: () => app, path: "/lab/places", component: Places }),
+  createRoute({ getParentRoute: () => app, path: "/lab/kernel", component: Kernel }),
 ]
 
 const share = createRoute({

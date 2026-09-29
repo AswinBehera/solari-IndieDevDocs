@@ -1,4 +1,5 @@
 import { createDb } from "@dt/db"
+import { PostgresTripStore } from "@dt/db/trips"
 import { PostgresOsmSearch, PostgresPlaceRepo } from "@dt/travel-pack/postgres"
 import { MemoryPacer } from "@samsara/harvest"
 import { FilesystemCaptureArchive } from "@samsara/harvest/node"
@@ -29,6 +30,7 @@ import {
 import { createDedupHandler } from "./dedup.js"
 import { HandlerRegistry, noopHandler } from "./handlers.js"
 import { createHarvestHandler } from "./harvest.js"
+import { createIntentHandler } from "./intent.js"
 import { createPackRegistry } from "./packs.js"
 import { createKeepaliveHandler } from "./personas.js"
 import { createRefineHandler } from "./refine.js"
@@ -154,6 +156,13 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       // dedup queues score. See `chain.ts` for why each link is non-fatal.
       queue: jobs,
     }),
+  )
+
+  // P4.3: dates the traveller wrote in prose, copied onto the Trip. Refuses by
+  // name when there is no LLM, like `refine.extract`.
+  handlers.register(
+    "trip.intent",
+    createIntentHandler({ trips: new PostgresTripStore(database.db), llm }),
   )
 
   /**

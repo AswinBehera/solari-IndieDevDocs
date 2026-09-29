@@ -1,4 +1,5 @@
 import { EMPTY_DOCUMENT, type TripStore } from "@dt/db/trips"
+import type { JobStore } from "@samsara/kernel/jobs"
 import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { z } from "zod"
@@ -26,6 +27,12 @@ export interface TripsDeps {
   /** Per-request, for the Hyperdrive reason `jobs` gives in `index.ts`. */
   store: (env: unknown) => TripStore
   verifier: Verifier
+  /**
+   * The queue, for intent parsing (P4.3) alone. Optional, and a failure to enqueue
+   * never fails a save: the document is the product, the dates are a convenience.
+   */
+  jobs?: (env: unknown) => JobStore
+  clock?: () => Date
 }
 
 /** A generous trip document is tens of kilobytes; this is an order of magnitude over that. */
@@ -174,6 +181,24 @@ export function tripsRoutes(deps: TripsDeps) {
         { error: "changed elsewhere since it was loaded", version: result.version },
         409,
       )
+    }
+    if (deps.jobs) {
+      // One job per trip per hour: the handler reads the latest document when it
+      // runs, so a burst of autosaves needs one model call, not one each. The
+      // window is `intent.ts`'s, restated because the API must not import the worker.
+      const now = (deps.clock?.() ?? new Date()).getTime()
+      const tripId = c.req.param("id")
+      try {
+        await deps.jobs(c.env).enqueue({
+          type: "trip.intent",
+          domainId: "travel",
+          ownerId: c.get("ownerId"),
+          payload: { tripId, ownerId: c.get("ownerId") },
+          idempotencyKey: `trip.intent:${tripId}:${Math.floor(now / 3_600_000)}`,
+        })
+      } catch {
+        // See the note above: a save that succeeded must not report failure.
+      }
     }
     return c.json({ version: result.version })
   })
