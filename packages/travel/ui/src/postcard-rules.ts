@@ -160,11 +160,14 @@ export interface PriceRow {
   usd: number | null
   status: "price" | "no_price" | "blocked"
   cheapest: boolean
+  /** Published path of the screenshot, when the API sent one. */
+  screenshotRef: string | null
 }
 
 export interface ObservationWire {
   country: string
   payload: unknown
+  screenshotRef?: string | null
 }
 
 /**
@@ -195,6 +198,7 @@ export function priceRows(observations: readonly ObservationWire[]): PriceRow[] 
       usd: status === "price" && typeof p.usd === "number" ? p.usd : null,
       status,
       cheapest: false,
+      screenshotRef: o.screenshotRef ?? null,
     }
   })
   rows.sort(

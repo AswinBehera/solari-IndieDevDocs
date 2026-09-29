@@ -14,17 +14,35 @@ import { api } from "../api"
 
 interface ProbeResponse {
   target: { id: string; url: string }
-  observations: { country: string; payload: unknown; capturedAt: string }[]
+  observations: { country: string; payload: unknown; capturedAt: string; screenshotRef: string }[]
 }
 
 /** Countries a probe can reach today: the eight asked for, less `th` (no proxy there). */
 export const REACHABLE = 7
-/** Past this the card stops polling and shows what it has: the rest are not coming. */
+/**
+ * A probe with no new observation for this long is finished: sessions land every
+ * 15 to 40 seconds while it runs, so a silence this long is a country that failed or
+ * timed out, and the rest are not coming.
+ */
+const QUIET_MS = 150_000
+/** With nothing at all back yet, wait this long from mount before calling it dead. */
 const GIVE_UP_MS = 4 * 60_000
 const POLL_MS = 5_000
 
 export async function startProbe(url: string): Promise<{ targetId: string }> {
   return api<{ targetId: string }>("/probes", { method: "POST", body: JSON.stringify({ url }) })
+}
+
+/** Whether a probe has finished, from what has landed. Exported so a test can hold it. */
+export function probeFinished(
+  observations: readonly { capturedAt: string }[],
+  now: number,
+  mountedAt: number,
+): boolean {
+  if (observations.length >= REACHABLE) return true
+  if (observations.length === 0) return now - mountedAt > GIVE_UP_MS
+  const newest = Math.max(...observations.map((o) => Date.parse(o.capturedAt)))
+  return now - newest > QUIET_MS
 }
 
 export function usePriceCheck(opts: {
@@ -42,10 +60,8 @@ export function usePriceCheck(opts: {
     queryKey: ["probe", opts.probeId] as const,
     enabled: opts.probeId !== null,
     queryFn: () => api<ProbeResponse>(`/probes/${opts.probeId}`),
-    refetchInterval: (query) => {
-      const n = query.state.data?.observations.length ?? 0
-      return n >= REACHABLE || Date.now() - since > GIVE_UP_MS ? false : POLL_MS
-    },
+    refetchInterval: (query) =>
+      probeFinished(query.state.data?.observations ?? [], Date.now(), since) ? false : POLL_MS,
   })
 
   const start = async () => {
@@ -67,7 +83,7 @@ export function usePriceCheck(opts: {
   if (starting) return { check: { state: "starting" } }
   if (opts.probeId && q.data) {
     const rows = priceRows(q.data.observations)
-    const finished = q.data.observations.length >= REACHABLE || Date.now() - since > GIVE_UP_MS
+    const finished = probeFinished(q.data.observations, Date.now(), since)
     return { check: { state: finished ? "done" : "running", rows } as PriceCheck, ...startFn }
   }
   if (opts.probeId && q.isError)

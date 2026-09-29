@@ -22,7 +22,8 @@
     "db:seed": "pnpm --filter @dt/db db:seed",
     "db:reset": "docker compose down -v && pnpm db:up && pnpm db:migrate && pnpm db:seed",
     "check:seam": "tsx tools/check-seam.ts",
-    "test:tools": "vitest run --dir tools"
+    "test:tools": "vitest run --dir tools",
+    "db:seed:demo": "pnpm --filter @dt/db db:seed:demo"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",

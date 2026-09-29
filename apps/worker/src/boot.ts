@@ -173,7 +173,9 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
     createProbeHandler({
       targets: new PostgresProbeTargetStore(database.db),
       observations: new PostgresObservationStore(database.db),
-      archive: new FilesystemScreenshotArchive(env.CAPTURE_ARCHIVE_DIR ?? ".captures"),
+      // Under the web app's `public/`, so the dev server serves each shot at
+      // `/shots/<ref>`. Local disk is the stand-in: production needs object storage.
+      archive: new FilesystemScreenshotArchive(env.PROBE_SCREENSHOT_DIR ?? "../web/public/shots"),
       adapters: new Map<string, ProbeAdapter>([[priceAdapter.id, priceAdapter as ProbeAdapter]]),
       rates: dailyFx(),
     }),

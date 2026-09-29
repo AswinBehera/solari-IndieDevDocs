@@ -358,6 +358,16 @@ export function PriceTable({ check, onCheck }: { check: PriceCheck; onCheck?: ()
               {r.usd !== null && (
                 <span className="ml-auto text-ink-muted">≈ ${r.usd.toFixed(0)}</span>
               )}
+              {r.screenshotRef && (
+                <a
+                  href={`/shots/${r.screenshotRef}`}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="text-[10px] text-accent-blue tracking-[.08em] underline"
+                >
+                  SCREENSHOT
+                </a>
+              )}
               {r.cheapest && (
                 <span className="border border-accent-gold px-1.5 text-[10px] text-accent-gold tracking-[.1em]">
                   CHEAPEST
@@ -369,7 +379,7 @@ export function PriceTable({ check, onCheck }: { check: PriceCheck; onCheck?: ()
       )}
       {check.state === "running" && (
         <p className="mt-2 font-mono text-[11px] text-ink-muted tracking-[.06em]">
-          {rows.length} OF 8 COUNTRIES BACK · READING THE REST
+          {rows.length} COUNTRIES BACK · READING THE REST
         </p>
       )}
       {check.state === "done" && (

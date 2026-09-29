@@ -86,7 +86,15 @@ export const priceAdapter: ProbeAdapter<StayTarget, PricePayload> = {
   async probe(ctx: ProbeContext, target): Promise<ProbeCapture<PricePayload>> {
     const page = ctx.page as PricePage
     const { site } = target.parsed
-    await page.goto(target.parsed.url, { waitUntil: "domcontentloaded", timeout: 45_000 })
+    // A slow route must still produce its screenshot and its `no_price`: a navigation
+    // that runs into the session deadline throws away the picture along with the wait.
+    // 30 s here plus the 35 s price wait stays inside the engine's 90 s deadline.
+    let navigationNote: string | null = null
+    try {
+      await page.goto(target.parsed.url, { waitUntil: "domcontentloaded", timeout: 30_000 })
+    } catch (e) {
+      navigationNote = `navigation did not settle: ${e instanceof Error ? e.message.slice(0, 80) : "unknown"}`
+    }
     // Prices render from XHR after `domcontentloaded`, so a read now reads a shell.
     // Poll for a price element rather than sleeping a fixed time: the fixed sleep
     // photographed a loading skeleton on the first live run.

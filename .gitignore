@@ -34,3 +34,5 @@ coverage/
 # before parsing it, so a download is never paid for twice — see that file. Tens
 # of megabytes of somebody else’s data: evidence, not source.
 .osm/
+
+apps/web/public/shots/
