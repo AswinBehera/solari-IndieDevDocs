@@ -67,6 +67,11 @@ on:
         description: "Job that triggered this run (for correlation only; the runner drains the queue)"
         required: false
         type: string
+      budgetMinutes:
+        description: "How long to drain (1-45). Raise it to work through a queued batch in one run."
+        required: false
+        default: "4"
+        type: string
 
 # One runner at a time. A double-click that slipped past the API's idempotency
 # check still cannot spend two runners, and two concurrent drains would only
@@ -82,11 +87,12 @@ permissions:
 jobs:
   drain:
     runs-on: ubuntu-latest
-    # Hard stop. The drain's own budget (WORKER_BUDGET_MS) is four minutes so it
-    # finishes on its own well before this; the timeout is the backstop for a
-    # handler that hangs on something that never settles. Minutes spent here are
-    # free on a public repository, but a hung run holds the concurrency group.
-    timeout-minutes: 10
+    # Hard stop. The drain's own budget (WORKER_BUDGET_MS) is four minutes on the
+    # cron, at most 45 on a dispatch, so it finishes on its own before this; the
+    # timeout is the backstop for a handler that hangs on something that never
+    # settles. Minutes spent here are free on a public repository, but a hung run
+    # holds the concurrency group.
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
 
@@ -100,7 +106,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Drain the queue
-        run: pnpm --filter @dt/worker start
+        run: |
+          m="$WORKER_BUDGET_MINUTES"
+          case "$m" in ''|*[!0-9]*) m=4 ;; esac
+          [ "$m" -lt 1 ] && m=1
+          [ "$m" -gt 45 ] && m=45
+          export WORKER_BUDGET_MS=$((m * 60000))
+          pnpm --filter @dt/worker start
         env:
           # Direct to Postgres, not through Hyperdrive: Hyperdrive is a Workers
           # binding, and its 100,000-queries-a-day account ceiling is spent by the
@@ -123,7 +135,9 @@ jobs:
           BUDGET_SOLARI_MINUTES_TOTAL: ${{ vars.BUDGET_SOLARI_MINUTES_TOTAL }}
           # Finish inside the grace period GitHub gives a cancelled run, with room
           # to close browser sessions and hand the claims back.
-          WORKER_BUDGET_MS: "240000"
+          # A dispatch may ask for longer (`budgetMinutes`); the cron has no inputs
+          # and gets four. Clamped in the step below, not trusted as typed.
+          WORKER_BUDGET_MINUTES: ${{ inputs.budgetMinutes || '4' }}
           WORKER_LEASE_MS: "300000"
           # Logged for correlation only. The runner does not read it.
           WORKER_TRIGGER_JOB_ID: ${{ inputs.jobId }}
