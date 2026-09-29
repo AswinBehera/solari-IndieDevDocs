@@ -54,12 +54,24 @@ export function probesRoutes(deps: ProbesDeps & { jobs: (env: unknown) => JobSto
     return c.json({ targetId: target.id, jobId: queued.id, deduped: queued.deduped }, 202)
   })
 
+  // Watch mode (P3.5): re-probe daily. Whoever owns the target may switch it; the
+  // worker's daily sweep does the probing, so this spends nothing itself.
+  routes.put("/:id/watch", async (c) => {
+    const parsed = z.object({ watch: z.boolean() }).safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) throw new HTTPException(400, { message: "watch must be a boolean" })
+    const target = await deps
+      .targets(c.env)
+      .setWatch(c.get("ownerId"), c.req.param("id"), parsed.data.watch)
+    if (!target) throw new HTTPException(404, { message: "no such probe" })
+    return c.json({ id: target.id, watch: target.watch, cadence: target.cadence })
+  })
+
   routes.get("/:id", async (c) => {
     const target = await deps.targets(c.env).getOwned(c.get("ownerId"), c.req.param("id"))
     if (!target) throw new HTTPException(404, { message: "no such probe" })
     const rows = await deps.observations(c.env).latestByCountry(target.id)
     return c.json({
-      target: { id: target.id, url: target.url, parsed: target.parsed },
+      target: { id: target.id, url: target.url, parsed: target.parsed, watch: target.watch },
       observations: rows.map((r) => ({
         country: r.country,
         capturedAt: r.capturedAt,

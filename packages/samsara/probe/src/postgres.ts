@@ -79,6 +79,15 @@ export class PostgresProbeTargetStore implements ProbeTargetStore {
     return row ? toTarget(row) : null
   }
 
+  async setWatch(ownerId: string, id: string, watch: boolean) {
+    const [row] = await this.db
+      .update(probeTargets)
+      .set({ watch, cadence: watch ? "daily" : null, updatedAt: new Date() })
+      .where(and(eq(probeTargets.id, id), eq(probeTargets.ownerId, ownerId)))
+      .returning()
+    return row ? toTarget(row) : null
+  }
+
   async listWatched() {
     const rows = await this.db.select().from(probeTargets).where(eq(probeTargets.watch, true))
     return rows.map(toTarget)

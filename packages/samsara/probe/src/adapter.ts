@@ -70,6 +70,8 @@ export interface ProbeTargetStore {
   /** The owner's own targets only: a target id alone must not read anyone's. */
   getOwned(ownerId: string, id: string): Promise<ProbeTargetRecord | null>
   listWatched(): Promise<ProbeTargetRecord[]>
+  /** The owner's own target only. Null when it is not theirs. */
+  setWatch(ownerId: string, id: string, watch: boolean): Promise<ProbeTargetRecord | null>
 }
 
 export interface ObservationRecord {

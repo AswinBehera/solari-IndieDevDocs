@@ -76,3 +76,19 @@ describe("/probes", () => {
     expect((await app.request("/probes", { method: "POST", body: "{}" })).status).toBe(401)
   })
 })
+
+describe("/probes/:id/watch", () => {
+  it("lets the owner switch watching on and off, and 404s anyone else", async () => {
+    const { targetId } = (await (await post("alice", URL_OK)).json()) as { targetId: string }
+    const put = (owner: string, watch: unknown) =>
+      app.request(
+        `/probes/${targetId}/watch`,
+        as(owner, { method: "PUT", body: JSON.stringify({ watch }) }),
+      )
+    const on = await put("alice", true)
+    expect(await on.json()).toMatchObject({ watch: true, cadence: "daily" })
+    expect((await put("bob", true)).status).toBe(404)
+    expect((await put("alice", "yes")).status).toBe(400)
+    expect(await (await put("alice", false)).json()).toMatchObject({ watch: false, cadence: null })
+  })
+})

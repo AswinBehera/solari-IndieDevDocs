@@ -38,6 +38,7 @@ import { createIntentHandler } from "./intent.js"
 import { createPackRegistry } from "./packs.js"
 import { createKeepaliveHandler } from "./personas.js"
 import { createProbeHandler } from "./probe.js"
+import { createProbeSweepHandler } from "./probe-sweep.js"
 import { createRefineHandler } from "./refine.js"
 import { createResolveHandler } from "./resolve.js"
 import { createScoreHandler } from "./score.js"
@@ -174,6 +175,16 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       archive: new FilesystemScreenshotArchive(env.CAPTURE_ARCHIVE_DIR ?? ".captures"),
       adapters: new Map<string, ProbeAdapter>([[priceAdapter.id, priceAdapter as ProbeAdapter]]),
       rates: dailyFx(),
+    }),
+  )
+
+  // P3.5: daily re-probe of watched targets. Queues only.
+  handlers.register(
+    "probe.sweep",
+    createProbeSweepHandler({
+      targets: new PostgresProbeTargetStore(database.db),
+      queue: jobs,
+      maxTargets: Number(env.PROBE_SWEEP_MAX ?? 5),
     }),
   )
 

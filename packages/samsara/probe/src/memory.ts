@@ -35,6 +35,13 @@ export class MemoryProbeTargetStore implements ProbeTargetStore {
     const r = this.rows.get(id)
     return r && r.ownerId === ownerId ? r : null
   }
+  async setWatch(ownerId: string, id: string, watch: boolean) {
+    const r = this.rows.get(id)
+    if (!r || r.ownerId !== ownerId) return null
+    const next = { ...r, watch, cadence: watch ? ("daily" as const) : null }
+    this.rows.set(id, next)
+    return next
+  }
   async listWatched() {
     return [...this.rows.values()].filter((r) => r.watch)
   }

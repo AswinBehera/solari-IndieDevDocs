@@ -4,6 +4,7 @@
 
 import { now } from "@samsara/kernel"
 import { boot } from "./boot.js"
+import { probeSweepJobKey } from "./probe-sweep.js"
 import { drain } from "./runner.js"
 import { dayOf, sweepJobKey } from "./sweep.js"
 
@@ -69,6 +70,11 @@ export async function main(): Promise<number> {
     // One sweep a day: the key is the UTC date, so the every-15-minute cron queues it
     // once and every later tick is a no-op. Opt-out, not opt-in, but `TRIP_SWEEP_MAX=0`
     // makes it queue nothing.
+    await app.jobs.enqueue({
+      type: "probe.sweep",
+      domainId: "travel",
+      idempotencyKey: probeSweepJobKey(dayOf(new Date())),
+    })
     await app.jobs.enqueue({
       type: "trip.sweep",
       domainId: "travel",

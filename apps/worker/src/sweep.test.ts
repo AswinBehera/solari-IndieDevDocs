@@ -70,7 +70,9 @@ describe("trip.sweep", () => {
       sourceId: SWEEP_SOURCE,
       domainId: "travel",
     })
-    expect((job?.payload as { query: string }).query).toBe("Bangkok street food and night markets")
+    expect((job?.payload as { query: string } | undefined)?.query).toBe(
+      "Bangkok street food and night markets",
+    )
     expect(job?.idempotencyKey).toBe(
       sweepHarvestKey([...s.store.trips.values()][0]?.id ?? "", dayOf(NOW)),
     )
