@@ -380,9 +380,16 @@ export function PriceTable({ check, onCheck }: { check: PriceCheck; onCheck?: ()
         </ul>
       )}
       {check.state === "running" && (
-        <p className="mt-2 font-mono text-[11px] text-ink-muted tracking-[.06em]">
-          {rows.length} COUNTRIES BACK · READING THE REST
-        </p>
+        <>
+          <p className="mt-2 font-mono text-[11px] text-ink-muted tracking-[.06em]">
+            {rows.length} COUNTRIES BACK · READING THE REST
+          </p>
+          {/* A browser visits the page once per country, queued behind other work, so
+              this takes minutes rather than seconds. Say so, or it looks stuck. */}
+          <p className="mt-1 text-ink-faint text-xs">
+            Usually a few minutes. You can leave this page; the prices land here when they are back.
+          </p>
+        </>
       )}
       {check.state === "done" && (
         <p className="mt-2 text-ink-muted text-sm">

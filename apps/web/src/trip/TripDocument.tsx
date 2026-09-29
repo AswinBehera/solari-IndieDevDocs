@@ -309,7 +309,7 @@ function TitleEditor({
           onEnter()
         }
       }}
-      className="mb-5 w-full resize-none bg-transparent font-display text-[44px] leading-[1.05] tracking-tight focus:outline-none sm:text-[60px] [field-sizing:content]"
+      className="mb-5 w-full resize-none bg-transparent font-display text-[44px] leading-[1.05] tracking-tight focus:outline-none focus:shadow-[inset_0_-2px_0_var(--color-accent-pink)] sm:text-[60px] [field-sizing:content]"
     />
   )
 }

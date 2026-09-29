@@ -29,12 +29,13 @@ interface NavGroup {
 
 const NAV: NavGroup[] = [
   { label: "PRODUCT", items: [{ to: "/", label: "Trips" }] },
+  // The lab, named for a traveller: what it is, not what the code calls it.
   {
-    label: "LAB",
+    label: "UNDER THE HOOD",
     items: [
-      { to: "/lab", label: "Personas" },
-      { to: "/lab/places", label: "Places" },
-      { to: "/lab/kernel", label: "Kernel" },
+      { to: "/lab", label: "Browsers" },
+      { to: "/lab/places", label: "Place scores" },
+      { to: "/lab/kernel", label: "Spend & jobs" },
     ],
   },
 ]
@@ -93,12 +94,20 @@ export function Shell() {
   )
 }
 
+/**
+ * Only when something is wrong. "API up" on every page told a traveller nothing
+ * and read as a developer's console left open.
+ */
 function StatusStrip() {
   const health = useHealth()
+  if (!health.isError) return null
   const line: { tone: "up" | "down" | "waiting"; text: ReactNode } = health.isPending
     ? { tone: "waiting", text: "Checking the API…" }
     : health.isError
-      ? { tone: "down", text: "API unreachable — is `pnpm dev` running it on :8788?" }
+      ? {
+          tone: "down",
+          text: "Can't reach the server right now. Changes won't save until it's back.",
+        }
       : { tone: "up", text: "API up" }
   const dot =
     line.tone === "up" ? "bg-accent-pink" : line.tone === "down" ? "bg-red-700" : "bg-rule"

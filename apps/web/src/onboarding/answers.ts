@@ -11,7 +11,7 @@ import { spokenList, tripTitle } from "../trips/format"
  * fact lives, and the two would drift the first time somebody edited the line.
  */
 
-/** The cities the canvas offers at alpha. */
+/** The cities onboarding offers. */
 export const CITIES = ["Bangkok", "Tokyo"] as const
 
 export const INTERESTS = ["food", "markets", "temples", "coffee", "nightlife", "nature"] as const
@@ -22,6 +22,23 @@ export interface Answers {
   start: string | null
   end: string | null
   interests: readonly string[]
+}
+
+/** The one date problem that is the last day's fault, so its input is the one marked. */
+export const DATE_ORDER = "The last day is before the first day."
+
+/**
+ * What is wrong with the dates, in the traveller's words, or null.
+ *
+ * Said before the trip is made rather than quietly repaired after: `newTripFrom`
+ * drops an end that cannot be one, and a trip that silently came out "undated"
+ * after someone typed two dates reads as the app losing them.
+ */
+export function dateProblem(a: Pick<Answers, "start" | "end">, today: string): string | null {
+  if (a.end && !a.start) return "Add a first day too, or clear the last one."
+  if (a.start && a.start < today) return "That first day has already passed."
+  if (a.start && a.end && a.end < a.start) return DATE_ORDER
+  return null
 }
 
 export function newTripFrom(a: Answers): NewTripInput {

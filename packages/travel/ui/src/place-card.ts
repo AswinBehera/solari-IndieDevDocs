@@ -126,7 +126,7 @@ export function provenance(place: Place): string {
     case 2:
       return "Looked up by geocoder"
     default:
-      return source ? `From ${source}` : "Coordinate of unrecorded origin"
+      return source ? `From ${source}` : "Location source not recorded"
   }
 }
 

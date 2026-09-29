@@ -78,6 +78,11 @@ describe("localPercent and whyRows", () => {
     }
   })
 
+  it("knows a factor however its name is spelled", () => {
+    expect(factorLabel("native-language share")).toBe("Written in Thai")
+    expect(factorLabel("creator_local_share")).toBe("Creators who read as local")
+  })
+
   it("names a factor it does not know by splitting its capitals", () => {
     expect(factorLabel("creatorPostingCadence")).toBe("Creator posting cadence")
   })
@@ -99,7 +104,7 @@ describe("linkKind", () => {
   })
 
   it("does not offer to do what is not built", () => {
-    expect(linkLine("tiktok")).toContain("not wired up yet")
+    expect(linkLine("tiktok")).toContain("kept as a link")
   })
 })
 

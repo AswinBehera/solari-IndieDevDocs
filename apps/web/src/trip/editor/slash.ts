@@ -19,13 +19,21 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
   {
     id: "place",
     command: "/place",
-    description: "Search the city’s Places, ranked by local score",
+    description: "Find a place — the ones locals talk about come first",
   },
   { id: "note", command: "/note", description: "A plain note block" },
-  { id: "photo", command: "/photo", description: "Upload; EXIF geo and time become a pin" },
+  {
+    id: "photo",
+    command: "/photo",
+    description: "Upload a photo; where and when it was taken become a pin",
+  },
   { id: "checklist", command: "/checklist", description: "Things to do before or during" },
   { id: "link", command: "/link", description: "Paste a URL and keep it with the plan" },
-  { id: "price", command: "/price", description: "A hotel URL, for Hundred Eyes to read" },
+  {
+    id: "price",
+    command: "/price",
+    description: "Paste a hotel link; compare what 7 countries are charged",
+  },
 ]
 
 export interface SlashState {

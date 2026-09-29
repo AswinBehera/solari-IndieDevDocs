@@ -11,6 +11,14 @@
    not the symlink, because that is what the scanner walks. */
 @source "../../../packages/travel/ui/src";
 
+/* Keyboard focus, for every control that does not draw its own. `:where` keeps
+   it at zero specificity, so a component's `focus:outline-none` still wins where
+   it has a better cue of its own. */
+:where(a, button, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent-blue);
+  outline-offset: 2px;
+}
+
 /* ---- The Trip Document (P4.1) -------------------------------------------------
    Tiptap renders plain elements with no classes, so the document's type is set
    here against its root rather than utility by utility. Sizes are the canvas's:

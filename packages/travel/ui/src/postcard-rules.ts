@@ -70,8 +70,12 @@ const FACTOR_LABELS: Record<string, string> = {
   listicleSources: "Listicle sites",
 }
 
+/** `native-language share`, `native_language_share` and `nativeLanguageShare` are one factor. */
+const squash = (name: string) => name.replace(/[^a-z0-9]/gi, "").toLowerCase()
+const BY_SQUASHED = new Map(Object.entries(FACTOR_LABELS).map(([k, v]) => [squash(k), v]))
+
 export function factorLabel(name: string): string {
-  const known = FACTOR_LABELS[name]
+  const known = FACTOR_LABELS[name] ?? BY_SQUASHED.get(squash(name))
   if (known) return known
   const words = name.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()
   return words.charAt(0).toUpperCase() + words.slice(1)
@@ -123,9 +127,9 @@ export function linkKind(raw: string): LinkKind {
 export function linkLine(kind: LinkKind): string {
   switch (kind) {
     case "tiktok":
-      return "TikTok video. Reading it into a Place is not wired up yet; it stays as a link."
+      return "TikTok video, kept as a link. Turning videos into places is coming soon."
     case "youtube":
-      return "YouTube video. Reading it into a Place is not wired up yet; it stays as a link."
+      return "YouTube video, kept as a link. Turning videos into places is coming soon."
     case "booking":
     case "agoda":
       return "A hotel page. Check what each country is shown for it."
