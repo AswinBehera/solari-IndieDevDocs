@@ -56,7 +56,7 @@ async function ensureDemoProbe(db: Db): Promise<{ id: string; url: string }> {
   }
   const [t] = (await db.execute(
     sql`insert into probe_targets (owner_id, source_id, url, parsed)
-        values (null, 'price.stay', ${fx.url}, ${JSON.stringify(fx.parsed)}::jsonb) returning id`,
+        values (${USER_ID}, 'price.stay', ${fx.url}, ${JSON.stringify(fx.parsed)}::jsonb) returning id`,
   )) as unknown as { id: string }[]
   if (!t) throw new Error("could not insert the demo probe target")
   for (const o of fx.observations) {
