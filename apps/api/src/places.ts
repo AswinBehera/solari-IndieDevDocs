@@ -1,4 +1,4 @@
-import type { PlaceReader } from "@dt/travel-pack/read"
+import type { OsmPlaceIndex, PlaceReader } from "@dt/travel-pack/read"
 import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { requireAuth, type Verifier } from "./auth.js"
@@ -25,6 +25,12 @@ import { requireAuth, type Verifier } from "./auth.js"
 export interface PlacesDeps {
   /** Per-request, for the Hyperdrive reason `jobs` gives in `index.ts`. */
   reader: (env: unknown) => PlaceReader
+  /**
+   * The OpenStreetMap extract, for `/place`'s fallback. Optional so a deployment
+   * without it still searches the scored table; it just has nothing to fall
+   * back to.
+   */
+  osm?: (env: unknown) => OsmPlaceIndex
   verifier: Verifier
 }
 
@@ -98,6 +104,9 @@ export function placesRoutes(deps: PlacesDeps) {
   return routes
 }
 
+/** The extract's ids, as `tools/load-osm.ts` writes them. */
+const OSM_ID = /^(node|way|relation)\/\d{1,20}$/
+
 /** A slash menu's worth: the editor shows these under the cursor, not in a grid. */
 export const SEARCH_LIMIT = 8
 
@@ -119,7 +128,29 @@ export function placeSearchRoutes(deps: PlacesDeps) {
       throw new HTTPException(400, { message: "q must be between 1 and 80 characters" })
     }
     const rows = await deps.reader(c.env).search(q, SEARCH_LIMIT)
-    return c.json({ places: rows.map((r) => ({ place: r.place, evidence: r.quote })) })
+    // The scored table first; what is left of the eight goes to the extract, so
+    // "Wat Pho" finds Wat Pho before any harvest has mentioned it. Never fewer
+    // than three extract rows while the scored ones do not fill the menu: a
+    // single fuzzy scored match should not hide the exact name below it.
+    const room = rows.length >= SEARCH_LIMIT ? 0 : Math.max(SEARCH_LIMIT - rows.length, 3)
+    const osm = room > 0 && deps.osm ? await deps.osm(c.env).search(q, room) : []
+    return c.json({ places: rows.map((r) => ({ place: r.place, evidence: r.quote })), osm })
+  })
+
+  /**
+   * An extract row made into a place, for picking it from `/place`. Idempotent:
+   * the second pick of the same POI returns the row the first one made.
+   */
+  routes.post("/osm", async (c) => {
+    if (!deps.osm) throw new HTTPException(404, { message: "no OpenStreetMap extract here" })
+    const body = (await c.req.json().catch(() => null)) as { osmId?: unknown } | null
+    const osmId = body?.osmId
+    if (typeof osmId !== "string" || !OSM_ID.test(osmId)) {
+      throw new HTTPException(400, { message: "osmId must look like node/123 or way/456" })
+    }
+    const row = await deps.osm(c.env).promote(osmId)
+    if (!row) throw new HTTPException(404, { message: "no such OpenStreetMap place" })
+    return c.json({ place: row.place, evidence: row.quote })
   })
 
   /** One place, for a Postcard's REFRESH: the same shape, read again now. */

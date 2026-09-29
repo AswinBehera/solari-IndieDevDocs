@@ -2,7 +2,7 @@
 
 import { createDb } from "@dt/db"
 import { PostgresTripStore } from "@dt/db/trips"
-import { PostgresPlaceReader } from "@dt/travel-pack/read"
+import { PostgresOsmPlaceIndex, PostgresPlaceReader } from "@dt/travel-pack/read"
 import {
   PostgresDriftExperimentStore,
   PostgresHarvestRunStore,
@@ -75,6 +75,10 @@ export default {
           reader: (bindings) => {
             const e = bindings as Env
             return new PostgresPlaceReader(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
+          },
+          osm: (bindings) => {
+            const e = bindings as Env
+            return new PostgresOsmPlaceIndex(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
           },
         },
         // Hundred Eyes: targets and observations, per request like everything above.

@@ -41,14 +41,39 @@ export async function readPlace(
   return await api<{ place: WirePlace; evidence: CardEvidence | null }>(`/places/${id}`)
 }
 
-/** Search the table, for `/place`. */
-export async function searchPlaces(
-  q: string,
-): Promise<{ place: WirePlace; evidence: CardEvidence | null }[]> {
-  const body = await api<{ places: { place: WirePlace; evidence: CardEvidence | null }[] }>(
-    `/places?q=${encodeURIComponent(q)}`,
-  )
-  return body.places
+/** A point from the OpenStreetMap extract that no harvest has scored yet. */
+export interface OsmMatch {
+  osmId: string
+  name: string
+  localName: string | null
+  formalName: string | null
+  category: WirePlace["category"]
+  geo: { lat: number; lng: number }
+}
+
+/**
+ * Search the table, for `/place`: scored places first, then what the map knows
+ * by that name and nothing has scored.
+ */
+export async function searchPlaces(q: string): Promise<{
+  places: { place: WirePlace; evidence: CardEvidence | null }[]
+  osm: OsmMatch[]
+}> {
+  const body = await api<{
+    places: { place: WirePlace; evidence: CardEvidence | null }[]
+    osm?: OsmMatch[]
+  }>(`/places?q=${encodeURIComponent(q)}`)
+  return { places: body.places, osm: body.osm ?? [] }
+}
+
+/** Make a map point a place, so a Postcard can pin it. The same point twice is one place. */
+export async function promoteOsm(
+  osmId: string,
+): Promise<{ place: WirePlace; evidence: CardEvidence | null }> {
+  return await api<{ place: WirePlace; evidence: CardEvidence | null }>("/places/osm", {
+    method: "POST",
+    body: JSON.stringify({ osmId }),
+  })
 }
 
 /**

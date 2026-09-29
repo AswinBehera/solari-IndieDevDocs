@@ -3,6 +3,7 @@ import {
   evidence,
   harvestRuns,
   mentions,
+  osmPlaces,
   personas,
   places,
   rawItems,
@@ -16,7 +17,7 @@ import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { travelPack } from "./pack.js"
-import { PostgresPlaceReader, TRAVEL_DOMAIN_ID } from "./read.js"
+import { PostgresOsmPlaceIndex, PostgresPlaceReader, TRAVEL_DOMAIN_ID } from "./read.js"
 
 /**
  * `PostgresPlaceReader` against a real Postgres.
@@ -278,5 +279,129 @@ describe.runIf(hasDb)("the places reader", () => {
       scores: local(0.8),
     })
     expect(row?.place.firstSeenAt).toBeInstanceOf(Date)
+  })
+})
+
+describe.runIf(hasDb)("the OpenStreetMap fallback", () => {
+  const d = () => db as NonNullable<typeof db>
+  const index = () => new PostgresOsmPlaceIndex(d())
+
+  beforeEach(async () => {
+    await d().execute(sql`truncate table places, osm_places restart identity cascade`)
+    await d()
+      .insert(osmPlaces)
+      .values([
+        {
+          id: "way/376312450",
+          city: "Bangkok",
+          name: "วัดโพธิ์",
+          nameEn: "Wat Pho",
+          lat: 13.7465,
+          lng: 100.4927,
+          category: "temple",
+          tags: ["amenity=place_of_worship"],
+        },
+        {
+          id: "relation/11169995",
+          city: "Bangkok",
+          name: "วัดพระเชตุพนวิมลมังคลารามราชวรมหาวิหาร",
+          nameEn: "Wat Phra Chettuphon Wimon Mangkhalaram Ratchaworamahawihan",
+          commonName: "Wat Pho",
+          commonLocal: "วัดโพธิ์",
+          altNames: ["Wat Pho", "วัดโพธิ์", "Temple of the Reclining Buddha"],
+          lat: 13.7459,
+          lng: 100.4928,
+          category: "temple",
+        },
+        {
+          id: "node/1",
+          city: "Bangkok",
+          name: "ท่าเรือวัดโพธิ์",
+          nameEn: "Wat Pho Pier",
+          lat: 13.745,
+          lng: 100.49,
+          category: "other",
+        },
+        {
+          id: "node/2",
+          city: "Bangkok",
+          name: "ICONSIAM",
+          nameEn: "ICONSIAM",
+          lat: 13.7267,
+          lng: 100.5104,
+          category: "shop",
+        },
+      ])
+  })
+
+  it("finds a place by its English name, the closest name first", async () => {
+    const rows = await index().search("wat pho", 5)
+    expect(rows.map((r) => r.osmId)).toEqual(["relation/11169995", "way/376312450", "node/1"])
+    expect(rows[1]).toEqual({
+      osmId: "way/376312450",
+      name: "Wat Pho",
+      localName: "วัดโพธิ์",
+      formalName: null,
+      category: "temple",
+      geo: { lat: 13.7465, lng: 100.4927 },
+    })
+  })
+
+  it("finds a place by its Thai name", async () => {
+    const ids = (await index().search("วัดโพธิ์", 5)).map((r) => r.osmId)
+    expect(ids.slice(0, 2).sort()).toEqual(["relation/11169995", "way/376312450"])
+  })
+
+  it("finds a place by a name it is only known by, and titles it that way", async () => {
+    const [hit] = await index().search("reclining buddha", 5)
+    expect(hit).toMatchObject({
+      osmId: "relation/11169995",
+      name: "Wat Pho",
+      localName: "วัดโพธิ์",
+      formalName: "Wat Phra Chettuphon Wimon Mangkhalaram Ratchaworamahawihan",
+    })
+  })
+
+  it("matches every word in any order, across names", async () => {
+    expect((await index().search("reclining the temple", 5))[0]?.osmId).toBe("relation/11169995")
+    expect(await index().search("temple of dawn", 5)).toEqual([])
+  })
+
+  it("keeps no local name when the sign is already roman", async () => {
+    expect((await index().search("iconsiam", 5))[0]?.localName).toBeNull()
+  })
+
+  it("promotes a row into places once, with the reference Tier 1 would give it", async () => {
+    const first = await index().promote("way/376312450")
+    const again = await index().promote("way/376312450")
+    expect(first?.place).toMatchObject({
+      canonicalName: "Wat Pho",
+      localName: "วัดโพธิ์",
+      category: "temple",
+      geo: { lat: 13.7465, lng: 100.4927 },
+      externalRef: { source: "osm", id: "way/376312450" },
+      resolvedTier: 1,
+      scores: {},
+      evidenceCount: 0,
+    })
+    expect(again?.place.id).toBe(first?.place.id)
+    const [{ n } = { n: 0 }] = await d().select({ n: sql<number>`count(*)::int` }).from(places)
+    expect(n).toBe(1)
+  })
+
+  it("leaves a promoted row out of the fallback, since the table now answers for it", async () => {
+    await index().promote("way/376312450")
+    expect((await index().search("wat pho", 5)).map((r) => r.osmId)).toEqual([
+      "relation/11169995",
+      "node/1",
+    ])
+  })
+
+  it("promotes nothing for an id the extract does not hold", async () => {
+    expect(await index().promote("node/404")).toBeNull()
+  })
+
+  it("reads % as a percent sign", async () => {
+    expect(await index().search("%", 5)).toEqual([])
   })
 })

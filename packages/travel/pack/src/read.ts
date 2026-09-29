@@ -1,5 +1,5 @@
 import type { Place, PlaceCategory } from "@dt/core"
-import { evidence, places } from "@dt/db"
+import { evidence, osmPlaces, places } from "@dt/db"
 import type { ScoreSet } from "@samsara/core"
 import { and, eq, ilike, inArray, or, sql, type TablesRelationalConfig } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
@@ -191,4 +191,168 @@ export class PostgresPlaceReader implements PlaceReader {
       }
     })
   }
+}
+
+/**
+ * A point of interest from the OpenStreetMap extract that no harvest has scored.
+ *
+ * `/place` falls back to these when the scored table has too little to show,
+ * so a traveller who types "Wat Pho" gets Wat Pho, with its coordinate, labelled
+ * as not scored rather than a blank result.
+ */
+export interface OsmMatch {
+  /** `node/123` or `way/456`, the extract's own id. */
+  osmId: string
+  name: string
+  localName: string | null
+  /**
+   * The formal name, when `name` is the common one: tells the Wat Pho everyone
+   * means from the smaller temple that is actually named วัดโพธิ์.
+   */
+  formalName: string | null
+  category: PlaceCategory
+  geo: { lat: number; lng: number }
+}
+
+export interface OsmPlaceIndex {
+  /**
+   * Extract rows whose name, Thai name or English name contains `query`, closest
+   * name first. Rows already promoted to `places` are left out: those come back
+   * from `PlaceReader.search` with whatever the pipeline knows about them.
+   */
+  search(query: string, limit: number): Promise<OsmMatch[]>
+  /**
+   * The `places` row for an extract row, created on first use. It gets the same
+   * `externalRef` and tier Tier 1 resolution would give it, so a later harvest
+   * that resolves a mention to this POI merges into it through dedup's
+   * `externalRef` key and the card gains scores instead of getting a twin.
+   * Null for an id the extract does not hold.
+   */
+  promote(osmId: string): Promise<PlaceCardRow | null>
+}
+
+/** Enough for any name; past it the query is a sentence, not a name. */
+const MAX_WORDS = 6
+
+const osmRef = (osmId: string) => sql`jsonb_build_object('source', 'osm', 'id', ${osmId}::text)`
+
+/** Thai script, the test for whether the extract's primary `name` is the local one. */
+const THAI = /[฀-๿]/
+
+export class PostgresOsmPlaceIndex implements OsmPlaceIndex {
+  constructor(private readonly db: Db) {}
+
+  async search(query: string, limit: number): Promise<OsmMatch[]> {
+    const q = query.trim()
+    const words = q
+      .split(/\s+/)
+      .filter((w) => w.length > 0)
+      .slice(0, MAX_WORDS)
+    if (words.length === 0) return []
+    const rows = await this.db
+      .select({
+        id: osmPlaces.id,
+        name: osmPlaces.name,
+        nameLocal: osmPlaces.nameLocal,
+        nameEn: osmPlaces.nameEn,
+        commonName: osmPlaces.commonName,
+        commonLocal: osmPlaces.commonLocal,
+        category: osmPlaces.category,
+        lat: osmPlaces.lat,
+        lng: osmPlaces.lng,
+      })
+      .from(osmPlaces)
+      .where(
+        and(
+          // Every word somewhere in any name, so "temple of dawn" finds "Temple
+          // of the Dawn" and "pho wat" still finds Wat Pho. Thai has no spaces,
+          // so a Thai query is one word and this is a plain contains.
+          ...words.map(
+            (word) =>
+              sql`(${osmPlaces.name} || ' ' || coalesce(${osmPlaces.nameLocal}, '') || ' ' || coalesce(${osmPlaces.nameEn}, '') || ' ' || array_to_string(${osmPlaces.altNames}, ' ')) ilike ${`%${escapeLike(word)}%`}`,
+          ),
+          sql`not exists (select 1 from ${places} where ${places.externalRef} = jsonb_build_object('source', 'osm', 'id', ${osmPlaces.id}))`,
+        ),
+      )
+      .orderBy(
+        // The best any name reaches, the common and alternate ones included, so
+        // the Wat Pho everyone means outranks the smaller temple actually named
+        // วัดโพธิ์. Past that, a mapped common name is a sign of a place people
+        // talk about.
+        sql`greatest(similarity(${osmPlaces.name}, ${q}), similarity(coalesce(${osmPlaces.nameLocal}, ''), ${q}), similarity(coalesce(${osmPlaces.nameEn}, ''), ${q}), coalesce((select max(similarity(a, ${q})) from unnest(${osmPlaces.altNames}) a), 0)) desc`,
+        sql`(${osmPlaces.commonName} is null)`,
+        // "other" is the extract's catch-all: bus stops, piers, offices. A temple
+        // or a market of the same name is almost always what was meant.
+        sql`(${osmPlaces.category} = 'other')`,
+        osmPlaces.id,
+      )
+      .limit(limit)
+    return rows.map((r) => {
+      const names = namesOf(r)
+      return {
+        osmId: r.id,
+        name: names.canonicalName,
+        localName: names.localName,
+        formalName: r.commonName ? (r.nameEn ?? r.name) : null,
+        category: r.category as PlaceCategory,
+        geo: { lat: r.lat, lng: r.lng },
+      }
+    })
+  }
+
+  async promote(osmId: string): Promise<PlaceCardRow | null> {
+    const reader = new PostgresPlaceReader(this.db)
+    const existing = await this.promoted(osmId)
+    if (existing) return await reader.byId(existing)
+
+    const [row] = await this.db.select().from(osmPlaces).where(eq(osmPlaces.id, osmId))
+    if (!row) return null
+    const names = namesOf(row)
+    const [inserted] = await this.db
+      .insert(places)
+      .values({
+        canonicalName: names.canonicalName,
+        localName: names.localName,
+        city: row.city,
+        lat: row.lat,
+        lng: row.lng,
+        externalRef: { source: "osm", id: row.id },
+        resolvedTier: 1,
+        category: row.category,
+        tags: row.tags,
+      })
+      .returning({ id: places.id })
+    if (!inserted) throw new Error("places insert returned no row")
+    return await reader.byId(inserted.id)
+  }
+
+  private async promoted(osmId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: places.id })
+      .from(places)
+      .where(sql`${places.externalRef} = ${osmRef(osmId)}`)
+      .orderBy(places.createdAt)
+      .limit(1)
+    return row?.id ?? null
+  }
+}
+
+/**
+ * The card's two names from the extract's. OSM's `name` is whatever is on the
+ * sign, usually Thai in Bangkok; `name:en` is the roman one when mapped; and the
+ * common names, when there are any, are what people actually call it.
+ */
+function namesOf(row: {
+  name: string
+  nameLocal: string | null
+  nameEn: string | null
+  commonName: string | null
+  commonLocal: string | null
+}): {
+  canonicalName: string
+  localName: string | null
+} {
+  const canonicalName = row.commonName ?? row.nameEn ?? row.name
+  const local = row.commonLocal ?? row.nameLocal ?? (THAI.test(row.name) ? row.name : null)
+  return { canonicalName, localName: local === canonicalName ? null : local }
 }

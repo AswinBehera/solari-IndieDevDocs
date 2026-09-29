@@ -110,6 +110,9 @@ export interface OsmPlaceRow {
   name: string
   nameLocal: string | null
   nameEn: string | null
+  commonName: string | null
+  commonLocal: string | null
+  altNames: string[]
   lat: number
   lng: number
   category: PlaceCategory
@@ -139,6 +142,28 @@ export interface OverpassElement {
 const KEPT_TAGS = ["cuisine", "amenity", "shop", "tourism"] as const
 
 /**
+ * The name tags besides `name`, `name:th` and `name:en`, most-said first. Only
+ * Thai and English forms: those are the two a traveller here types, and the
+ * table has to fit a free tier.
+ */
+const ALT_NAME_KEYS = [
+  "loc_name:en",
+  "short_name:en",
+  "loc_name",
+  "short_name",
+  "alt_name:en",
+  "alt_name",
+  "alt_name:th",
+  "official_name:en",
+  "official_name",
+  "old_name:en",
+  "old_name",
+] as const
+
+/** Thai script. `loc_name` is in whatever script the mapper wrote. */
+const THAI = /[\u0E00-\u0E7F]/
+
+/**
  * An Overpass element as an `osm_places` row, or null if it cannot be one.
  *
  * Three ways to be null, and all three are ordinary rather than exceptional: no
@@ -164,6 +189,19 @@ export function rowOf(element: OverpassElement, city: string): OsmPlaceRow | nul
     .map((value) => value.trim())
     .filter((value) => value.length > 0)
 
+  const tag = (key: string) => tags[key]?.trim() || null
+  const thai = (value: string | null) => (value && THAI.test(value) ? value : null)
+  const commonName = tag("loc_name:en") ?? tag("short_name:en")
+  const commonLocal = thai(tag("loc_name")) ?? thai(tag("short_name"))
+  const primary = new Set([name, tags["name:th"]?.trim(), tags["name:en"]?.trim()])
+  const altNames = [
+    ...new Set(
+      ALT_NAME_KEYS.flatMap((key) => (tags[key] ?? "").split(";"))
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0 && !primary.has(value)),
+    ),
+  ]
+
   return {
     // OSM's own `<type>/<id>`, which is what `externalRef` carries and what
     // makes a reload an upsert rather than a duplicate.
@@ -172,6 +210,9 @@ export function rowOf(element: OverpassElement, city: string): OsmPlaceRow | nul
     name,
     nameLocal: tags["name:th"]?.trim() || null,
     nameEn: tags["name:en"]?.trim() || null,
+    commonName,
+    commonLocal,
+    altNames,
     lat,
     lng,
     category: categoryOf(tags),

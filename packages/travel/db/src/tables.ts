@@ -184,6 +184,23 @@ export const osmPlaces = pgTable(
     nameLocal: text("name_local"),
     /** The `name:en` tag. Present far less often than `name:th`. */
     nameEn: text("name_en"),
+    /**
+     * The name people say, when OSM files the place under a formal one:
+     * `loc_name:en`, else `short_name:en`. Bangkok's famous places are mapped
+     * by their royal names — Wat Pho's `name` is วัดพระเชตุพนวิมลมังคลาราม and
+     * "Wat Pho" is only its `loc_name:en` — so a card that drew `name:en` would
+     * title Wat Pho "Wat Phra Chettuphon Wimon Mangkhalaram Ratchaworamahawihan".
+     */
+    commonName: text("common_name"),
+    /** The same in Thai: `loc_name`, else `short_name`, when either is Thai script. */
+    commonLocal: text("common_local"),
+    /**
+     * Every other name a person might type: the common names above, `alt_name`,
+     * `official_name`, `old_name` and their `:en`/`:th` forms. Searched by `/place`'s
+     * fallback; without them "Wat Pho" finds a smaller temple across the river
+     * that happens to be called that, and not the one everyone means.
+     */
+    altNames: text("alt_names").array().notNull().default([]),
     lat: doublePrecision("lat").notNull(),
     lng: doublePrecision("lng").notNull(),
     /** Mapped from OSM tags by the loader, so the resolver never reads a raw tag. */

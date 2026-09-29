@@ -112,6 +112,44 @@ describe("rowOf", () => {
     expect(row).toMatchObject({ nameLocal: null, nameEn: null })
   })
 
+  it("keeps the name people say apart from the formal one OSM files it under", () => {
+    // Wat Pho's own tags, trimmed.
+    const row = rowOf(
+      node({
+        name: "วัดพระเชตุพนวิมลมังคลารามราชวรมหาวิหาร",
+        "name:th": "วัดพระเชตุพนวิมลมังคลารามราชวรมหาวิหาร",
+        "name:en": "Wat Phra Chettuphon Wimon Mangkhalaram Ratchaworamahawihan",
+        loc_name: "วัดโพธิ์",
+        "loc_name:en": "Wat Pho",
+        "alt_name:en": "Temple of the Reclining Buddha",
+        "alt_name:ja": "ワット・ポー",
+      }),
+      "Bangkok",
+    )
+    expect(row).toMatchObject({
+      commonName: "Wat Pho",
+      commonLocal: "วัดโพธิ์",
+      altNames: ["Wat Pho", "วัดโพธิ์", "Temple of the Reclining Buddha"],
+    })
+  })
+
+  it("takes a roman loc_name as no Thai common name, and repeats no primary name", () => {
+    const row = rowOf(
+      node({
+        name: "ICONSIAM",
+        "name:en": "ICONSIAM",
+        loc_name: "Iconsiam",
+        alt_name: "ICONSIAM;ไอคอนสยาม",
+      }),
+      "Bangkok",
+    )
+    expect(row).toMatchObject({
+      commonName: null,
+      commonLocal: null,
+      altNames: ["Iconsiam", "ไอคอนสยาม"],
+    })
+  })
+
   it("splits Overpass's multi-values, because each half is a thing people search", () => {
     const row = rowOf(
       node({ name: "Boat Noodle", amenity: "restaurant", cuisine: "thai;noodle" }),
