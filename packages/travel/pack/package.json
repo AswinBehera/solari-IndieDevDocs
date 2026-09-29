@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./postgres": "./src/postgres.ts",
-    "./read": "./src/read.ts"
+    "./read": "./src/read.ts",
+    "./price": "./src/price/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -20,7 +21,8 @@
     "@samsara/llm": "workspace:*",
     "@samsara/refine": "workspace:*",
     "drizzle-orm": "^0.45.2",
-    "zod": "^4.6.1"
+    "zod": "^4.6.1",
+    "@samsara/probe": "workspace:*"
   },
   "devDependencies": {
     "@samsara/db": "workspace:*",

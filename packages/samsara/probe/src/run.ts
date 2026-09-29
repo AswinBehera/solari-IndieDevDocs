@@ -98,7 +98,7 @@ export async function runProbe(deps: ProbeDeps, input: ProbeInput): Promise<Prob
         country: vp.country,
         outcome: "failed",
         ...(sessionId ? { sessionId } : {}),
-        failure: `${result.error.kind}: ${result.error.message}`,
+        failure: `${result.error.kind}: ${result.error.message}${result.error.cause ? ` (${result.error.cause})` : ""}`,
       }
     }
     if (!sessionId) {

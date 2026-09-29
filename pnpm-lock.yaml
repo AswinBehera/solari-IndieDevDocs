@@ -400,6 +400,9 @@ importers:
       '@samsara/llm':
         specifier: workspace:*
         version: link:../../samsara/llm
+      '@samsara/probe':
+        specifier: workspace:*
+        version: link:../../samsara/probe
       '@samsara/refine':
         specifier: workspace:*
         version: link:../../samsara/refine
