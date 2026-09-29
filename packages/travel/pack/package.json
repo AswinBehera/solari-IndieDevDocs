@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./postgres": "./src/postgres.ts",
     "./read": "./src/read.ts",
-    "./price": "./src/price/index.ts"
+    "./price": "./src/price/index.ts",
+    "./price/parse": "./src/price/parse.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

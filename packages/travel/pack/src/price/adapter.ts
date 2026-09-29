@@ -1,5 +1,6 @@
 import type { FxRates, ProbeAdapter, ProbeCapture, ProbeContext } from "@samsara/probe"
 import {
+  PRICE_SOURCE_ID,
   type PriceSite,
   parseStayUrl,
   readCaveats,
@@ -75,7 +76,7 @@ const MAX_WAIT_MS = 35_000
 const MAX_TEXT = 20_000
 
 export const priceAdapter: ProbeAdapter<StayTarget, PricePayload> = {
-  id: "price.stay" as never,
+  id: PRICE_SOURCE_ID as never,
 
   parseUrl(url) {
     const r = parseStayUrl(url, new Date())

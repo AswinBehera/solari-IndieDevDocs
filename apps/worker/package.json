@@ -23,6 +23,7 @@
     "@samsara/kernel": "workspace:*",
     "@samsara/llm": "workspace:*",
     "@samsara/personas": "workspace:*",
+    "@samsara/probe": "workspace:*",
     "@samsara/refine": "workspace:*",
     "@samsara/sources": "workspace:*"
   },

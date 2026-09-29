@@ -1,6 +1,7 @@
 import { createDb } from "@dt/db"
 import { PostgresTripStore } from "@dt/db/trips"
 import { PostgresOsmSearch, PostgresPlaceRepo } from "@dt/travel-pack/postgres"
+import { priceAdapter } from "@dt/travel-pack/price"
 import { MemoryPacer } from "@samsara/harvest"
 import { FilesystemCaptureArchive } from "@samsara/harvest/node"
 import {
@@ -19,6 +20,9 @@ import { createSolariBrowserLauncher, solariCredentials } from "@samsara/kernel/
 import { LlmClient, loadLlmConfig } from "@samsara/llm"
 import { createOpenRouterClient } from "@samsara/llm/openrouter"
 import { PostgresPersonaStore } from "@samsara/personas/postgres"
+import { dailyFx, type ProbeAdapter } from "@samsara/probe"
+import { FilesystemScreenshotArchive } from "@samsara/probe/node"
+import { PostgresObservationStore, PostgresProbeTargetStore } from "@samsara/probe/postgres"
 import {
   PostgresEntityLinks,
   PostgresEvidenceStore,
@@ -33,6 +37,7 @@ import { createHarvestHandler } from "./harvest.js"
 import { createIntentHandler } from "./intent.js"
 import { createPackRegistry } from "./packs.js"
 import { createKeepaliveHandler } from "./personas.js"
+import { createProbeHandler } from "./probe.js"
 import { createRefineHandler } from "./refine.js"
 import { createResolveHandler } from "./resolve.js"
 import { createScoreHandler } from "./score.js"
@@ -155,6 +160,19 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       // The rest of the chain: extract queues resolve, resolve queues dedup,
       // dedup queues score. See `chain.ts` for why each link is non-fatal.
       queue: jobs,
+    }),
+  )
+
+  // P3.1: one URL from every country. The adapter is the price one; a second probe
+  // source is a line here.
+  handlers.register(
+    "probe.run",
+    createProbeHandler({
+      targets: new PostgresProbeTargetStore(database.db),
+      observations: new PostgresObservationStore(database.db),
+      archive: new FilesystemScreenshotArchive(env.CAPTURE_ARCHIVE_DIR ?? ".captures"),
+      adapters: new Map<string, ProbeAdapter>([[priceAdapter.id, priceAdapter as ProbeAdapter]]),
+      rates: dailyFx(),
     }),
   )
 

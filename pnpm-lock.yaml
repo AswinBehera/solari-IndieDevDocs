@@ -47,6 +47,9 @@ importers:
       '@samsara/personas':
         specifier: workspace:*
         version: link:../../packages/samsara/personas
+      '@samsara/probe':
+        specifier: workspace:*
+        version: link:../../packages/samsara/probe
       '@samsara/refine':
         specifier: workspace:*
         version: link:../../packages/samsara/refine
@@ -154,6 +157,9 @@ importers:
       '@samsara/personas':
         specifier: workspace:*
         version: link:../../packages/samsara/personas
+      '@samsara/probe':
+        specifier: workspace:*
+        version: link:../../packages/samsara/probe
       '@samsara/refine':
         specifier: workspace:*
         version: link:../../packages/samsara/refine

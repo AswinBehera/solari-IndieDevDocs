@@ -12,6 +12,7 @@ import type { Dispatcher } from "./dispatch.js"
 import { type KernelDeps, kernelRoutes } from "./kernel.js"
 import { type LabDeps, labRoutes } from "./lab.js"
 import { type PlacesDeps, placeSearchRoutes, placesRoutes } from "./places.js"
+import { type ProbesDeps, probesRoutes } from "./probes.js"
 import { type TripsDeps, tripsRoutes } from "./trips.js"
 
 /**
@@ -44,6 +45,8 @@ export interface AppDeps {
   lab?: Omit<LabDeps, "verifier" | "jobs">
   /** The Place Postcard grid's read (P2.7), and `/place`'s search. Optional for the reason `lab` is. */
   places?: Omit<PlacesDeps, "verifier">
+  /** Hundred Eyes: paste a URL, read one price per country. Optional for the reason `lab` is. */
+  probes?: Omit<ProbesDeps, "verifier">
   /** The ops dashboard (P5.5). Optional for the reason `lab` is. */
   kernel?: Omit<KernelDeps, "verifier">
   /** Trips, documents and Postcards (P4.1). Optional for the reason `lab` is. */
@@ -192,6 +195,9 @@ export function createApp(deps: AppDeps) {
   // otherwise match `/lab/places` too and verify every token twice, against a
   // 10 ms CPU ceiling. Registered first, this route answers and the Lab's
   // middleware never runs. `places.test.ts` counts the verifications.
+  if (deps.probes) {
+    app.route("/probes", probesRoutes({ ...deps.probes, verifier: deps.verifier, jobs: deps.jobs }))
+  }
   if (deps.kernel) {
     app.route("/lab/kernel", kernelRoutes({ ...deps.kernel, verifier: deps.verifier }))
   }

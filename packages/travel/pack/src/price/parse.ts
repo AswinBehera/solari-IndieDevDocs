@@ -3,6 +3,9 @@
  * says. No page, no clock, no network, so both are tested against strings.
  */
 
+/** The probe source id every stay target is stored under. */
+export const PRICE_SOURCE_ID = "price.stay"
+
 export type PriceSite = "booking" | "agoda"
 
 export interface StayTarget {

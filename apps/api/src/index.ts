@@ -11,6 +11,7 @@ import {
 import { PostgresOpsReader } from "@samsara/kernel/ops"
 import { PostgresJobStore } from "@samsara/kernel/postgres"
 import { PostgresPersonaStore } from "@samsara/personas/postgres"
+import { PostgresObservationStore, PostgresProbeTargetStore } from "@samsara/probe/postgres"
 import { PostgresMentionStore } from "@samsara/refine/postgres"
 import { createApp } from "./app.js"
 import { devVerifier, supabaseVerifier, type Verifier } from "./auth.js"
@@ -75,6 +76,17 @@ export default {
             const e = bindings as Env
             return new PostgresPlaceReader(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
           },
+        },
+        // Hundred Eyes: targets and observations, per request like everything above.
+        probes: {
+          targets: (bindings) =>
+            new PostgresProbeTargetStore(
+              createDb((bindings as Env).HYPERDRIVE.connectionString, { max: 1 }).db,
+            ),
+          observations: (bindings) =>
+            new PostgresObservationStore(
+              createDb((bindings as Env).HYPERDRIVE.connectionString, { max: 1 }).db,
+            ),
         },
         // The ops dashboard (P5.5), per request like everything above.
         kernel: {
