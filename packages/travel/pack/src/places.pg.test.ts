@@ -352,15 +352,30 @@ describe.runIf(hasDb)("the places repo, merging", () => {
     expect(kept?.resolvedTier).toBe(2)
   })
 
-  it("refuses a merge whose rows are not both there", async () => {
-    const survivor = await repo().upsert(resolved)
+  it("refuses a merge whose survivor is not there", async () => {
+    const duplicate = await repo().upsert(resolved)
 
     // Loud rather than silent: the engine has already repointed evidence at the
-    // survivor by the time this runs, and a merge that quietly did nothing would
-    // leave the duplicate in the table with none of its own evidence left.
-    await expect(repo().merge(survivor, "00000000-0000-4000-8000-000000000000")).rejects.toThrow(
+    // survivor by the time this runs, and a survivor that is gone means that
+    // evidence now points at nothing.
+    await expect(repo().merge("00000000-0000-4000-8000-000000000000", duplicate)).rejects.toThrow(
       /cannot merge/,
     )
+    expect(await d().select().from(places).where(eq(places.id, duplicate))).toHaveLength(1)
+  })
+
+  it("does nothing when a concurrent run already merged the duplicate away", async () => {
+    const survivor = await repo().upsert(resolved)
+    const duplicate = await repo().upsert({ ...resolved, canonicalName: "Kuay Tiew Rua" })
+    await repo().merge(survivor, duplicate)
+    const [before] = await d().select().from(places).where(eq(places.id, survivor))
+
+    // The second job read its page before the first job's delete.
+    await expect(repo().merge(survivor, duplicate)).resolves.toBeUndefined()
+
+    const [after] = await d().select().from(places).where(eq(places.id, survivor))
+    expect(after?.evidenceCount).toBe(before?.evidenceCount)
+    expect(after?.tags).toEqual(before?.tags)
   })
 })
 

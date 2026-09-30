@@ -237,7 +237,9 @@ export class MemoryEntityRepo<TEntity> implements EntityRepo<TEntity> {
   async merge(into: string, from: string): Promise<void> {
     const target = this.entities.find((row) => row.id === into)
     const index = this.entities.findIndex((row) => row.id === from)
-    if (!target || index < 0) throw new Error(`cannot merge ${from} into ${into}: no such entity`)
+    if (!target) throw new Error(`cannot merge ${from} into ${into}: no such entity`)
+    // Already folded by a concurrent run: the same no-op the Postgres repo makes.
+    if (index < 0) return
     const duplicate = this.entities[index]
     if (duplicate && this.options.fold)
       target.entity = this.options.fold(target.entity, duplicate.entity)

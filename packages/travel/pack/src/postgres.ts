@@ -349,9 +349,15 @@ export class PostgresPlaceRepo implements EntityRepo<PlaceEntity> {
 
       const survivor = rows.find((row) => row.id === into)
       const duplicate = rows.find((row) => row.id === from)
-      if (!survivor || !duplicate) {
+      if (!survivor) {
         throw new Error(`cannot merge ${from} into ${into}: no such row`)
       }
+      // A duplicate that is already gone was folded by a dedup job running
+      // beside this one, from a page this job read before the delete. Nothing
+      // is left to fold: its evidence went with that job's repoint, and this
+      // job's repoint found none. The survivor is locked and present, so
+      // stopping here loses nothing, where throwing failed the whole page.
+      if (!duplicate) return
 
       const takesGeo = survivor.lat === null || survivor.lng === null
       const tags = [...new Set([...survivor.tags, ...duplicate.tags])]

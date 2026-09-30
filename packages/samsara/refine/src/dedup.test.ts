@@ -517,6 +517,15 @@ describe("EntityRepo.page, which both entity-shaped stages read their work from"
     expect(second.entities.map((row) => row.id)).toEqual(["entity-4", "entity-5", "entity-6"])
   })
 
+  it("treats merging a duplicate that is already gone as done, not as an error", async () => {
+    const repo = await boxes(3)
+    await repo.merge("entity-1", "entity-2")
+    // A second run that read its page before the first run's merge.
+    await expect(repo.merge("entity-1", "entity-2")).resolves.toBeUndefined()
+    expect(repo.entities.map((row) => row.id)).toEqual(["entity-1", "entity-3"])
+    await expect(repo.merge("entity-2", "entity-3")).rejects.toThrow(/cannot merge/)
+  })
+
   it("refuses a cursor it did not mint rather than returning an empty page", async () => {
     const repo = await boxes(2)
     await expect(repo.page("somewhere", 3)).rejects.toThrow(/cursor/)
