@@ -1,4 +1,4 @@
-import type { Place, PostcardState } from "@dt/core"
+import type { Place, PlaceCategory, PostcardState } from "@dt/core"
 
 /**
  * The judgements the Trip Document's Postcards make, as plain functions — the
@@ -324,4 +324,86 @@ export function offerVerdict(rows: readonly OfferRow[]): string | null {
   if (!lo.cheapest)
     return `Level: within $${gap} for ${nights}, less than tax differences between sites. A code would decide it.`
   return `${lo.provider?.label ?? "One site"} is $${gap} less than ${hi.provider?.label ?? "the dearest"} for ${nights}.`
+}
+
+/** A word of Thai for a sticker, romanised and glossed for a reader who has none. */
+export interface Slang {
+  thai: string
+  roman: string
+  gloss: string
+  /** True when a local wrote it about this place; false when it is a phrase to use there. */
+  heard: boolean
+}
+
+/**
+ * Words Thai reviewers use to praise a place, longest first so "อร่อยมาก" is
+ * found before "อร่อย". Food-forum slang, the kind a phrasebook leaves out.
+ */
+const HEARD: readonly Omit<Slang, "heard">[] = [
+  { thai: "อร่อยมาก", roman: "aroi mak", gloss: "really delicious" },
+  { thai: "ถูกและดี", roman: "thuk lae di", gloss: "cheap and good" },
+  { thai: "ต้องลอง", roman: "tong long", gloss: "you have to try it" },
+  { thai: "เจ้าเก่า", roman: "chao kao", gloss: "the old original" },
+  { thai: "แซ่บ", roman: "saep", gloss: "fiery and good" },
+  { thai: "เด็ด", roman: "det", gloss: "outstanding" },
+  { thai: "คุ้ม", roman: "khum", gloss: "worth it" },
+  { thai: "ฟิน", roman: "fin", gloss: "pure bliss" },
+  { thai: "ปัง", roman: "pang", gloss: "a smash hit" },
+  { thai: "ชิล", roman: "chill", gloss: "easy-going" },
+  { thai: "อร่อย", roman: "aroi", gloss: "delicious" },
+]
+
+/** A phrase to use at a kind of place, for when no local word was found. */
+const SAY: Record<PlaceCategory, Omit<Slang, "heard"> | null> = {
+  food: { thai: "อร่อยมาก", roman: "aroi mak", gloss: "say it to the cook" },
+  drink: { thai: "ชนแก้ว", roman: "chon kaeo", gloss: "cheers" },
+  market: { thai: "ลดได้ไหม", roman: "lot dai mai", gloss: "any discount?" },
+  temple: { thai: "สาธุ", roman: "sathu", gloss: "said with a wai" },
+  nature: { thai: "สบาย", roman: "sabai", gloss: "relaxed, at ease" },
+  nightlife: { thai: "มันส์", roman: "man", gloss: "a blast" },
+  shop: { thai: "เท่าไหร่", roman: "thao rai", gloss: "how much?" },
+  other: null,
+}
+
+/**
+ * The place card's sticker. A word from the quote beats a phrasebook line,
+ * because it is what a local actually said. The sticker says which kind it is,
+ * so a phrase to use is never mistaken for a review.
+ */
+export function slangSticker(category: PlaceCategory, quote: string | null): Slang | null {
+  const heard = quote ? HEARD.find((w) => quote.includes(w.thai)) : undefined
+  if (heard) return { ...heard, heard: true }
+  const say = SAY[category]
+  return say ? { ...say, heard: false } : null
+}
+
+/** How a link's site is stamped on its ticket: the brand as a rubber stamp, not a logo. */
+export function linkStamp(kind: LinkKind): { label: string; className: string } {
+  switch (kind) {
+    case "youtube":
+      return { label: "YOUTUBE", className: "border-signal-red text-signal-red" }
+    case "tiktok":
+      return { label: "TIKTOK", className: "border-ink text-ink" }
+    case "maps":
+      return { label: "GOOGLE MAPS", className: "border-signal-green text-signal-green" }
+    case "booking":
+      return { label: "BOOKING.COM", className: "border-accent-blue text-accent-blue" }
+    case "agoda":
+      return { label: "AGODA", className: "border-accent-pink text-accent-pink" }
+    default:
+      return { label: "LINK", className: "border-ink-faint text-ink-faint" }
+  }
+}
+
+/**
+ * The first Thai word a note uses that the sticker sheet knows, as a phrase to
+ * say. Never "heard": the traveller wrote the note, not a local.
+ */
+export function phraseIn(text: string): Slang | null {
+  const says = Object.values(SAY).filter((w) => w !== null)
+  const hit = [...HEARD, ...says]
+    .map((w) => ({ w, at: text.indexOf(w.thai) }))
+    .filter((x) => x.at >= 0)
+    .sort((a, b) => a.at - b.at || b.w.thai.length - a.w.thai.length)[0]
+  return hit ? { ...hit.w, heard: false } : null
 }

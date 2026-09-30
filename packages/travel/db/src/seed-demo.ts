@@ -111,7 +111,40 @@ async function main() {
     sourceRefs: [],
   })
   if (!price) throw new Error("could not add the price card")
+
+  // The rest of the page, so the scrapbook has something besides the price card.
+  // The link and the café are real finds from Samsara's demo captures
+  // (`@dt/travel-pack/fixtures/samsara-demo.json`), not stand-ins.
+  const card = async (kind: "note" | "checklist" | "link", payload: Record<string, unknown>) => {
+    const c = await store.addPostcard(USER_ID, TRIP_ID, {
+      kind,
+      placeId: null,
+      payload,
+      geo: null,
+      time: null,
+      sourceRefs: [],
+    })
+    if (!c) throw new Error(`could not add the ${kind} card`)
+    return { type: "postcard", attrs: { postcardId: c.id } }
+  }
+  const link = await card("link", { url: "https://www.youtube.com/watch?v=3OK61vAyz2w" })
+  const note = await card("note", {
+    text: "Say อร่อยมาก (aroi mak, really delicious) to the cook.\nลดได้ไหม (lot dai mai) at the market, with a smile.\nCash for the stalls; most take PromptPay, not cards.",
+  })
+  const packing = await card("checklist", {
+    items: [
+      { text: "Book the hotel on whichever site is cheaper", done: false },
+      { text: "Ask Beam to look for a code again the week before", done: false },
+      { text: "Coffee in Ari: Two Eight Squared (the office worker's find)", done: true },
+      { text: "Small notes, 20s and 100s, for street food", done: false },
+    ],
+  })
   const text = (t: string) => ({ type: "paragraph", content: [{ type: "text", text: t }] })
+  const h2 = (t: string) => ({
+    type: "heading",
+    attrs: { level: 2 },
+    content: [{ type: "text", text: t }],
+  })
   const content = {
     type: "doc",
     content: [
@@ -124,6 +157,12 @@ async function main() {
         "Street food, night markets, and one good hotel. Same room on two booking sites: which is cheaper, and has anyone shared a code?",
       ),
       { type: "postcard", attrs: { postcardId: price.id } },
+      h2("Morning"),
+      text("The street-food auntie's pick for a market breakfast, found searching in Thai."),
+      link,
+      h2("Before we go"),
+      note,
+      packing,
     ],
   }
   const saved = await store.saveDocument(USER_ID, TRIP_ID, content, 1)

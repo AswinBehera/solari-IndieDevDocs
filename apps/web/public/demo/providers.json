@@ -26,9 +26,7 @@
           "source": "element",
           "amount": 724,
           "currency": "USD",
-          "caveats": [
-            "a member or sign-in rate may apply"
-          ],
+          "caveats": ["a member or sign-in rate may apply"],
           "wall": null,
           "context": null,
           "judge": {

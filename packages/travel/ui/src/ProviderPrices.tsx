@@ -1,6 +1,7 @@
 import { type CSSProperties, type ReactNode, useState } from "react"
 import { tiltStyle } from "./paper.js"
 import type { OfferRow } from "./postcard-rules.js"
+import { Tape } from "./Scrapbook.js"
 
 /**
  * The Price Postcard: one hotel, a link per booking site, each read from the
@@ -72,7 +73,7 @@ export function ProviderPricesPostcard({
       style={tiltStyle(id, 0.4) as CSSProperties}
       className="relative rotate-(--tilt) border border-track bg-paper px-6 pt-6 pb-5 shadow-postcard"
     >
-      <span className="sb-tape -top-2.5 left-8 rotate-[-4deg]" aria-hidden />
+      <Tape id={id} />
       <ViewpointStamp country={viewpoint} />
       {/* Tall enough that the stamp never sits on the first row. */}
       <div className="min-h-[84px] pr-24">

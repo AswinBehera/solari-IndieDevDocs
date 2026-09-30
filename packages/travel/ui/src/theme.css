@@ -137,3 +137,51 @@
     radial-gradient(circle at 100% 50%, #0000 var(--notch), #000 calc(var(--notch) + 0.5px)) right /
     51% 100% no-repeat;
 }
+.sb-tape.blue {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgb(22 32 74 / 0.2) 0 6px,
+    rgb(22 32 74 / 0.12) 6px 12px
+  );
+}
+
+/* A round sticker with a white die-cut edge, as if peeled off a sheet. */
+.sb-sticker {
+  border: 3px solid var(--color-paper);
+  border-radius: 9999px;
+  box-shadow: 0 3px 8px -2px rgb(35 36 42 / 0.35);
+}
+
+/* Ruled notebook lines under a note, spaced to its line height. */
+.sb-lined {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 calc(1.5em - 1px),
+    rgb(22 32 74 / 0.12) calc(1.5em - 1px) 1.5em
+  );
+  background-position: 0 2.45em;
+}
+
+/* Till-roll paper: a torn zigzag along the bottom edge. */
+.sb-receipt {
+  --tooth: 8px;
+  padding-bottom: calc(var(--tooth) + 14px);
+  -webkit-mask:
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / var(--tooth)
+    51% repeat-x,
+    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth) / 2) no-repeat;
+  mask:
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / var(--tooth)
+    51% repeat-x,
+    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth) / 2) no-repeat;
+}
+
+/* A photo corner: a small dark triangle the print is tucked into. */
+.sb-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: rgb(35 36 42 / 0.82);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  pointer-events: none;
+}

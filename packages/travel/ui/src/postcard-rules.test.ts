@@ -8,8 +8,10 @@ import {
   offerRows,
   offerVerdict,
   photoLine,
+  phraseIn,
   priceRows,
   priceSpread,
+  slangSticker,
   sourceBadge,
   stateTag,
   whyRows,
@@ -189,5 +191,48 @@ describe("offerRows", () => {
     const rows = offerRows([offer(booking, null), { url: agoda, started: true }])
     expect(rows.map((r) => r.status).sort()).toEqual(["blocked", "reading"])
     expect(offerVerdict(rows)).toBeNull()
+  })
+})
+
+describe("slangSticker", () => {
+  it("prefers a word a local wrote, and says it was heard", () => {
+    const s = slangSticker("food", "น้ำซุปแซ่บมาก ต้องลอง")
+    // "ต้องลอง" is longer and listed first, so it wins over "แซ่บ".
+    expect(s).toEqual({
+      thai: "ต้องลอง",
+      roman: "tong long",
+      gloss: "you have to try it",
+      heard: true,
+    })
+  })
+
+  it("finds the long form before the word inside it", () => {
+    expect(slangSticker("food", "อร่อยมากค่ะ")?.roman).toBe("aroi mak")
+  })
+
+  it("falls back to a phrase to use, marked as not heard", () => {
+    expect(slangSticker("market", "a quote in English")).toMatchObject({
+      roman: "lot dai mai",
+      heard: false,
+    })
+    expect(slangSticker("temple", null)?.heard).toBe(false)
+  })
+
+  it("has nothing for a place it cannot place", () => {
+    expect(slangSticker("other", null)).toBeNull()
+  })
+})
+
+describe("phraseIn", () => {
+  it("stickers the first Thai phrase a note uses, the long form first, as one to say", () => {
+    expect(phraseIn("Say อร่อยมาก to the cook. ลดได้ไหม at the market")).toMatchObject({
+      roman: "aroi mak",
+      heard: false,
+    })
+    expect(phraseIn("ask ลดได้ไหม")?.gloss).toBe("any discount?")
+  })
+
+  it("has nothing for a note with no Thai it knows", () => {
+    expect(phraseIn("Cash only, closed Mondays")).toBeNull()
   })
 })

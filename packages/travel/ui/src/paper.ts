@@ -44,3 +44,28 @@ export function tiltStyle(id: string, max = MAX_TILT): Record<"--tilt", string> 
  */
 export const PAPER =
   "border border-track bg-paper shadow-postcard rotate-(--tilt) transition-[rotate,translate,box-shadow] duration-200 hover:rotate-0 hover:-translate-y-[3px] hover:shadow-postcard-lift"
+
+export type TapeColour = "pink" | "gold" | "blue"
+
+export interface TapePlacement {
+  colour: TapeColour
+  /** Where along the top edge it lands, as a percentage of the card's width. */
+  left: number
+  angle: number
+}
+
+const TAPE_COLOURS: readonly TapeColour[] = ["pink", "gold", "blue"]
+
+/**
+ * A card's strip of washi tape, fixed by its id for the same reason as its tilt:
+ * tape that moves when the document saves looks like a bug. Kept off the
+ * right-hand third, where cards put their stamps.
+ */
+export function tapeFor(id: string): TapePlacement {
+  const h = hash(`tape:${id}`)
+  return {
+    colour: TAPE_COLOURS[h % TAPE_COLOURS.length] as TapeColour,
+    left: 6 + ((h >>> 3) % 40),
+    angle: ((h >>> 9) % 11) - 5,
+  }
+}

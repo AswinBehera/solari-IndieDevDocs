@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { MAX_TILT, tiltFor, tiltStyle } from "./paper"
+import { MAX_TILT, tapeFor, tiltFor, tiltStyle } from "./paper"
 
 describe("tiltFor", () => {
   it("gives one id the same angle every time", () => {
@@ -22,5 +22,17 @@ describe("tiltFor", () => {
 
   it("writes an angle the browser can read", () => {
     expect(tiltStyle("x")["--tilt"]).toMatch(/^-?\d+(\.\d)?deg$/)
+  })
+})
+
+describe("tapeFor", () => {
+  it("puts one card's tape in the same place every time, clear of the stamp corner", () => {
+    expect(tapeFor("card-1")).toEqual(tapeFor("card-1"))
+    for (const id of ["a", "b", "c", "d", "e", "f"]) {
+      const t = tapeFor(id)
+      expect(t.left).toBeGreaterThanOrEqual(6)
+      expect(t.left).toBeLessThan(46)
+      expect(Math.abs(t.angle)).toBeLessThanOrEqual(5)
+    }
   })
 })

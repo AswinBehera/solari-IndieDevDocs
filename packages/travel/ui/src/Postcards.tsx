@@ -14,12 +14,16 @@ import {
   checklistCount,
   type LinkKind,
   linkLine,
+  linkStamp,
   localPercent,
   photoLine,
+  phraseIn,
+  slangSticker,
   sourceBadge,
   stateTag,
   whyRows,
 } from "./postcard-rules.js"
+import { SlangSticker, Tape } from "./Scrapbook.js"
 
 /**
  * The Trip Document's Postcards (P4.1, with P4.9's paper), read off the canvas's
@@ -63,13 +67,15 @@ export function PlacePostcard(props: PlacePostcardProps) {
   const pct = localPercent(place)
   const why = whyRows(place)
   const editable = props.onRefresh !== undefined || props.onTogglePin !== undefined
+  const slang = slangSticker(place.category, evidence?.quote ?? null)
 
   return (
     <div
       style={tilted(props.id)}
-      className="rotate-(--tilt) cursor-pointer border border-track bg-paper px-6 py-[22px] shadow-postcard transition-[rotate,translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:rotate-0 hover:shadow-postcard-lift"
+      className="relative rotate-(--tilt) cursor-pointer border border-track bg-paper px-6 py-[22px] shadow-postcard transition-[rotate,translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:rotate-0 hover:shadow-postcard-lift"
     >
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-[minmax(0,1fr)_128px]">
+      <Tape id={props.id} />
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-[minmax(0,1fr)_140px]">
         <button
           type="button"
           onClick={() => setOpen(!open)}
@@ -132,7 +138,10 @@ export function PlacePostcard(props: PlacePostcardProps) {
           )}
         </button>
         <div className="flex flex-col gap-2.5">
-          <MapThumb place={place} bbox={props.bbox} />
+          {/* The locator as the card's postage stamp. */}
+          <div className="sb-stamp rotate-[2deg]">
+            <MapThumb place={place} bbox={props.bbox} />
+          </div>
           {editable && (
             <div className="flex gap-1.5">
               <button
@@ -146,6 +155,11 @@ export function PlacePostcard(props: PlacePostcardProps) {
               <button type="button" className={smallButton} onClick={props.onTogglePin}>
                 {state === "pinned" ? "UNPIN" : "PIN"}
               </button>
+            </div>
+          )}
+          {slang && (
+            <div className="flex justify-center pt-1">
+              <SlangSticker slang={slang} />
             </div>
           )}
         </div>
@@ -227,12 +241,21 @@ export function NotePostcard({
   text: string
   onChange?: (text: string) => void
 }) {
+  const phrase = phraseIn(text)
   return (
     <div
       style={tilted(id, 0.5)}
-      className="rotate-(--tilt) bg-note px-5 py-4 text-[15px] leading-normal shadow-postcard"
+      className="sb-lined relative rotate-(--tilt) bg-note px-5 pt-4 pb-5 text-[15px] leading-[1.5em] shadow-postcard"
     >
-      <div className="mb-1.5 font-mono text-[10px] text-ink-faint tracking-[.1em]">NOTE</div>
+      <Tape id={id} />
+      {phrase && (
+        <div className="absolute -top-6 -right-4 z-10">
+          <SlangSticker slang={phrase} tilt={9} />
+        </div>
+      )}
+      <div className="mb-1.5 font-mono text-[10px] text-ink-faint leading-normal tracking-[.1em]">
+        NOTE
+      </div>
       {onChange ? (
         <AutoText value={text} onChange={onChange} placeholder="Write the thing you will forget." />
       ) : (
@@ -255,62 +278,68 @@ export function ChecklistPostcard({
   const set = (i: number, item: ChecklistItem) =>
     onChange?.(items.map((it, j) => (j === i ? item : it)))
   return (
+    // The receipt's torn edge is a mask, which would cut off a box-shadow, so the
+    // shadow is a filter on this wrapper and the tape sits outside the mask.
     <div
       style={tilted(id, 0.5)}
-      className="max-w-[480px] rotate-(--tilt) bg-paper px-[22px] py-[18px] shadow-postcard"
+      className="relative max-w-[480px] rotate-(--tilt) drop-shadow-[0_8px_14px_rgb(35_36_42/0.18)]"
     >
-      <div className="mb-2.5 font-mono text-[10px] text-ink-faint tracking-[.1em]">
-        CHECKLIST · {checklistCount(items)}
+      <Tape id={id} />
+      <div className="sb-receipt bg-paper px-[22px] pt-[18px]">
+        <div className="mb-2.5 flex justify-between border-ink border-b border-dashed pb-2 font-mono text-[10px] text-ink-faint tracking-[.1em]">
+          <span>CHECKLIST</span>
+          <span>{checklistCount(items)}</span>
+        </div>
+        {items.map((item, i) => (
+          <label
+            // Items have no ids of their own; position is their identity in the list.
+            // biome-ignore lint/suspicious/noArrayIndexKey: see above
+            key={i}
+            className="flex cursor-pointer items-center gap-3 border-[#efebe0] border-b py-[7px] text-[15px] hover:text-accent-pink"
+          >
+            <input
+              type="checkbox"
+              checked={item.done}
+              disabled={!onChange}
+              onChange={(e) => set(i, { ...item, done: e.target.checked })}
+              className="size-4 flex-none appearance-none border-[1.5px] border-ink checked:bg-ink"
+            />
+            <span className={item.done ? "text-ink-faint line-through" : ""}>{item.text}</span>
+            {onChange && (
+              <button
+                type="button"
+                aria-label={`remove ${item.text}`}
+                onClick={(e) => {
+                  e.preventDefault()
+                  onChange(items.filter((_, j) => j !== i))
+                }}
+                className="ml-auto font-mono text-[10px] text-ink-faint hover:text-signal-red"
+              >
+                ×
+              </button>
+            )}
+          </label>
+        ))}
+        {onChange && (
+          <form
+            className="pt-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const text = draft.trim()
+              if (!text) return
+              onChange([...items, { text, done: false }])
+              setDraft("")
+            }}
+          >
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Add a thing, then Enter"
+              className="w-full bg-transparent py-1 text-[15px] placeholder:text-ink-faint focus:outline-none"
+            />
+          </form>
+        )}
       </div>
-      {items.map((item, i) => (
-        <label
-          // Items have no ids of their own; position is their identity in the list.
-          // biome-ignore lint/suspicious/noArrayIndexKey: see above
-          key={i}
-          className="flex cursor-pointer items-center gap-3 border-[#efebe0] border-b py-[7px] text-[15px] hover:text-accent-pink"
-        >
-          <input
-            type="checkbox"
-            checked={item.done}
-            disabled={!onChange}
-            onChange={(e) => set(i, { ...item, done: e.target.checked })}
-            className="size-4 flex-none appearance-none border-[1.5px] border-ink checked:bg-ink"
-          />
-          <span className={item.done ? "text-ink-faint line-through" : ""}>{item.text}</span>
-          {onChange && (
-            <button
-              type="button"
-              aria-label={`remove ${item.text}`}
-              onClick={(e) => {
-                e.preventDefault()
-                onChange(items.filter((_, j) => j !== i))
-              }}
-              className="ml-auto font-mono text-[10px] text-ink-faint hover:text-signal-red"
-            >
-              ×
-            </button>
-          )}
-        </label>
-      ))}
-      {onChange && (
-        <form
-          className="pt-2"
-          onSubmit={(e) => {
-            e.preventDefault()
-            const text = draft.trim()
-            if (!text) return
-            onChange([...items, { text, done: false }])
-            setDraft("")
-          }}
-        >
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Add a thing, then Enter"
-            className="w-full bg-transparent py-1 text-[15px] placeholder:text-ink-faint focus:outline-none"
-          />
-        </form>
-      )}
     </div>
   )
 }
@@ -330,42 +359,55 @@ export function LinkPostcard({
   children?: ReactNode
 }) {
   const [draft, setDraft] = useState(url)
+  const stamp = linkStamp(kind)
   return (
+    // An admission ticket: notched sides (a mask, so the shadow is a filter here),
+    // the site pressed on as a rubber stamp.
     <div
       style={tilted(id, 0.4)}
-      className="rotate-(--tilt) border border-track bg-paper px-[18px] py-3.5 shadow-postcard"
+      className="rotate-(--tilt) drop-shadow-[0_8px_14px_rgb(35_36_42/0.18)]"
     >
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span className="font-mono text-[10px] text-ink-faint tracking-[.1em]">LINK</span>
-        {url && !onChangeUrl ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="min-w-0 truncate font-mono text-accent-blue text-xs"
+      <div className="sb-stub bg-paper px-7 py-3.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className={`flex-none -rotate-3 border-[1.5px] px-1.5 py-0.5 font-mono text-[9px] tracking-[.12em] ${stamp.className}`}
           >
-            {url}
-          </a>
-        ) : (
-          <form
-            className="min-w-0 flex-1"
-            onSubmit={(e) => {
-              e.preventDefault()
-              onChangeUrl?.(draft.trim())
-            }}
-          >
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => draft.trim() !== url && onChangeUrl?.(draft.trim())}
-              placeholder="Paste a URL, then Enter"
-              className="w-full bg-transparent font-mono text-accent-blue text-xs placeholder:text-ink-faint focus:outline-none"
-            />
-          </form>
+            {stamp.label}
+          </span>
+          {url && !onChangeUrl ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="min-w-0 truncate font-mono text-accent-blue text-xs"
+            >
+              {url}
+            </a>
+          ) : (
+            <form
+              className="min-w-0 flex-1"
+              onSubmit={(e) => {
+                e.preventDefault()
+                onChangeUrl?.(draft.trim())
+              }}
+            >
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={() => draft.trim() !== url && onChangeUrl?.(draft.trim())}
+                placeholder="Paste a URL, then Enter"
+                className="w-full bg-transparent font-mono text-accent-blue text-xs placeholder:text-ink-faint focus:outline-none"
+              />
+            </form>
+          )}
+        </div>
+        {url && (
+          <p className="mt-2.5 border-rule border-t border-dashed pt-2 text-ink-muted text-sm">
+            {linkLine(kind)}
+          </p>
         )}
+        {children}
       </div>
-      {url && <p className="mt-2.5 text-ink-muted text-sm">{linkLine(kind)}</p>}
-      {children}
     </div>
   )
 }
@@ -389,8 +431,9 @@ export function PhotoPostcard({
   return (
     <div
       style={tilted(id, 1.2)}
-      className="w-[300px] max-w-full rotate-(--tilt) bg-paper px-3 pt-3 pb-3.5 shadow-postcard"
+      className="relative w-[300px] max-w-full rotate-(--tilt) bg-paper px-3 pt-3 pb-3.5 shadow-postcard"
     >
+      <PhotoCorners />
       <div className="relative h-[200px] overflow-hidden bg-[linear-gradient(160deg,#2b2f4a,#16204a_60%,#0d1330)]">
         {image ? (
           <img src={image} alt={caption || "photo"} className="size-full object-cover" />
@@ -400,20 +443,34 @@ export function PhotoPostcard({
           </div>
         )}
       </div>
-      <div className="mt-2.5 flex justify-between gap-3 font-mono text-[10px] text-ink-muted tracking-[.06em]">
+      <div className="mt-2.5 flex items-baseline justify-between gap-3 font-mono text-[10px] text-ink-muted tracking-[.06em]">
         {onChangeCaption ? (
           <input
             defaultValue={caption}
             onBlur={(e) => e.target.value !== caption && onChangeCaption(e.target.value)}
-            placeholder="CAPTION"
-            className="min-w-0 flex-1 bg-transparent uppercase placeholder:text-ink-faint focus:outline-none"
+            placeholder="Write a caption"
+            className="min-w-0 flex-1 bg-transparent font-display text-[17px] text-ink normal-case tracking-normal placeholder:text-ink-faint focus:outline-none"
           />
         ) : (
-          <span className="uppercase">{caption}</span>
+          <span className="font-display text-[17px] text-ink normal-case tracking-normal">
+            {caption}
+          </span>
         )}
         <span className="flex-none">{photoLine(geo, takenAt)}</span>
       </div>
     </div>
+  )
+}
+
+/** Four photo corners, the print tucked into them as in an album. */
+function PhotoCorners() {
+  return (
+    <>
+      <span className="sb-corner -top-1 -left-1" aria-hidden />
+      <span className="sb-corner -top-1 -right-1 rotate-90" aria-hidden />
+      <span className="sb-corner -right-1 -bottom-1 rotate-180" aria-hidden />
+      <span className="sb-corner -bottom-1 -left-1 -rotate-90" aria-hidden />
+    </>
   )
 }
 
