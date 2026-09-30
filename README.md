@@ -178,6 +178,42 @@ Three things about that worth knowing before they surprise you:
 `SUPABASE_URL` is only required once a request actually authenticates, so `pnpm dev`
 works on a clean checkout with nothing but Docker running.
 
+### Try the app
+
+Tested from a fresh clone on 30 September 2026. The first part needs no API key.
+
+```bash
+pnpm db:seed:demo      # a demo trip, and a real seven-country hotel price check
+npx tsx --env-file=.env tools/load-osm.ts --from data/osm/bangkok.json.gz --commit
+pnpm dev               # then open http://localhost:5173
+```
+
+The second line loads 27k named Bangkok places from a committed OpenStreetMap snapshot
+(`data/osm/`). Without it, `/place` in a trip finds nothing.
+
+1. **Start a trip.** You answer three questions and get a document. Type `/` in it for
+   the commands.
+2. **`/place` searches by name, in Thai or English.** Places the pipeline has scored come
+   first, with their local/tourist meter. Below them are OpenStreetMap matches marked
+   *not scored yet*. Pick one and it becomes a card with a coordinate and a pin on the
+   trip's map.
+3. **Open `/trips/00000000-0000-4000-8000-0000000000d1`** to see the demo trip's price
+   card: one hotel page, as seven countries' visitors were charged for it.
+
+**With your own keys, the pipeline fills in the scores.** Set `SOLARI_API_KEY` and
+`OPENROUTER_API_KEY` in `.env`, then:
+
+```bash
+npx tsx --env-file=.env tools/harvest-corpus.ts --limit 5            # prints the estimate
+npx tsx --env-file=.env tools/harvest-corpus.ts --limit 5 --commit   # queues five searches
+```
+
+`pnpm dev`'s worker drains the queue: harvest → extract → resolve → dedup → score. Five
+searches cost a few cents. Scored places then appear at the top of `/place`, and under
+*Under the hood → Place scores*. Without `--limit` the tool queues all 120 queries
+(about $0.50). An extraction is minutes of model time, so a big batch takes a while.
+*Under the hood → Spend & jobs* shows the queue.
+
 One test does spend money, and it is skipped unless you ask for it:
 
 ```bash

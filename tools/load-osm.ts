@@ -29,7 +29,9 @@
  *      and then hit a parse bug must never be paid for twice. The raw body lands
  *      in `.osm/` and the path is printed.
  *   3. **`--from <file>` replays a saved response** with no network at all. This
- *      is the form to use while iterating on the mapping in `osm-tags.ts`.
+ *      is the form to use while iterating on the mapping in `osm-tags.ts`, and a
+ *      `.gz` file works too: `data/osm/bangkok.json.gz` is a committed snapshot, so
+ *      a fresh clone loads Bangkok without waiting on a busy public Overpass.
  *   4. **`--count` asks how big the answer is** before asking for the answer.
  *      It is the one case where two queries are politer than one: Overpass
  *      answers a count without serialising a result set, and a nationwide query
@@ -47,6 +49,7 @@
  *   npx tsx --env-file=.env tools/load-osm.ts                     # query, save, report
  *   npx tsx --env-file=.env tools/load-osm.ts --commit            # and write the rows
  *   npx tsx --env-file=.env tools/load-osm.ts --from .osm/x.json --commit
+ *   npx tsx --env-file=.env tools/load-osm.ts --from data/osm/bangkok.json.gz --commit
  *   ./tools/with-hosted-env.sh npx tsx tools/load-osm.ts --from .osm/x.json --commit
  *
  * The last form is the one P2.3 needs: `.env` points `DATABASE_URL` at local
@@ -55,6 +58,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { gunzipSync } from "node:zlib"
 import { createDb } from "../packages/travel/db/src/index.js"
 import {
   BANGKOK,
@@ -131,6 +135,12 @@ function overpassQuery(city: City, mode: "data" | "count"): string {
   const clauses = families.map((key) => `  nwr["${key}"]["name"](${bbox});`).join("\n")
   const out = mode === "count" ? "out count;" : "out center tags;"
   return `[out:json][timeout:${OVERPASS_TIMEOUT_S}];\n(\n${clauses}\n);\n${out}`
+}
+
+/** A saved response, plain or gzipped (the committed snapshot is the latter). */
+function readSaved(path: string): string {
+  const raw = readFileSync(resolve(path))
+  return (path.endsWith(".gz") ? gunzipSync(raw) : raw).toString("utf8")
 }
 
 function usage(message: string): never {
@@ -296,7 +306,7 @@ async function main(): Promise<void> {
     return
   }
 
-  const body = from ? readFileSync(resolve(from), "utf8") : await ask(city, "data")
+  const body = from ? readSaved(from) : await ask(city, "data")
   if (from) console.log(`read ${mb(body.length)} from ${from}\n`)
 
   const parsed = parse(body, city)

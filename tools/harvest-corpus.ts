@@ -16,21 +16,29 @@
  * is required, and the estimate prints first. Each harvest is one Solari session
  * (~0.2 browser-minutes observed) plus one extraction of ~20 items.
  *
+ * **It uses the database's own personas**, alternating across the healthy ones so
+ * none carries the whole batch. A fresh clone has none, so on `--commit` it
+ * creates one `anon` Bangkok persona: `anon` needs no Solari profile, only the
+ * `SOLARI_API_KEY` the harvest itself spends.
+ *
  * Usage:
+ *   npx tsx --env-file=.env tools/harvest-corpus.ts [--limit N] [--commit]
  *   ./tools/with-hosted-env.sh npx tsx tools/harvest-corpus.ts [--commit]
  *
- * Then drain it: `gh workflow run worker.yml -f budgetMinutes=45`.
+ * `--limit 5` takes the first five queries, which is the way to try the pipeline
+ * for a few cents. Locally `pnpm dev`'s worker drains the queue; on hosted,
+ * `gh workflow run worker.yml -f budgetMinutes=40 -f shards=6`.
  */
 
+import { randomUUID } from "node:crypto"
 import { PostgresJobStore } from "../packages/samsara/kernel/src/stores/postgres.js"
+import { PostgresPersonaStore } from "../packages/samsara/personas/src/postgres.js"
 import { createDb } from "../packages/travel/db/src/index.js"
 
 const SOURCE_ID = "youtube.search"
 const DOMAIN_ID = "travel"
-/** The dev owner, who owns the hosted personas. */
+/** The dev owner `pnpm db:seed` creates, and the one the hosted jobs carry. */
 const OWNER_ID = "00000000-0000-4000-8000-000000000001"
-/** Both hosted personas, alternated so neither carries the whole batch. */
-const PERSONAS = ["5e07a59f-30c6-46b2-b192-4678ee6bb604", "1b98f494-242c-4eeb-8e29-e94623a43896"]
 
 /** Observed on the fourteen hosted runs of 28–29 September 2026. */
 const MINUTES_PER_HARVEST = 0.2
@@ -170,7 +178,7 @@ export const QUERIES: readonly string[] = [
 
 function usage(message: string): never {
   console.error(`harvest-corpus: ${message}`)
-  console.error("usage: tools/harvest-corpus.ts [--commit]")
+  console.error("usage: tools/harvest-corpus.ts [--limit N] [--commit]")
   process.exit(1)
 }
 
@@ -182,10 +190,15 @@ async function main(): Promise<void> {
   const unique = new Set(QUERIES)
   if (unique.size !== QUERIES.length) usage("QUERIES has duplicates; the key is the query")
 
-  const minutes = QUERIES.length * MINUTES_PER_HARVEST
-  const dollars = minutes * DOLLARS_PER_MINUTE + QUERIES.length * DOLLARS_PER_EXTRACTION
+  const at = process.argv.indexOf("--limit")
+  const limit = at === -1 ? QUERIES.length : Number(process.argv[at + 1])
+  if (!Number.isInteger(limit) || limit < 1) usage("--limit takes a whole number above zero")
+  const queries = QUERIES.slice(0, limit)
+
+  const minutes = queries.length * MINUTES_PER_HARVEST
+  const dollars = minutes * DOLLARS_PER_MINUTE + queries.length * DOLLARS_PER_EXTRACTION
   console.log(
-    `${QUERIES.length} harvest(s) via ${SOURCE_ID}, ~${minutes.toFixed(0)} browser-minutes`,
+    `${queries.length} harvest(s) via ${SOURCE_ID}, ~${minutes.toFixed(1)} browser-minutes`,
   )
   console.log(`estimated ~$${dollars.toFixed(2)} including extraction`)
 
@@ -197,10 +210,11 @@ async function main(): Promise<void> {
   const database = createDb(url)
   try {
     const jobs = new PostgresJobStore(database.db)
+    const personas = await personasFor(new PostgresPersonaStore(database.db))
     let queued = 0
     let deduped = 0
-    for (const [i, query] of QUERIES.entries()) {
-      const personaId = PERSONAS[i % PERSONAS.length] as string
+    for (const [i, query] of queries.entries()) {
+      const personaId = personas[i % personas.length] as string
       const result = await jobs.enqueue({
         type: "harvest.run",
         domainId: DOMAIN_ID,
@@ -215,6 +229,30 @@ async function main(): Promise<void> {
   } finally {
     await database.sql.end({ timeout: 5 })
   }
+}
+
+/** The healthy personas' ids, creating a Bangkok `anon` one when there are none. */
+async function personasFor(store: PostgresPersonaStore): Promise<string[]> {
+  const healthy = await store.list({ health: "healthy" })
+  if (healthy.length > 0) return healthy.map((p) => p.id)
+  const id = randomUUID()
+  await store.insert({
+    id,
+    name: "bangkok-anon",
+    locality: "Bangkok",
+    country: "th",
+    locale: "th-TH",
+    timezoneId: "Asia/Bangkok",
+    tier: "anon",
+    solariProfileId: null,
+    proxySession: null,
+    health: "healthy",
+    seedPlanId: null,
+    lastAliveAt: null,
+    stats: { sessions: 0, minutes: 0, blocks: 0 },
+  })
+  console.log(`no healthy persona, so created ${id} (anon, Bangkok)`)
+  return [id]
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
