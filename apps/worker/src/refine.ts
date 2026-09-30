@@ -44,6 +44,9 @@ import { resolveJobKey } from "./resolve.js"
  * both the job and the mentions want doing again, in the same breath, without
  * anything else in the system having to know that rule.
  */
+/** An extraction batch's answer cap; see the call below for why it is not the default. */
+export const EXTRACT_MAX_OUTPUT_TOKENS = 16_000
+
 export const refineJobKey = (domainId: string, packVersion: string, harvestRunId: string): string =>
   `refine.extract:${domainId}:${packVersion}:${harvestRunId}`
 
@@ -160,6 +163,11 @@ export function createRefineHandler(deps: RefineHandlerDeps): JobHandler {
       // routes a user's own text through here, this line is the one to find.
       sensitivity: "public",
       scope: { purpose: "refine", runId: run.id },
+      // Double `complete()`'s default. A batch of ten short YouTube items already
+      // answers in ~5,700 output tokens on deepseek-v4-flash (29–30 September hosted
+      // logs), so a batch of long Thai ones overran 8,000 and failed as `config`,
+      // which is not retried. Output tokens are the cheap side of this call.
+      maxOutputTokens: EXTRACT_MAX_OUTPUT_TOKENS,
     })
 
     // Counts only, no text: ADR-0014 puts this log in a public Actions run. The

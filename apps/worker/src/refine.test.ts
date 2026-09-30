@@ -34,7 +34,7 @@ import {
 import { describe, expect, it } from "vitest"
 import { z } from "zod"
 import type { JobContext } from "./handlers.js"
-import { createRefineHandler } from "./refine.js"
+import { createRefineHandler, EXTRACT_MAX_OUTPUT_TOKENS } from "./refine.js"
 import { resolveJobKey } from "./resolve.js"
 
 /**
@@ -95,7 +95,9 @@ class FakeJobs {
 const CEILINGS: Record<MeterId, number> = {
   "solari.minutes": 4_000,
   "llm.input.tokens": 1_000_000,
-  "llm.output.tokens": 200_000,
+  // The production default, so a run's 5% window (200k) holds an extraction's
+  // reservation of EXTRACT_MAX_OUTPUT_TOKENS per call, as it does on hosted.
+  "llm.output.tokens": 4_000_000,
   "geocode.calls": 800,
 }
 
@@ -299,6 +301,24 @@ describe("the path through", () => {
     expect(h.sink.rows.every((row) => row.packVersion === "3")).toBe(true)
     expect(h.sink.rows.map((row) => row.rawItemId).sort()).toEqual(["r0", "r1"])
     expect(h.sink.rows[0]?.payload).toMatchObject({ name: "Quán Bà Tư" })
+  })
+
+  it("asks for room to answer a batch, not complete()'s default", async () => {
+    // A batch of ten YouTube items answered in ~5,700 tokens on hosted; long Thai
+    // items overran 8,000 and failed as `config`, which is never retried.
+    const caps: number[] = []
+    const h = await harness({
+      items: 2,
+      script: ((req: { user: string; maxOutputTokens: number }) => {
+        caps.push(req.maxOutputTokens)
+        return answers([...req.user.matchAll(/ref:\s*(\S+)/g)].map((m) => m[1] as string))
+      }) as never,
+    })
+
+    await h.handler(h.ctx(PAYLOAD))
+
+    expect(caps.length).toBeGreaterThan(0)
+    expect(caps.every((cap) => cap === EXTRACT_MAX_OUTPUT_TOKENS)).toBe(true)
   })
 
   it("reports counts and nothing that was read, because the log is public", async () => {
