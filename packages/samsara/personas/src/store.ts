@@ -1,4 +1,4 @@
-import type { PersonaHealth, PersonaTier, SessionOutcome } from "@samsara/core"
+import type { PersonaHealth, PersonaTier, PersonaTraits, SessionOutcome } from "@samsara/core"
 
 /**
  * The persona row as this package needs it, and the port that holds it.
@@ -26,7 +26,20 @@ export interface PersonaRecord {
   seedPlanId: string | null
   lastAliveAt: Date | null
   stats: { sessions: number; minutes: number; blocks: number }
+  /** Optional so every record written before traits existed still is one. */
+  traits?: PersonaTraits | null
 }
+
+/**
+ * What may change about an identity after it exists.
+ *
+ * Never its counters, health or profile: those are history, written by the
+ * sessions that made it. The where-and-how fields are here for an identity that
+ * has not run yet; the caller decides whether to allow them later.
+ */
+export type PersonaEdit = Partial<
+  Pick<PersonaRecord, "name" | "locality" | "country" | "locale" | "timezoneId" | "tier">
+> & { traits?: PersonaTraits | null }
 
 export interface PersonaFilter {
   country?: string
@@ -45,6 +58,8 @@ export interface PersonaStore {
   byId(id: string): Promise<PersonaRecord | null>
   list(filter?: PersonaFilter): Promise<PersonaRecord[]>
   setHealth(id: string, health: PersonaHealth): Promise<void>
+  /** Returns the edited record, or null when there is no such persona. */
+  edit(id: string, patch: PersonaEdit): Promise<PersonaRecord | null>
   setProfile(id: string, solariProfileId: string | null): Promise<void>
   /** Rotation: the same identity behind a different address. See `rotateProxySession`. */
   setProxySession(id: string, proxySession: string): Promise<void>
@@ -91,6 +106,13 @@ export class MemoryPersonaStore implements PersonaStore {
   async setHealth(id: string, health: PersonaHealth): Promise<void> {
     const row = this.rows.get(id)
     if (row) row.health = health
+  }
+
+  async edit(id: string, patch: PersonaEdit): Promise<PersonaRecord | null> {
+    const row = this.rows.get(id)
+    if (!row) return null
+    Object.assign(row, patch)
+    return this.byId(id)
   }
 
   async setProfile(id: string, solariProfileId: string | null): Promise<void> {

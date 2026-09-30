@@ -75,6 +75,7 @@ const row = (over: Partial<PersonaRecord> = {}): PersonaRecord => ({
   seedPlanId: null,
   lastAliveAt: null,
   stats: { sessions: 0, minutes: 0, blocks: 0 },
+  traits: null,
   ...over,
 })
 
@@ -92,6 +93,22 @@ describe.runIf(hasDb)("personas, against Postgres", () => {
     await s.insert(p)
     const read = await s.byId(p.id)
     expect(read).toEqual(p)
+  })
+
+  it("keeps a character's traits opaque, and edits them without touching the counters", async () => {
+    const s = store()
+    const p = row({
+      traits: { archetype: "night owl", interests: ["late food"], look: { colour: "#7b8cff" } },
+    })
+    await s.insert(p)
+    expect((await s.byId(p.id))?.traits).toEqual(p.traits)
+
+    await s.recordSession(p.id, { minutes: 1, outcome: "ok", at: new Date() })
+    const edited = await s.edit(p.id, { name: "renamed", traits: { interests: ["temples"] } })
+    expect(edited?.name).toBe("renamed")
+    expect(edited?.traits).toEqual({ interests: ["temples"] })
+    expect(edited?.stats.sessions).toBe(1)
+    expect(await s.edit(randomUUID(), { name: "nobody" })).toBeNull()
   })
 
   it("keeps every increment when eight sessions land at once", async () => {

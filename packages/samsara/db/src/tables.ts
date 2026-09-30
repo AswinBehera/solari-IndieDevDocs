@@ -64,6 +64,8 @@ export const personas = pgTable(
     statSessions: integer("stat_sessions").notNull().default(0),
     statMinutes: doublePrecision("stat_minutes").notNull().default(0),
     statBlocks: integer("stat_blocks").notNull().default(0),
+    /** `PersonaTraits`: a description the engine stores and never reads. */
+    traits: jsonb("traits"),
     ...timestamps,
   },
   (t) => [index("personas_country_health_idx").on(t.country, t.health)],

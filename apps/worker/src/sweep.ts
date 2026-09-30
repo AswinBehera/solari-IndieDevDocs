@@ -1,5 +1,6 @@
 import { documentText } from "@dt/core"
 import type { TripStore } from "@dt/db/trips"
+import { interestsIn, localQuery } from "@dt/travel-pack/interests"
 import type { JobStore } from "@samsara/kernel/jobs"
 import type { PersonaStore } from "@samsara/personas"
 import type { JobHandler } from "./handlers.js"
@@ -17,9 +18,11 @@ import type { JobHandler } from "./handlers.js"
  * cities the pipeline covers, because harvesting Tokyo before its extract is loaded
  * would bill minutes for nothing the chain can resolve (HANDOFF decision 13).
  *
- * **The query is the traveller's own first line.** Interests live in the document
- * as prose (onboarding writes them there), so the query is the city plus that line,
- * capped. It is a crude reading and says so: a smarter one is `trip.intent`'s job.
+ * **The query is asked in Thai.** Interests live in the document as prose
+ * (onboarding writes them there); the sweep reads the tags back out of that line
+ * and asks the first one's hand-written local search (`interests.ts`). A line with
+ * no known tag falls back to the city plus the line, capped, which is the old
+ * crude reading and still says so.
  */
 
 /** Cities the pipeline can resolve today. Lower-case; matched as a substring of the trip's city. */
@@ -37,9 +40,14 @@ export const sweepHarvestKey = (tripId: string, day: string): string =>
 export const dayOf = (at: Date): string => at.toISOString().slice(0, 10)
 
 /** City plus the document's first line of prose, capped. Null when the city is not covered. */
-export function sweepQuery(city: string, firstLine: string): string | null {
+export function sweepQuery(city: string, firstLine: string, day = 0): string | null {
   const lower = city.toLowerCase()
   if (!SWEEP_CITIES.some((c) => lower.includes(c))) return null
+  // One interest a day, rotating, so a trip with five tags is read five ways in a week.
+  const tags = interestsIn(firstLine)
+  const tag = tags.length > 0 ? tags[day % tags.length] : undefined
+  const local = tag ? localQuery(tag, city) : null
+  if (local) return local
   return `${city.trim()} ${firstLine.trim()}`.trim().replace(/\s+/g, " ").slice(0, MAX_QUERY_CHARS)
 }
 
@@ -64,7 +72,7 @@ export function createSweepHandler(deps: SweepDeps): JobHandler {
     for (const trip of planning) {
       const record = await deps.trips.get(trip.userId, trip.id)
       const firstLine = documentText(record?.document.content).split("\n")[0] ?? ""
-      const query = sweepQuery(trip.destinationCity, firstLine)
+      const query = sweepQuery(trip.destinationCity, firstLine, Math.floor(Date.parse(day) / 864e5))
       if (!query) continue
       const result = await deps.queue.enqueue({
         type: "harvest.run",

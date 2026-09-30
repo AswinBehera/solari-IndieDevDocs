@@ -70,8 +70,9 @@ describe("trip.sweep", () => {
       sourceId: SWEEP_SOURCE,
       domainId: "travel",
     })
-    expect((job?.payload as { query: string } | undefined)?.query).toBe(
-      "Bangkok street food and night markets",
+    // "street food and night markets": one tag a day, asked the way Bangkok asks it.
+    expect(["สตรีทฟู้ด กรุงเทพ ร้านเด็ด", "ตลาดนัดกลางคืน กรุงเทพ"]).toContain(
+      (job?.payload as { query: string } | undefined)?.query,
     )
     expect(job?.idempotencyKey).toBe(
       sweepHarvestKey([...s.store.trips.values()][0]?.id ?? "", dayOf(NOW)),
@@ -96,6 +97,12 @@ describe("trip.sweep", () => {
 })
 
 describe("sweepQuery", () => {
+  it("asks a tag the document names in Thai, rotating by day", () => {
+    const line = "I care about temples and rooftop bars."
+    expect(sweepQuery("Bangkok", line, 0)).toBe("รูฟท็อปบาร์ กรุงเทพ")
+    expect(sweepQuery("Bangkok", line, 1)).toBe("วัดสวย กรุงเทพ ไหว้พระ")
+  })
+
   it("caps the query and refuses a city the pipeline does not cover", () => {
     expect(sweepQuery("Bangkok", "x".repeat(300))?.length).toBe(80)
     expect(sweepQuery("Tokyo", "food")).toBeNull()

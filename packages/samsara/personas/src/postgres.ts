@@ -1,9 +1,15 @@
-import type { PersonaHealth, SessionOutcome } from "@samsara/core"
+import { type PersonaHealth, personaTraits, type SessionOutcome } from "@samsara/core"
 import { personas, sessions } from "@samsara/db"
 import type { TablesRelationalConfig } from "drizzle-orm"
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
-import type { PersonaFilter, PersonaRecord, PersonaStore, SessionOutturn } from "./store.js"
+import type {
+  PersonaEdit,
+  PersonaFilter,
+  PersonaRecord,
+  PersonaStore,
+  SessionOutturn,
+} from "./store.js"
 
 /**
  * The real persona store.
@@ -30,6 +36,9 @@ const toRecord = (row: Row): PersonaRecord => ({
   seedPlanId: row.seedPlanId,
   lastAliveAt: row.lastAliveAt,
   stats: { sessions: row.statSessions, minutes: row.statMinutes, blocks: row.statBlocks },
+  // Parsed on the way out: jsonb takes anything, and a row edited by hand should
+  // read as no traits rather than as a shape the caller trusts.
+  traits: row.traits == null ? null : (personaTraits.safeParse(row.traits).data ?? null),
 })
 
 export class PostgresPersonaStore implements PersonaStore {
@@ -52,6 +61,7 @@ export class PostgresPersonaStore implements PersonaStore {
       statSessions: row.stats.sessions,
       statMinutes: row.stats.minutes,
       statBlocks: row.stats.blocks,
+      traits: row.traits ?? null,
     })
   }
 
@@ -77,6 +87,15 @@ export class PostgresPersonaStore implements PersonaStore {
 
   async setHealth(id: string, health: PersonaHealth): Promise<void> {
     await this.db.update(personas).set({ health, updatedAt: new Date() }).where(eq(personas.id, id))
+  }
+
+  async edit(id: string, patch: PersonaEdit): Promise<PersonaRecord | null> {
+    const [row] = await this.db
+      .update(personas)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(personas.id, id))
+      .returning()
+    return row ? toRecord(row) : null
   }
 
   async setProfile(id: string, solariProfileId: string | null): Promise<void> {

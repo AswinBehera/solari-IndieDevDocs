@@ -20,6 +20,36 @@ export const personaStats = z.object({
 export type PersonaStats = z.infer<typeof personaStats>
 
 /**
+ * What a person looking through this identity is like, beyond where and in what
+ * language: a short description, what they care about, where they tend to look,
+ * and how the identity is drawn on screen.
+ *
+ * **The engine stores this and reads none of it.** A vertical turns `interests`
+ * into the questions it asks and `sources` into the surfaces it asks them on; the
+ * engine only needs the identity's locale, clock and egress. Every field is
+ * optional and bounded, because this is a description a person edits, not a
+ * contract another stage depends on.
+ */
+export const personaTraits = z.object({
+  /** A vertical's preset this identity was made from, if any. */
+  archetype: z.string().trim().min(1).max(40).optional(),
+  bio: z.string().trim().max(280).optional(),
+  interests: z.array(z.string().trim().min(1).max(60)).max(24).optional(),
+  /** Source ids, preferred first. Suggestions to a planner, not a permission. */
+  sources: z.array(z.string().trim().min(1).max(60)).max(12).optional(),
+  look: z
+    .object({
+      colour: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/)
+        .optional(),
+      prop: z.string().trim().min(1).max(30).optional(),
+    })
+    .optional(),
+})
+export type PersonaTraits = z.infer<typeof personaTraits>
+
+/**
  * An identity the system can look through. Country is where it egresses; locality is
  * where it reads as being from, which is not always the same thing and is the more
  * interesting of the two.
@@ -41,6 +71,7 @@ export const persona = z
     seedPlanId: id.nullable(),
     lastAliveAt: z.date().nullable(),
     stats: personaStats,
+    traits: personaTraits.nullish(),
   })
   .extend(timestamps.shape)
 export type Persona = z.infer<typeof persona>

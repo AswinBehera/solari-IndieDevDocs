@@ -39,6 +39,7 @@ import {
   PostgresResolutionCache,
 } from "@samsara/refine/postgres"
 import { createDedupHandler } from "./dedup.js"
+import { createExploreHandler } from "./explore.js"
 import { HandlerRegistry, noopHandler } from "./handlers.js"
 import { createHarvestHandler } from "./harvest.js"
 import { createIntentHandler } from "./intent.js"
@@ -216,6 +217,10 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       maxTrips: Number(env.TRIP_SWEEP_MAX ?? 3),
     }),
   )
+
+  // A character sent exploring: its interests, asked in its language, queued as
+  // harvests. Queues only; translates a free-text interest when there is a model.
+  handlers.register("persona.explore", createExploreHandler({ personas, queue: jobs, llm }))
 
   // P4.3: dates the traveller wrote in prose, copied onto the Trip. Refuses by
   // name when there is no LLM, like `refine.extract`.

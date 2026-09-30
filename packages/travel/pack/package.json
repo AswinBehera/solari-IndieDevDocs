@@ -8,11 +8,14 @@
     "./postgres": "./src/postgres.ts",
     "./read": "./src/read.ts",
     "./price": "./src/price/index.ts",
-    "./price/parse": "./src/price/parse.ts"
+    "./price/parse": "./src/price/parse.ts",
+    "./interests": "./src/interests.ts",
+    "./characters": "./src/characters.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed:characters": "tsx --env-file-if-exists=../../../.env src/seed-characters.ts"
   },
   "dependencies": {
     "@dt/core": "workspace:*",
