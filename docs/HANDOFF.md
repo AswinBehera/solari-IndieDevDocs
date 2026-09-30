@@ -4,6 +4,44 @@ Written 28 September 2026 by the session that built them. Read `docs/STATUS.md`'
 for *why* any of it is shaped the way it is; this file is only what the next session must not
 assume.
 
+## 30 September, overnight: read this first
+
+What the 29–30 September session shipped on `main`, and what is still yours to do.
+
+**Shipped (pushed):**
+
+- `38f7f65` `tools/harvest-corpus.ts`: 120 Bangkok queries (English and Thai) queued as
+  `harvest.run`. **All harvests succeeded.** A dispatched drain can now run up to 45 minutes
+  (`gh workflow run worker.yml -R AswinBehera/solari-TravelOS -f budgetMinutes=45`).
+- `fc38a6e` `/place` falls back to OpenStreetMap. Unscored OSM matches appear under
+  "OPENSTREETMAP · NOT SCORED YET", and picking one creates a Tier 1 place with a coordinate
+  (`POST /places/osm`). Migration 0015 (`common_name`, `common_local`, `alt_names` on
+  `osm_places`) is **applied to hosted**. "Wat Pho" now finds Wat Pho, not a smaller temple.
+- `c67c0ae` the persona-review fixes:
+  - onboarding refuses a trip that starts in the past or ends before it starts;
+  - the lab links sit under "Under the hood";
+  - the status strip shows only when the server is down;
+  - jargon is gone from the slash menu and postcards;
+  - focus rings are visible;
+  - the price card says a check usually takes a few minutes.
+
+**Yours to do:**
+
+1. **Redeploy the API** (`cd apps/api && npx wrangler deploy`). CI does not deploy it, and hosted
+   has no `/places/osm` until you do. The web app degrades cleanly without it (no OSM section).
+2. **Extraction is the bottleneck, not harvesting.** Each `refine.extract` makes about three
+   deepseek calls of about 3 minutes and 5k output tokens each, so roughly 6 minutes per job.
+   About 100 were queued at 03:40 UTC. The runner is sequential, the cron only drains for 4
+   minutes, and a dispatched run for 45, so the batch needs about 10 hours of drains. The cost is
+   small: about $0.003 per extract. The fix I would make, but did not (editing the workflow was
+   outside what I was cleared to change unattended):
+   - add a `shards` dispatch input that fans the drain job out as a matrix; claims are already
+     `FOR UPDATE SKIP LOCKED`;
+   - raise `WORKER_LEASE_MS` from 5 to 15 minutes, so a parallel shard does not reclaim a
+     6-minute extraction mid-call.
+3. One extract failed on `maxOutputTokens (8000)` (a batch of ten long Thai items). Either raise
+   the cap for `travel/place.extract` or lower `batchSize` from 10.
+
 ## State in one line
 
 The pipeline runs itself from a harvest to a scored place, and there is a travel app on top of it:
