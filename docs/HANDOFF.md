@@ -39,8 +39,8 @@ What the 29–30 September session shipped on `main`, and what is still yours to
      `FOR UPDATE SKIP LOCKED`;
    - raise `WORKER_LEASE_MS` from 5 to 15 minutes, so a parallel shard does not reclaim a
      6-minute extraction mid-call.
-3. One extract failed on `maxOutputTokens (8000)` (a batch of ten long Thai items). Either raise
-   the cap for `travel/place.extract` or lower `batchSize` from 10.
+3. ~~One extract failed on `maxOutputTokens (8000)`.~~ Fixed in `508d6d7`: extraction now asks
+   for 16k. Drains started before that commit still use 8k.
 
 ## State in one line
 
