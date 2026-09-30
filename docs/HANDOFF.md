@@ -11,9 +11,8 @@ app, English interests turned into local searches, prices by booking site instea
 country, codes from locals, and a scrapbook look for the document.
 
 - `6e837e0`, `590042e`: **Samsara at `/samsara`.** Characters are personas with `traits`
-  (archetype, bio, interests, sources, look). **Migration 0016 (`personas.traits`) must be
-  on hosted** before a hosted API reads a persona. This session did not check; run
-  `pnpm db:migrate:hosted`, which skips what is already applied.
+  (archetype, bio, interests, sources, look). Migration 0016 (`personas.traits`) was
+  applied to hosted on 30 September (`pnpm db:migrate:hosted`).
   Seven presets (`@dt/travel-pack/characters`) are seeded by `pnpm db:seed:demo` with fixed
   ids, along with their real captures (`fixtures/samsara-demo.json`, `fixtures/deals-demo.json`).
   `persona.explore` sends one out: at most eight searches.
