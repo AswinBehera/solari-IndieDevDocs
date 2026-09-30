@@ -180,6 +180,17 @@ works on a clean checkout with nothing but Docker running.
 
 ### Try the app
 
+[![Two minutes through the app](docs/demo/walkthrough.jpg)](docs/demo/walkthrough.mp4)
+
+[`docs/demo/walkthrough.mp4`](docs/demo/walkthrough.mp4) (1:49) records the steps below,
+running locally with no API key. It covers:
+- onboarding refusing a trip that ends before it starts;
+- the `/` menu;
+- `/place` in Thai and English;
+- two OpenStreetMap places becoming cards and map pins;
+- the seven-country price card;
+- *Under the hood*.
+
 Tested from a fresh clone on 30 September 2026. The first part needs no API key.
 
 ```bash
