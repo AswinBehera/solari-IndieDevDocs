@@ -25,10 +25,20 @@ What the 29–30 September session shipped on `main`, and what is still yours to
   - focus rings are visible;
   - the price card says a check usually takes a few minutes.
 
+**Later the same morning (`8b0b774`):** the reviewers will run the repo themselves with their
+own keys, so no Cloudflare deploy for the demo. The API has in fact never been deployed:
+there is no worker on the account, and `wrangler.toml`'s Hyperdrive id is still the
+placeholder. I tested a fresh clone against an empty database and fixed what broke:
+- `db:migrate` ignored `.env`;
+- the OSM data now ships as a snapshot in `data/osm/`;
+- `harvest-corpus` makes its own persona.
+
+README's "Try the app" is the tested path.
+
 **Yours to do:**
 
-1. **Redeploy the API** (`cd apps/api && npx wrangler deploy`). CI does not deploy it, and hosted
-   has no `/places/osm` until you do. The web app degrades cleanly without it (no OSM section).
+1. ~~Redeploy the API.~~ Not needed for the demo (see above). A first deploy needs a Hyperdrive
+   config (`wrangler hyperdrive create`), `SUPABASE_URL` as a secret, and somewhere to host `apps/web`.
 2. **Extraction is the bottleneck, not harvesting.** Each `refine.extract` makes about three
    deepseek calls of about 3 minutes and 5k output tokens each, so roughly 6 minutes per job.
    About 100 were queued at 03:40 UTC. The runner is sequential, the cron only drains for 4
