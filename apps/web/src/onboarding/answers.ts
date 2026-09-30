@@ -14,8 +14,6 @@ import { spokenList, tripTitle } from "../trips/format"
 /** The cities onboarding offers. */
 export const CITIES = ["Bangkok", "Tokyo"] as const
 
-export const INTERESTS = ["food", "markets", "temples", "coffee", "nightlife", "nature"] as const
-
 export interface Answers {
   city: string
   /** `YYYY-MM-DD`, from a date input, or null for "not sure yet". */

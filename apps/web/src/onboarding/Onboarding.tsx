@@ -1,23 +1,25 @@
+import { cityLanguage, INTEREST_GROUPS, LANGUAGE_NAME, localQuery } from "@dt/travel-pack/interests"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
 import { useCreateTrip } from "../trips/api"
 import { Failure } from "../trips/TripsHome"
-import { type Answers, CITIES, DATE_ORDER, dateProblem, INTERESTS, newTripFrom } from "./answers"
+import { type Answers, CITIES, DATE_ORDER, dateProblem, newTripFrom } from "./answers"
 
 /**
  * First trip, three questions, one sentence (P6.1) — read off the canvas's
  * ONBOARDING screen, where the answers build a sentence rather than fill a form:
  * "I'm going to Bangkok from 14 Nov to 17 Nov, and I care about food and markets."
  *
- * The canvas's third step ends on a banner promising that tonight the OS starts
- * reading the city for these interests. Nothing does that yet (P5.2), so the hint
- * says where the interests actually go.
+ * The third step's tags are the pack's (`interests.ts`), and each shows what a
+ * local would type for it, because that is what the characters on `/samsara`
+ * will search: the traveller picks in English and the city is read in its own
+ * language. The chosen tags sit in the sentence; the full set sits under it.
  */
 
 const HINTS = [
   "Bangkok knows the most so far. Tokyo is just getting started.",
   "Dates can change later. Leave them empty if you do not know yet.",
-  "They become the document's first line, where you can rewrite them.",
+  "Our local characters search for these in the city's language. They also become the document's first line.",
 ]
 
 const pill = (on: boolean) =>
@@ -116,12 +118,13 @@ export function Onboarding() {
             <>
               <span>and I care about</span>
               <span className="mx-1.5 inline-flex flex-wrap gap-1.5 align-baseline">
-                {INTERESTS.map((interest) => (
+                {answers.interests.length === 0 && <span className="text-ink-faint">…</span>}
+                {answers.interests.map((interest) => (
                   <button
                     key={interest}
                     type="button"
-                    className={pill(answers.interests.includes(interest))}
-                    aria-pressed={answers.interests.includes(interest)}
+                    className={pill(true)}
+                    aria-label={`Remove ${interest}`}
                     onClick={() => toggle(interest)}
                   >
                     {interest}
@@ -132,6 +135,9 @@ export function Onboarding() {
             </>
           )}
         </div>
+        {step >= 3 && (
+          <InterestPicker city={answers.city} chosen={answers.interests} onToggle={toggle} />
+        )}
         <div className="mt-10 flex flex-wrap items-center gap-4">
           <button
             type="button"
@@ -156,5 +162,66 @@ export function Onboarding() {
         )}
       </div>
     </main>
+  )
+}
+
+/**
+ * Every tag, grouped, each with the local search it becomes. The local line is
+ * the search minus the city's name, which every one of them repeats.
+ */
+function InterestPicker({
+  city,
+  chosen,
+  onToggle,
+}: {
+  city: string
+  chosen: readonly string[]
+  onToggle: (interest: string) => void
+}) {
+  const lang = cityLanguage(city)
+  return (
+    <div className="mt-8 flex flex-col gap-3 border-rule border-t pt-6">
+      {lang && (
+        <p className="font-mono text-[10px] text-ink-faint tracking-[.1em]">
+          PICK IN ENGLISH · LOCALS SEARCH IN {LANGUAGE_NAME[lang.language].toUpperCase()}
+        </p>
+      )}
+      {INTEREST_GROUPS.map((group) => (
+        <div key={group.label} className="flex flex-wrap items-start gap-1.5">
+          <span className="w-14 flex-none pt-1.5 font-mono text-[11px] text-ink-faint">
+            {group.label.toUpperCase()}
+          </span>
+          {group.tags.map((tag) => {
+            const on = chosen.includes(tag.id)
+            const local = lang
+              ? (localQuery(tag.id, city) ?? "").replace(lang.name, "").replace(/\s+/g, " ").trim()
+              : ""
+            return (
+              <button
+                key={tag.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => onToggle(tag.id)}
+                className={`flex flex-col items-start border px-2.5 py-1 text-left leading-tight transition ${
+                  on
+                    ? "border-accent-pink bg-accent-pink text-white"
+                    : "border-[#c9c3b4] text-ink hover:border-ink"
+                }`}
+              >
+                <span className="text-sm">{tag.id}</span>
+                {local && (
+                  <span
+                    lang={lang?.language}
+                    className={`text-[11px] ${on ? "text-white/85" : "text-ink-faint"}`}
+                  >
+                    {local}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      ))}
+    </div>
   )
 }
