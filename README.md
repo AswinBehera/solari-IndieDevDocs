@@ -182,19 +182,21 @@ works on a clean checkout with nothing but Docker running.
 
 [![Two minutes through the app](docs/demo/walkthrough.jpg)](docs/demo/walkthrough.mp4)
 
-[`docs/demo/walkthrough.mp4`](docs/demo/walkthrough.mp4) (1:49) records the steps below,
+[`docs/demo/walkthrough.mp4`](docs/demo/walkthrough.mp4) (1:43) records the steps below,
 running locally with no API key. It covers:
-- onboarding refusing a trip that ends before it starts;
-- the `/` menu;
-- `/place` in Thai and English;
+- **Samsara**, the cast of local characters the app browses as, with Beam the Deal
+  hunter opened to show his real searches;
+- onboarding, where interests picked in English show the Thai a local would search;
+- the `/` menu, and `/place` in Thai and English;
 - two OpenStreetMap places becoming cards and map pins;
-- the seven-country price card;
+- the demo trip: one hotel priced on Agoda and Booking.com, the codes Beam looked for,
+  and the scrapbook cards;
 - *Under the hood*.
 
 Tested from a fresh clone on 30 September 2026. The first part needs no API key.
 
 ```bash
-pnpm db:seed:demo      # a demo trip, and a real seven-country hotel price check
+pnpm db:seed:demo      # the demo trip, Samsara's cast, and their real captures
 npx tsx --env-file=.env tools/load-osm.ts --from data/osm/bangkok.json.gz --commit
 pnpm dev               # then open http://localhost:5173
 ```
@@ -208,8 +210,16 @@ The second line loads 27k named Bangkok places from a committed OpenStreetMap sn
    first, with their local/tourist meter. Below them are OpenStreetMap matches marked
    *not scored yet*. Pick one and it becomes a card with a coordinate and a pin on the
    trip's map.
-3. **Open `/trips/00000000-0000-4000-8000-0000000000d1`** to see the demo trip's price
-   card: one hotel page, as seven countries' visitors were charged for it.
+3. **Open `/samsara` to meet the cast.** Each character is a browser identity with a
+   neighbourhood, a language, a clock and habits. Open one to change their settings
+   and see every search they made and what came back. *Send exploring* is the one
+   button here that spends, and it runs at most eight searches.
+4. **Open `/trips/00000000-0000-4000-8000-0000000000d1`** to see the demo trip. It
+   has a price card for one hotel on Agoda (USD 724) and Booking.com ($729), read from
+   the US on 30 September with snapshots. Under it is what Beam the Deal hunter found
+   searching Pantip and YouTube in Thai for codes: 214 posts and no working code, so
+   none is shown. The note, link and checklist are the scrapbook cards: washi tape,
+   a ticket stub, a torn receipt, and a sticker for the Thai phrase the note uses.
 
 **With your own keys, the pipeline fills in the scores.** Set `SOLARI_API_KEY` and
 `OPENROUTER_API_KEY` in `.env`, then:
@@ -219,7 +229,12 @@ npx tsx --env-file=.env tools/harvest-corpus.ts --limit 5            # prints th
 npx tsx --env-file=.env tools/harvest-corpus.ts --limit 5 --commit   # queues five searches
 ```
 
-`pnpm dev`'s worker drains the queue: harvest → extract → resolve → dedup → score. Five
+`pnpm dev`'s worker drains the queue: harvest → extract → resolve → dedup → score.
+Extraction reads `LLM_MODEL_EXTRACT` from `.env` (`.env.example` sets it); without it
+every extract job fails with a config error. On its first run each UTC day the worker also queues
+sweeps: a short keep-alive session per character and a harvest per active trip. So a
+running worker with keys spends a little even when you have queued nothing.
+`TRIP_SWEEP_MAX=0` turns the trip harvests off. Five
 searches cost a few cents. Scored places then appear at the top of `/place`, and under
 *Under the hood → Place scores*. Without `--limit` the tool queues all 120 queries
 (about $0.50). An extraction is minutes of model time, so a big batch takes a while.

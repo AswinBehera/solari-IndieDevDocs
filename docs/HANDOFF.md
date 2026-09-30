@@ -4,6 +4,40 @@ Written 28 September 2026 by the session that built them. Read `docs/STATUS.md`'
 for *why* any of it is shaped the way it is; this file is only what the next session must not
 assume.
 
+## 30 September, afternoon: the Samsara redesign
+
+On `main`, after the overnight entry below. Asked for: Samsara as a visible part of the
+app, English interests turned into local searches, prices by booking site instead of by
+country, codes from locals, and a scrapbook look for the document.
+
+- `6e837e0`, `590042e`: **Samsara at `/samsara`.** Characters are personas with `traits`
+  (archetype, bio, interests, sources, look). **Migration 0016 (`personas.traits`) must be
+  on hosted** before a hosted API reads a persona. This session did not check; run
+  `pnpm db:migrate:hosted`, which skips what is already applied.
+  Seven presets (`@dt/travel-pack/characters`) are seeded by `pnpm db:seed:demo` with fixed
+  ids, along with their real captures (`fixtures/samsara-demo.json`, `fixtures/deals-demo.json`).
+  `persona.explore` sends one out: at most eight searches.
+- `24f8d3a`: onboarding offers the full interest set; each tag shows the Thai query a local
+  would search (`interests.ts`).
+- `412a3ff`: **the price card is one hotel across booking sites**, each read once from one
+  viewpoint (`POST /probes` takes `countries`). It names a cheaper site only for the same stay
+  and a gap over 2%. Under it, codes the Deal hunter (Beam) found go through the new `deals`
+  pack (extract only). Beam's real run on 30 Sep read 214 posts and found no code, and the card
+  says exactly that. `/lab/deals` reports what was searched.
+- `16c312e`: the scrapbook look (tape, stamps, ticket stubs, receipts, Thai slang stickers).
+  Every choice is a tested function in `postcard-rules.ts` or `paper.ts`.
+
+Things that will bite you:
+- Extraction needs `LLM_MODEL_EXTRACT` in `.env`. `.env.example` has it; a local `.env` made
+  before that line was added may not.
+- Running `apps/worker` locally queues the daily sweeps on its first run each day: keep-alives
+  for every character and a harvest per active trip. Both spend. Delete queued `harvest.run`
+  rows or set `TRIP_SWEEP_MAX=0` if you only meant to drain refine jobs.
+- `pantip.tag` runs can keep more than 100 items, and extraction refuses those
+  (`ITEM_LIST_LIMIT`). Beam's "Agoda" tag run (205 items) is one.
+- `apps/web/public/demo/probe.json` and `export-demo-probe.ts` are the old seven-country
+  fixture. Nothing seeds from them now.
+
 ## 30 September, overnight: read this first
 
 What the 29–30 September session shipped on `main`, and what is still yours to do.
