@@ -29,11 +29,14 @@ interface NavGroup {
 
 const NAV: NavGroup[] = [
   { label: "PRODUCT", items: [{ to: "/", label: "Trips" }] },
+  // The kernel, with a face: the characters who do the browsing. Its own group
+  // because it is the part of the product that is not a trip planner.
+  { label: "SAMSARA", items: [{ to: "/samsara", label: "Characters" }] },
   // The lab, named for a traveller: what it is, not what the code calls it.
   {
     label: "UNDER THE HOOD",
     items: [
-      { to: "/lab", label: "Browsers" },
+      { to: "/lab", label: "Lab" },
       { to: "/lab/places", label: "Place scores" },
       { to: "/lab/kernel", label: "Spend & jobs" },
     ],

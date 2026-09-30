@@ -9,6 +9,7 @@ import { Kernel } from "./kernel/Kernel"
 import { Lab } from "./lab/Lab"
 import { Onboarding } from "./onboarding/Onboarding"
 import { Places } from "./places/Places"
+import { Samsara } from "./samsara/Samsara"
 import { Shell } from "./shell/Shell"
 import { TripsHome } from "./trips/TripsHome"
 
@@ -38,6 +39,7 @@ const routes = [
     path: "/trips/$tripId",
     component: lazyRouteComponent(() => import("./trip/TripDocument"), "TripDocument"),
   }),
+  createRoute({ getParentRoute: () => app, path: "/samsara", component: Samsara }),
   createRoute({ getParentRoute: () => app, path: "/lab", component: Lab }),
   createRoute({ getParentRoute: () => app, path: "/lab/places", component: Places }),
   createRoute({ getParentRoute: () => app, path: "/lab/kernel", component: Kernel }),

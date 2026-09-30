@@ -31,8 +31,11 @@ const verifier: Verifier = {
   },
 }
 
+const enqueued: { type: string; ownerId?: string | null; payload: unknown }[] = []
+
 const jobs = {
-  async enqueue() {
+  async enqueue(i: { type: string; ownerId?: string | null; payload: unknown }) {
+    enqueued.push(i)
     return { id: "job-1", deduped: false }
   },
   async claim() {
@@ -121,6 +124,7 @@ const item = (
 })
 
 beforeEach(() => {
+  enqueued.length = 0
   personas = new MemoryPersonaStore()
   runs = new MemoryHarvestRunStore()
   items = new MemoryRawItemStore()
@@ -214,6 +218,74 @@ describe("personas", () => {
     // The Lab exists to make the outcome visible. Hiding the banned one would hide
     // the single most informative row on the page.
     expect(body.personas.map((p) => p.id).sort()).toEqual(["a", "b"])
+  })
+
+  it("keeps a character's traits, and hands them back", async () => {
+    const res = await build().request("/lab/personas", {
+      method: "POST",
+      headers: AUTH,
+      body: JSON.stringify({
+        name: "Auntie Noi",
+        locality: "Yaowarat, Bangkok",
+        country: "sg",
+        locale: "th-TH",
+        timezoneId: "Asia/Bangkok",
+        traits: {
+          archetype: "street-food-auntie",
+          interests: ["street food"],
+          look: { colour: "#ff6b5b", prop: "ladle" },
+        },
+      }),
+    })
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as { persona: { traits: { interests: string[] } } }
+    expect(body.persona.traits.interests).toEqual(["street food"])
+  })
+
+  it("lets traits change any time, but not where a persona that has browsed lives", async () => {
+    await personas.insert(persona("fresh"))
+    await personas.insert(persona("used", { stats: { sessions: 3, minutes: 12, blocks: 0 } }))
+    const edit = (id: string, body: unknown) =>
+      build().request(`/lab/personas/${id}`, {
+        method: "PATCH",
+        headers: AUTH,
+        body: JSON.stringify(body),
+      })
+
+    expect((await edit("fresh", { locality: "Ari, Bangkok" })).status).toBe(200)
+    expect((await personas.byId("fresh"))?.locality).toBe("Ari, Bangkok")
+
+    expect((await edit("used", { country: "au" })).status).toBe(409)
+    expect((await personas.byId("used"))?.country).toBe("th")
+
+    expect((await edit("used", { traits: { interests: ["temples"] } })).status).toBe(200)
+    expect((await personas.byId("used"))?.traits?.interests).toEqual(["temples"])
+
+    expect((await edit("nobody", { traits: {} })).status).toBe(404)
+  })
+
+  it("sends a character exploring as an ordinary queued job, owned by the caller", async () => {
+    await personas.insert(persona("noi"))
+    const res = await build().request("/lab/personas/noi/explore", {
+      method: "POST",
+      headers: AUTH,
+      body: JSON.stringify({ city: "Bangkok", interests: ["street food"] }),
+    })
+    expect(res.status).toBe(202)
+    expect(enqueued).toEqual([
+      expect.objectContaining({
+        type: "persona.explore",
+        ownerId: OWNER,
+        payload: { personaId: "noi", city: "Bangkok", interests: ["street food"] },
+      }),
+    ])
+
+    const missing = await build().request("/lab/personas/nobody/explore", {
+      method: "POST",
+      headers: AUTH,
+      body: JSON.stringify({ city: "Bangkok" }),
+    })
+    expect(missing.status).toBe(404)
   })
 })
 

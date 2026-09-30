@@ -1,4 +1,4 @@
-import { countryCode, locale, personaTier, resolutionState } from "@samsara/core"
+import { countryCode, locale, personaTier, personaTraits, resolutionState } from "@samsara/core"
 // Subpath imports, never the barrels, for the reason `app.ts` gives about
 // `@samsara/kernel/jobs`: this app is compiled against the Workers runtime, and
 // `@samsara/harvest`'s barrel reaches `run.ts`, `@samsara/sources` and Playwright,
@@ -8,7 +8,7 @@ import { countryCode, locale, personaTier, resolutionState } from "@samsara/core
 import { overlapAt } from "@samsara/harvest/overlap"
 import type { HarvestRunRecord, RawItemRow } from "@samsara/harvest/ports"
 import type { JobStore } from "@samsara/kernel/jobs"
-import type { PersonaRecord, PersonaStore } from "@samsara/personas/store"
+import type { PersonaEdit, PersonaRecord, PersonaStore } from "@samsara/personas/store"
 import type { MentionFilter, MentionRecord } from "@samsara/refine/ports"
 import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
@@ -154,6 +154,25 @@ const createPersonaBody = z.object({
   /** IANA zone. Not validated against the database here: Workers has no tz table. */
   timezoneId: z.string().min(1).max(60),
   tier: personaTier.default("anon"),
+  traits: personaTraits.optional(),
+})
+
+/**
+ * What the character builder may change. The where-and-how fields only while the
+ * identity has never run: a persona with sessions behind it that moved country
+ * would make its own history uninterpretable. The name and traits may change any
+ * time; they describe what to ask next, not what was asked.
+ */
+const editPersonaBody = createPersonaBody.omit({ tier: true }).partial()
+
+/**
+ * Send a persona out: `persona.explore`, which queues its harvests. The city and
+ * interests are the traveller's; sources default to the persona's own.
+ */
+const exploreBody = z.object({
+  city: z.string().trim().min(1).max(80),
+  interests: z.array(z.string().trim().min(1).max(60)).max(24).optional(),
+  sources: z.array(z.string().trim().min(1).max(60)).max(12).optional(),
 })
 
 const personaView = (p: PersonaRecord) => ({
@@ -167,6 +186,7 @@ const personaView = (p: PersonaRecord) => ({
   health: p.health,
   lastAliveAt: p.lastAliveAt?.toISOString() ?? null,
   stats: p.stats,
+  traits: p.traits ?? null,
 })
 
 const runView = (r: HarvestRunRecord) => ({
@@ -263,9 +283,58 @@ export function labRoutes(deps: LabDeps) {
       seedPlanId: null,
       lastAliveAt: null,
       stats: { sessions: 0, minutes: 0, blocks: 0 },
+      traits: parsed.data.traits ?? null,
     }
     await deps.stores(c.env).personas.insert(row)
     return c.json({ persona: personaView(row) }, 201)
+  })
+
+  lab.patch("/personas/:id", async (c) => {
+    const parsed = editPersonaBody.safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0]
+      throw new HTTPException(400, {
+        message: issue ? `${issue.path.join(".") || "body"}: ${issue.message}` : "invalid body",
+      })
+    }
+    const store = deps.stores(c.env).personas
+    const current = await store.byId(c.req.param("id"))
+    if (!current) throw new HTTPException(404, { message: "no such persona" })
+    // Only the fields the body named: zod's partial leaves the rest as undefined.
+    const patch = Object.fromEntries(
+      Object.entries(parsed.data).filter(([, v]) => v !== undefined),
+    ) as PersonaEdit
+    const movesIt = Object.keys(patch).some((k) => k !== "traits" && k !== "name")
+    if (current.stats.sessions > 0 && movesIt) {
+      throw new HTTPException(409, {
+        message: "this persona has already browsed; make a new one to change where it is",
+      })
+    }
+    const edited = await store.edit(current.id, patch)
+    if (!edited) throw new HTTPException(404, { message: "no such persona" })
+    return c.json({ persona: personaView(edited) })
+  })
+
+  lab.post("/personas/:id/explore", async (c) => {
+    const parsed = exploreBody.safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0]
+      throw new HTTPException(400, {
+        message: issue ? `${issue.path.join(".") || "body"}: ${issue.message}` : "invalid body",
+      })
+    }
+    const persona = await deps.stores(c.env).personas.byId(c.req.param("id"))
+    if (!persona) throw new HTTPException(404, { message: "no such persona" })
+    const hour = Math.floor((deps.clock?.() ?? new Date()).getTime() / 3_600_000)
+    const queued = await deps.jobs(c.env).enqueue({
+      type: "persona.explore",
+      domainId: "travel",
+      ownerId: c.get("ownerId"),
+      payload: { personaId: persona.id, ...parsed.data },
+      // One outing an hour per persona and question: a double click is one.
+      idempotencyKey: `persona.explore:${persona.id}:${hour}:${JSON.stringify(parsed.data)}`,
+    })
+    return c.json({ jobId: queued.id, deduped: queued.deduped }, queued.deduped ? 200 : 202)
   })
 
   lab.get("/harvests", async (c) => {

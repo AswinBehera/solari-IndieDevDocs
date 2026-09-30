@@ -1,0 +1,428 @@
+{
+  "runs": [
+    {
+      "archetype": "Street-food auntie",
+      "sourceId": "youtube.search",
+      "query": "Bangkok street food",
+      "capturedAt": "2026-09-16T17:36:53.907Z",
+      "why": "Thai-locale browser; YouTube answered in Thai. Half of the 16 Sep comparison pair.",
+      "items": [
+        {
+          "rank": 1,
+          "url": "https://www.youtube.com/watch?v=Y8TwAYjDkQI",
+          "title": "I Tried Michelin Street Food in Bangkok (120hrs)",
+          "text": "Get a whole month of great cinema FREE on MUBI: https://mubi.com/doobydobap Truly just a life-changing experience? I've ** the ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 1644919,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 2,
+          "url": "https://www.youtube.com/watch?v=3OK61vAyz2w",
+          "title": "Bangkok Most Local Morning Market | Yummy Street Food!",
+          "text": "Trok Mor Morning Market, one of Bangkok's oldest traditional markets, hidden right in the heart of the Old Town. While thousands ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 95405,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 3,
+          "url": "https://www.youtube.com/watch?v=MY3Qy6vAbZQ",
+          "title": "24 Hour Thai Street Food Challenge in Bangkok | Epic Food Journeys with Mark Wiens | Nat Geo",
+          "text": "Mark Wiens goes on a 24-hour challenge in Bangkok, Thailand, to eat as many different street foods as possible. From sizzling ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 2400184,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 4,
+          "url": "https://www.youtube.com/watch?v=wBCaiXxhbsY",
+          "title": "The ULTIMATE Thailand Street Food Tour!",
+          "text": "Get an exclusive 15% discount on Saily data plans! Use code karissa15 at checkout. Download Saily app or go to ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 296343,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 5,
+          "url": "https://www.youtube.com/watch?v=b8Tlr6C2Obc",
+          "title": "Chinatown Bangkok 🍜 The Ultimate Street Food Tour on Yaowarat Road! [4K HDR]",
+          "text": "Embark on the ultimate street food tour down Yaowarat Road, the glowing heart of Bangkok's legendary Chinatown! Experience ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 252564,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 6,
+          "url": "https://www.youtube.com/watch?v=jJyJDKQjzSM",
+          "title": "BEST THAI STREET FOOD Compilation | Bangkok Thailand",
+          "text": "Bangkok, Thailand street food compilation! The most popular street food markets for the First Half of 2024!! 00:00:00 Liab Duan ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 1597843,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 7,
+          "url": "https://www.youtube.com/watch?v=AQB1NGTQUTY",
+          "title": "AWESOME! 18 SUPER FAMOUS BANGKOK STREET FOOD YOU MUST TRY AT LEAST ONCE | THAILAND STREET FOOD",
+          "text": "AWESOME! 18 SUPER FAMOUS BANGKOK STREET FOOD YOU MUST TRY AT LEAST ONCE | THAILAND STREET FOOD We, ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 146136,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 8,
+          "url": "https://www.youtube.com/watch?v=tSlt7Ex8p0Q",
+          "title": "35 TOP RATED THAI STREET FOODS EVERYONE SHOULD TRY IN 2025 | BANGKOK'S BEST STREET FOOD COLLECTION",
+          "text": "35 TOP RATED THAI STREET FOODS EVERYONE SHOULD TRY IN 2025 | BANGKOK'S BEST STREET FOOD COLLECTION ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 484512,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 9,
+          "url": "https://www.youtube.com/watch?v=hkeZ-qSrTOI",
+          "title": "BEST THAI STREET FOOD Compilation 2025 | Night Market in Bangkok Thailand",
+          "text": "Bangkok, Thailand street food compilation! A roundup of 3 night markets loved by locals! From food to clothes and knick-knacks, ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 129066,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 10,
+          "url": "https://www.youtube.com/watch?v=G5rnP4YaahE",
+          "title": "NEW Baibour Night Market Bangkok Street Food 🇹🇭 Thailand",
+          "text": "Brand New Baibour Street Food Night Market opened on the 9th of September next to the Wong Sawang MRT station Nonthaburi.",
+          "languageGuess": null,
+          "engagement": {
+            "views": 54250,
+            "likes": null,
+            "comments": null
+          }
+        }
+      ]
+    },
+    {
+      "archetype": "First-time tourist",
+      "sourceId": "youtube.search",
+      "query": "Bangkok street food",
+      "capturedAt": "2026-09-16T17:37:04.779Z",
+      "why": "English-locale browser, same question 11 s later. The other half of the pair.",
+      "items": [
+        {
+          "rank": 1,
+          "url": "https://www.youtube.com/watch?v=x8BC9IoNsB8",
+          "title": "NOBODY COOKS LIKE THAILAND 🇹🇭 | 4 Hours of Street Food, Markets & Night Food Streets",
+          "text": "NOBODY COOKS LIKE THAILAND – 4 Hours of Street Food, Markets & Night Food Streets Four hours of Thailand, left to run ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 555,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 2,
+          "url": "https://www.youtube.com/watch?v=jJyJDKQjzSM",
+          "title": "BEST THAI STREET FOOD Compilation | Bangkok Thailand",
+          "text": "Bangkok, Thailand street food compilation! The most popular street food markets for the First Half of 2024!! 00:00:00 Liab Duan ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 1597843,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 3,
+          "url": "https://www.youtube.com/watch?v=4VJaFkKewuw",
+          "title": "Delicious Bangkok Street Foods - Thai street food",
+          "text": "Delicious Bangkok Street Foods - Thai street food timeline chapter 00:00 Amazing Skill! Pad Thai Master - Thai Street Food ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 1004864,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 4,
+          "url": "https://www.youtube.com/watch?v=AQB1NGTQUTY",
+          "title": "AWESOME! 18 SUPER FAMOUS BANGKOK STREET FOOD YOU MUST TRY AT LEAST ONCE | THAILAND STREET FOOD",
+          "text": "AWESOME! 18 SUPER FAMOUS BANGKOK STREET FOOD YOU MUST TRY AT LEAST ONCE | THAILAND STREET FOOD We, ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 146136,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 5,
+          "url": "https://www.youtube.com/watch?v=MY3Qy6vAbZQ",
+          "title": "24 Hour Thai Street Food Challenge in Bangkok | Epic Food Journeys with Mark Wiens | Nat Geo",
+          "text": "Mark Wiens goes on a 24-hour challenge in Bangkok, Thailand, to eat as many different street foods as possible. From sizzling ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 2400184,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 6,
+          "url": "https://www.youtube.com/watch?v=hkeZ-qSrTOI",
+          "title": "BEST THAI STREET FOOD Compilation 2025 | Night Market in Bangkok Thailand",
+          "text": "Bangkok, Thailand street food compilation! A roundup of 3 night markets loved by locals! From food to clothes and knick-knacks, ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 129065,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 7,
+          "url": "https://www.youtube.com/watch?v=tSlt7Ex8p0Q",
+          "title": "35 TOP RATED THAI STREET FOODS EVERYONE SHOULD TRY IN 2025 | BANGKOK'S BEST STREET FOOD COLLECTION",
+          "text": "35 TOP RATED THAI STREET FOODS EVERYONE SHOULD TRY IN 2025 | BANGKOK'S BEST STREET FOOD COLLECTION ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 484512,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 8,
+          "url": "https://www.youtube.com/watch?v=GhAJUYwjkU8",
+          "title": "BANGKOK, Thailand 4K Walking Tour - Night Market Food Tour | 4K HDR 60fps",
+          "text": "Welcome to Bangkok, Thailand 4K Food Tour. \n\nStep into the vibrant nightlife of Bangkok with our exhilarating 4K walking tour ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 2211706,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 9,
+          "url": "https://www.youtube.com/watch?v=FHVNxG1JUw0",
+          "title": "Sold Out in 2 Hours! 500 Golden Tilapia FRIED FISH by a Beautiful Thai Chef | Thai Street Food",
+          "text": "Watch a beautiful Thai chef fry 500 golden tilapia fish every day at a busy Thai street food stall, where the crispy fried fish sells out ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 4865,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 10,
+          "url": "https://www.youtube.com/watch?v=ySuqRhK8m7c",
+          "title": "Bangkok Food Secret 🇹🇭 This Hidden Silom Food Court Is Packed With Locals 4K",
+          "text": "bangkok #silom #thaifood Silom Food Court Bangkok 2026 - 4K ambient walk. No music, no commentary. Bangkok's hidden ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 8684,
+            "likes": null,
+            "comments": null
+          }
+        }
+      ]
+    },
+    {
+      "archetype": "Street-food auntie",
+      "sourceId": "pantip.forum",
+      "query": "food",
+      "capturedAt": "2026-09-13T17:46:54.655Z",
+      "why": "th-TH browser reading Pantip's food forum.",
+      "items": [
+        {
+          "rank": 1,
+          "url": "https://pantip.com/topic/42601472",
+          "title": "[SR] 24 ร้านอาหารนครนายก คุณค่าที่พุงคู่ควร",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": null
+        },
+        {
+          "rank": 2,
+          "url": "https://pantip.com/topic/42682877",
+          "title": "รวมเมนู ปอเปี๊ยะทอด อร่อยสุดยอดจนต้องทำตาม",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": null
+        },
+        {
+          "rank": 3,
+          "url": "https://pantip.com/topic/42710991",
+          "title": "ใครชอบกินปลาทูต้องดูกับ 5 เมนูจาก ปลาทู สุดน่ากิน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": null
+        },
+        {
+          "rank": 4,
+          "url": "https://pantip.com/topic/43218010",
+          "title": "รวม 5 สูตร กุ้งอบวุ้นเส้น โดดเด่นน่าทำตาม",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": null
+        },
+        {
+          "rank": 5,
+          "url": "https://pantip.com/topic/43204529",
+          "title": "ดุเด็ดเผ็ดร้อนไปกับ 5 เมนู ผัดกะเพรา",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": null
+        },
+        {
+          "rank": 6,
+          "url": "https://pantip.com/topic/44222482",
+          "title": ".9️⃣.9️⃣เมนูพิเศษแบบกล้วยๆ---กล้วยอบธัญพืช ทำง่ายๆในหม้อทอดไร้น้ำมัน สะดวก รวดเร็ว อร่อยดี มีประโยชน์ต่อสุขภาพ💚🩷💚🍌🍪",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 4,
+            "comments": 45
+          }
+        },
+        {
+          "rank": 7,
+          "url": "https://pantip.com/topic/44223349",
+          "title": "@@ กำเงิน 200 บาท ไปร้านโครงการหลวง....ได้อะไรบ้าง มาดูกันครับ ^^ @@",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 6,
+            "comments": 32
+          }
+        },
+        {
+          "rank": 8,
+          "url": "https://pantip.com/topic/44223486",
+          "title": "[CR] รีวิวราดหน้าหมูหมักคะน้าฮ่องกง ในราคา 60 บาท มาเป็นชามเท่ากะละมัง!",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 6,
+            "comments": 40
+          }
+        },
+        {
+          "rank": 9,
+          "url": "https://pantip.com/topic/44221962",
+          "title": "🍀ชวนทำสันคอหมูย่าง หอมๆ นุ่มฉ่ำ ทำกินเองที่บ้าน สูตรหมักง่าย วัตถุดิบไม่เยอะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 5,
+            "comments": 41
+          }
+        },
+        {
+          "rank": 10,
+          "url": "https://pantip.com/topic/44221780",
+          "title": "🗾 🍷👱‍♀️😊🤗💑 🐖🫚 ราดหน้าและผัดซีอิ๊วเส้นยากิโซบะ 😸❤️",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 7,
+            "comments": 39
+          }
+        }
+      ]
+    },
+    {
+      "archetype": "Office worker in Ari",
+      "sourceId": "maps.search",
+      "query": "ร้านกาแฟ อารีย์",
+      "capturedAt": "2026-09-13T17:47:56.841Z",
+      "why": "th-TH browser searching Maps for cafés in Ari, in Thai.",
+      "items": [
+        {
+          "rank": 1,
+          "url": "https://maps.google.com/?cid=12427923641137976532",
+          "title": "Two Eight Squared Coffee",
+          "text": "4.9 · ร้านกาแฟ · 33 ซ. อารีย์ 3ปิดอยู่ · เปิดเวลา 09:00 น. · ร้านกาแฟ · 33 ซ. อารีย์ 3 · ปิดอยู่ · เปิดเวลา 09:00 น.",
+          "languageGuess": "th",
+          "engagement": null
+        },
+        {
+          "rank": 2,
+          "url": "https://maps.google.com/?cid=5348182387316994536",
+          "title": "นานา คอฟฟี่ โรสเตอร์ อารีย์",
+          "text": "4.4 · ร้านกาแฟ · 24, 2 ซอย อารีย์ 4ร้านกาแฟสุดฮิปกับเมล็ดกาแฟจากแหล่งเดียวปิดอยู่ · เปิดเวลา 07:00 น. · ร้านกาแฟ · 24, 2 ซอย อารีย์ 4 · ร้านกาแฟสุดฮิปกับเมล็ดกาแฟจากแหล่งเดียว · ปิดอยู่ · เปิดเวลา 07:00 น.",
+          "languageGuess": "th",
+          "engagement": null
+        },
+        {
+          "rank": 3,
+          "url": "https://maps.google.com/?cid=5975433454316016458",
+          "title": "Aribica Specialty Coffee X Amplify Coffee Roasters",
+          "text": "4.6 · ร้านกาแฟ · 17, 1 ซอย อารีย์ 1ปิดอยู่ · เปิดเวลา 07:00 น. · ร้านกาแฟ · 17, 1 ซอย อารีย์ 1 · ปิดอยู่ · เปิดเวลา 07:00 น.",
+          "languageGuess": "th",
+          "engagement": null
+        },
+        {
+          "rank": 4,
+          "url": "https://maps.google.com/?cid=15347997790372003131",
+          "title": "BAY Aree",
+          "text": "4.3 · ร้านกาแฟ ·  · 111 ถนน พหลโยธิน ซอย 7ปิดอยู่ · เปิดเวลา 10:00 น. · ร้านกาแฟ ·  · 111 ถนน พหลโยธิน ซอย 7 · ปิดอยู่ · เปิดเวลา 10:00 น.",
+          "languageGuess": "th",
+          "engagement": null
+        },
+        {
+          "rank": 5,
+          "url": "https://maps.google.com/?cid=3822342593037138099",
+          "title": "Brewlab Cafe Ari",
+          "text": "4.9 · ร้านกาแฟ ·  · 959/3 ถ. พหลโยธินปิดอยู่ · เปิดเวลา 07:00 น. · ร้านกาแฟ ·  · 959/3 ถ. พหลโยธิน · ปิดอยู่ · เปิดเวลา 07:00 น.",
+          "languageGuess": "th",
+          "engagement": null
+        },
+        {
+          "rank": 6,
+          "url": "https://maps.google.com/?cid=5059418287966054426",
+          "title": "KURA Cafe",
+          "text": "5.0 · ร้านกาแฟ ·  · 2, 32 A5 ซ. พหลโยธิน 7ปิดอยู่ · เปิดเวลา 07:00 น. · ร้านกาแฟ ·  · 2, 32 A5 ซ. พหลโยธิน 7 · ปิดอยู่ · เปิดเวลา 07:00 น.",
+          "languageGuess": "th",
+          "engagement": null
+        }
+      ]
+    }
+  ]
+}

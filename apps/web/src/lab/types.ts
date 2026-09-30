@@ -27,9 +27,19 @@ export interface Persona {
   health: PersonaHealth
   lastAliveAt: string | null
   stats: { sessions: number; minutes: number; blocks: number }
+  /** What makes it a character. Null for a bare persona made in the Lab. */
+  traits: PersonaTraits | null
 }
 
-export type HarvestOutcome = "ok" | "partial" | "blocked" | "error"
+export interface PersonaTraits {
+  archetype?: string
+  bio?: string
+  interests?: string[]
+  sources?: string[]
+  look?: { colour?: string; prop?: string }
+}
+
+export type HarvestOutcome = "running" | "ok" | "empty" | "partial" | "blocked" | "error"
 
 export interface Harvest {
   id: string
