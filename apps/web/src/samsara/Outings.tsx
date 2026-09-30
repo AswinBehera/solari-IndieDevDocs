@@ -18,7 +18,32 @@ import { errorText } from "../lab/ui"
 
 const MAX_HARVESTS = 8
 
-const sourceLabel = (id: string) => CHARACTER_SOURCES.find((s) => s.id === id)?.label ?? id
+// Matched on the part before the dot too, so `pantip.tag` reads "Pantip" rather
+// than showing its adapter id.
+const sourceLabel = (id: string) =>
+  CHARACTER_SOURCES.find((s) => s.id === id)?.label ??
+  CHARACTER_SOURCES.find((s) => s.id.split(".")[0] === id.split(".")[0])?.label ??
+  id
+
+/** A run's result in a traveller's words; "0 kept · blocked" read as our own failure. */
+function runLine(run: { outcome: string | null; itemCount: number }): string {
+  const posts = `${run.itemCount} post${run.itemCount === 1 ? "" : "s"}`
+  switch (run.outcome) {
+    case null:
+    case "running":
+      return "browsing…"
+    case "ok":
+      return posts
+    case "partial":
+      return `${posts} · page cut short`
+    case "empty":
+      return "nothing found"
+    case "blocked":
+      return "the site didn't let them in · try later"
+    default:
+      return "didn't finish · try later"
+  }
+}
 
 export function Outings({ persona }: { persona: Persona }) {
   const [city, setCity] = useState("Bangkok")
@@ -48,7 +73,7 @@ export function Outings({ persona }: { persona: Persona }) {
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="rounded-xl border border-ink border-dashed p-4">
-        <p className="font-mono text-[10px] text-ink-faint tracking-[.1em]">NEXT OUTING</p>
+        <p className="font-mono text-[10px] text-ink-faint tracking-[.1em]">SEND OUT</p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-sm">
             <span className="text-ink-muted">Explore</span>
@@ -65,7 +90,7 @@ export function Outings({ persona }: { persona: Persona }) {
             disabled={send.isPending || unwell || plan.length === 0 || !city.trim()}
             className="rounded-full bg-accent-pink px-5 py-2 font-medium text-sm text-white disabled:opacity-40"
           >
-            {send.isPending ? "Sending…" : `Send ${persona.name} exploring`}
+            {send.isPending ? "Sending…" : `Send ${persona.name} out searching`}
           </button>
         </div>
         {plan.length === 0 && (
@@ -75,7 +100,7 @@ export function Outings({ persona }: { persona: Persona }) {
         )}
         {unwell && (
           <p className="mt-2 text-signal-red text-xs">
-            {persona.name} is {persona.health}. Hire someone new.
+            {persona.name} is {persona.health}. Add someone new.
           </p>
         )}
         {plan.length > 0 && (
@@ -103,7 +128,7 @@ export function Outings({ persona }: { persona: Persona }) {
         {send.data && (
           <p className="mt-2 text-signal-green text-xs">
             {send.data.deduped
-              ? "Already on their way. One outing an hour per question."
+              ? "Already on their way. One search an hour per question."
               : "On their way. The worker opens a browser for each search; results land below."}
           </p>
         )}
@@ -160,11 +185,7 @@ function Run({ run }: { run: Harvest }) {
           {sourceLabel(run.sourceId)}
         </span>
         <span className="min-w-0 flex-1 truncate text-sm">{run.query}</span>
-        <span className={`text-xs ${tone}`}>
-          {run.outcome === null || run.outcome === "running"
-            ? "browsing…"
-            : `${run.itemCount} kept · ${run.outcome}`}
-        </span>
+        <span className={`text-xs ${tone}`}>{runLine(run)}</span>
       </button>
       {open && (
         <div className="border-rule border-t px-3 py-2">

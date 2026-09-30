@@ -24,7 +24,17 @@ import { withRetry } from "./retry.js"
  */
 
 export interface BrowserOptions {
+  /**
+   * The proxy's country. With `direct`, no proxy is used and this is only the
+   * label written on the session row (the provider's own egress, not a viewpoint).
+   */
   country: string
+  /**
+   * No stealth, no proxy: the provider's plain browser. For reading public pages
+   * where the viewpoint is set in the URL (Steam's `cc=`), and the only mode a free
+   * plan can launch — proxies need stealth, and stealth is a paid feature.
+   */
+  direct?: boolean
   /**
    * The viewpoint to present (see `Viewpoint` in `ports.ts`). Optional, and the
    * default is worth naming: without it the session is `en-US` on UTC, which is a
@@ -154,16 +164,18 @@ export class Kernel {
     if (!launcher) return err(failure("config", "kernel has no browser launcher configured"))
 
     const config: LaunchConfig = {
-      // Always on. Every session this system opens goes through a residential
-      // proxy — a persona without a country is not a persona — and the provider
-      // requires stealth for that pairing, so there is no configuration in which
-      // we would want it off.
-      stealth: true,
-      proxy: {
-        country: opts.country,
-        ...(opts.proxyTier ? { tier: opts.proxyTier } : {}),
-        ...(opts.proxySession ? { session: opts.proxySession } : {}),
-      },
+      // On for every proxied session: the provider requires stealth for a proxy.
+      // Off only when the caller asked for the provider's plain egress.
+      stealth: !opts.direct,
+      ...(opts.direct
+        ? {}
+        : {
+            proxy: {
+              country: opts.country,
+              ...(opts.proxyTier ? { tier: opts.proxyTier } : {}),
+              ...(opts.proxySession ? { session: opts.proxySession } : {}),
+            },
+          }),
       ...(opts.locale && opts.timezoneId
         ? {
             viewpoint: {

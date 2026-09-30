@@ -63,13 +63,17 @@ export function Places() {
           <p className="mb-2 font-mono text-[11px] text-ink-faint tracking-[.1em]">
             /lab/places · {sample ? "SAMPLE" : "BANGKOK"} · SORTED BY LOCAL SCORE
           </p>
-          <h1 className="font-display text-[44px] leading-none tracking-tight">
-            {sample
-              ? "Every state a card can be in."
-              : summary
-                ? `${summary.total} place${summary.total === 1 ? "" : "s"}. ${summary.strong} above 0.7.`
-                : "Places"}
-          </h1>
+          <h1 className="font-display text-[44px] leading-none tracking-tight">Places</h1>
+          {!sample && summary && (
+            <p className="mt-2 font-display text-[22px] leading-tight">
+              {summary.total} place{summary.total === 1 ? "" : "s"}. {summary.strong} above 0.7.
+            </p>
+          )}
+          {sample && (
+            <p className="mt-2 font-display text-[22px] leading-tight">
+              Every state a card can be in.
+            </p>
+          )}
           <p className="mt-2 text-ink-muted text-sm">
             {sample ? (
               <>

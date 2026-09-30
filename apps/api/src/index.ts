@@ -1,18 +1,8 @@
-// @dt/api — Hono on Cloudflare Workers (ADR-0014). Thin: validates, enqueues, reads.
+// @rd/api — Hono on Cloudflare Workers (ADR-0014). Thin: validates, enqueues, reads.
 
-import { createDb } from "@dt/db"
-import { PostgresTripStore } from "@dt/db/trips"
-import { PostgresOsmPlaceIndex, PostgresPlaceReader } from "@dt/travel-pack/read"
-import {
-  PostgresDriftExperimentStore,
-  PostgresHarvestRunStore,
-  PostgresRawItemStore,
-} from "@samsara/harvest/postgres"
+import { createDb, PostgresResearchStore } from "@rd/db"
 import { PostgresOpsReader } from "@samsara/kernel/ops"
 import { PostgresJobStore } from "@samsara/kernel/postgres"
-import { PostgresPersonaStore } from "@samsara/personas/postgres"
-import { PostgresObservationStore, PostgresProbeTargetStore } from "@samsara/probe/postgres"
-import { PostgresMentionStore } from "@samsara/refine/postgres"
 import { createApp } from "./app.js"
 import { devVerifier, supabaseVerifier, type Verifier } from "./auth.js"
 import { githubDispatcher, noopDispatcher } from "./dispatch.js"
@@ -50,48 +40,6 @@ export default {
           const e = bindings as Env
           return new PostgresJobStore(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
         },
-        // The Lab's five stores over one connection. Same per-request rule as
-        // `jobs` above and for the same reason: Hyperdrive hands out a pooled
-        // connection per request, and holding one across requests in a long-lived
-        // isolate is how a pool is exhausted by an API that looks idle.
-        lab: {
-          stores: (bindings) => {
-            const e = bindings as Env
-            const { db } = createDb(e.HYPERDRIVE.connectionString, { max: 1 })
-            return {
-              personas: new PostgresPersonaStore(db),
-              runs: new PostgresHarvestRunStore(db),
-              items: new PostgresRawItemStore(db),
-              experiments: new PostgresDriftExperimentStore(db),
-              // The read side only. `PostgresMentionSink` is not built here:
-              // the worker writes mentions, the API must never be able to.
-              mentions: new PostgresMentionStore(db),
-            }
-          },
-        },
-        // The Place Postcard grid (P2.7). Its own connection, per request, for
-        // the same Hyperdrive reason as the two above.
-        places: {
-          reader: (bindings) => {
-            const e = bindings as Env
-            return new PostgresPlaceReader(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
-          },
-          osm: (bindings) => {
-            const e = bindings as Env
-            return new PostgresOsmPlaceIndex(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
-          },
-        },
-        // Hundred Eyes: targets and observations, per request like everything above.
-        probes: {
-          targets: (bindings) =>
-            new PostgresProbeTargetStore(
-              createDb((bindings as Env).HYPERDRIVE.connectionString, { max: 1 }).db,
-            ),
-          observations: (bindings) =>
-            new PostgresObservationStore(
-              createDb((bindings as Env).HYPERDRIVE.connectionString, { max: 1 }).db,
-            ),
-        },
         // The ops dashboard (P5.5), per request like everything above.
         kernel: {
           reader: (bindings) => {
@@ -99,12 +47,12 @@ export default {
             return new PostgresOpsReader(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
           },
         },
-        // Trips, documents and Postcards (P4.1), per request like everything above.
-        trips: {
-          store: (bindings) => {
-            const e = bindings as Env
-            return new PostgresTripStore(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
-          },
+        // Research documents, per request like everything above.
+        research: {
+          store: (bindings) =>
+            new PostgresResearchStore(
+              createDb((bindings as Env).HYPERDRIVE.connectionString, { max: 1 }).db,
+            ),
         },
         // Built on first use, not at boot. `/health` is unauthenticated and must
         // answer on a machine with no Supabase project configured — otherwise the

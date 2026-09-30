@@ -19,7 +19,7 @@ import { type Answers, CITIES, DATE_ORDER, dateProblem, newTripFrom } from "./an
 const HINTS = [
   "Bangkok knows the most so far. Tokyo is just getting started.",
   "Dates can change later. Leave them empty if you do not know yet.",
-  "Our local characters search for these in the city's language. They also become the document's first line.",
+  "Our locals search for these in the city's language. They also become the document's first line.",
 ]
 
 const pill = (on: boolean) =>
@@ -72,7 +72,7 @@ export function Onboarding() {
     <main className="flex flex-1 items-center justify-center px-8 py-16">
       <div className="w-full max-w-[760px]">
         <p className="mb-7 font-mono text-[11px] text-ink-faint tracking-[.1em]">
-          FIRST TRIP · THREE QUESTIONS · {step} OF 3
+          NEW TRIP · THREE QUESTIONS · {step} OF 3
         </p>
         <div className="font-display text-[46px] leading-[1.25] tracking-tight [text-wrap:pretty]">
           I’m going to{" "}
@@ -139,13 +139,23 @@ export function Onboarding() {
           <InterestPicker city={answers.city} chosen={answers.interests} onToggle={toggle} />
         )}
         <div className="mt-10 flex flex-wrap items-center gap-4">
+          {step > 1 && (
+            <button
+              type="button"
+              onClick={() => setStep(step - 1)}
+              disabled={create.isPending}
+              className="border border-rule px-4 py-3 text-ink-muted text-sm hover:border-ink hover:text-ink disabled:opacity-50"
+            >
+              Back
+            </button>
+          )}
           <button
             type="button"
             onClick={next}
             disabled={create.isPending || problem !== null}
             className="bg-ink px-5 py-3 font-medium text-sm text-surface hover:bg-accent-blue disabled:opacity-50"
           >
-            {step < 3 ? "Next" : create.isPending ? "Opening…" : "Open the document"}
+            {step < 3 ? "Next" : create.isPending ? "Opening…" : `Start my ${answers.city} trip`}
           </button>
           {problem ? (
             <span role="alert" className="text-[13px] text-signal-red">

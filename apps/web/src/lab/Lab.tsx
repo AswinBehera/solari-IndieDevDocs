@@ -33,15 +33,16 @@ import { RunHarvest } from "./RunHarvest"
 
 export function Lab() {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-5xl flex-col gap-4 p-6">
+    // `w-full`: with `mx-auto` and no width, a column flex child sizes to its
+    // content, and the tables below made the whole page 551px on a phone.
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 pt-10 pb-16 sm:px-6">
       <header>
-        <h1 className="font-semibold text-2xl tracking-tight">Persona Lab</h1>
-        <p className="text-neutral-500 text-sm">
-          Internal. Identities, the questions they ask, and what came back —{" "}
-          <a href="/" className="underline">
-            back to the app
-          </a>
-          .
+        <p className="mb-2 font-mono text-[11px] text-ink-faint tracking-[.1em]">
+          /lab · BUILT ON SOLARI · INTERNAL
+        </p>
+        <h1 className="font-display text-[44px] leading-none tracking-tight">Searches</h1>
+        <p className="mt-2 text-ink-muted text-sm">
+          The identities that browse, the questions they ask, and what came back.
         </p>
       </header>
 

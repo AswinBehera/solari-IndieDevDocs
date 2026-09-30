@@ -1,5 +1,5 @@
 import { POSTCARD_ATTR, POSTCARD_NODE, type Postcard, postcardIdsIn } from "@dt/core"
-import { useParams } from "@tanstack/react-router"
+import { Link, useParams } from "@tanstack/react-router"
 import { Placeholder } from "@tiptap/extension-placeholder"
 import { EditorContent, type Editor as TiptapEditor, useEditor } from "@tiptap/react"
 import { StarterKit } from "@tiptap/starter-kit"
@@ -198,7 +198,10 @@ function Loaded({ record }: { record: TripRecord }) {
 
   return (
     <div className="grid flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <div className="mx-auto w-full max-w-[820px] px-6 pt-14 pb-32 sm:px-[72px]">
+      <div className="mx-auto w-full max-w-[820px] px-6 pt-8 pb-32 sm:px-[72px]">
+        <Link to="/" className="mb-6 inline-block text-ink-muted text-sm hover:text-ink">
+          ← All trips
+        </Link>
         <div className="mb-3.5 flex flex-wrap gap-4 font-mono text-[11px] text-ink-faint tracking-[.08em]">
           <span>{trip.destinationCity.toUpperCase()}</span>
           <DatesEditor
@@ -228,6 +231,7 @@ function Loaded({ record }: { record: TripRecord }) {
           onEnter={() => editor?.commands.focus("start")}
         />
         <EditorContent editor={editor} />
+        {editor && <AddButton editor={editor} />}
         {error && (
           <p className="mt-4 text-signal-red text-sm">Could not add that Postcard: {error}</p>
         )}
@@ -311,6 +315,32 @@ function TitleEditor({
       }}
       className="mb-5 w-full resize-none bg-transparent font-display text-[44px] leading-[1.05] tracking-tight focus:outline-none focus:shadow-[inset_0_-2px_0_var(--color-accent-pink)] sm:text-[60px] [field-sizing:content]"
     />
+  )
+}
+
+/**
+ * The `/` menu, for people who have not found `/`. The placeholder is the only
+ * other cue, and it shows only on an empty line with the caret in it — and on a
+ * phone `/` is behind the symbols keyboard. Types the `/` at the end of the
+ * document, on a fresh line, so the menu that opens is the same one.
+ */
+function AddButton({ editor }: { editor: TiptapEditor }) {
+  const add = () => {
+    const last = editor.state.doc.lastChild
+    const emptyLine = last?.type.name === "paragraph" && last.content.size === 0
+    const chain = editor.chain().focus("end")
+    if (!emptyLine) chain.insertContent({ type: "paragraph" })
+    chain.insertContent("/").run()
+  }
+  return (
+    <button
+      type="button"
+      onClick={add}
+      className="mt-6 inline-flex items-center gap-2 rounded-full border border-ink/25 border-dashed px-4 py-2 text-ink-muted text-sm hover:border-ink hover:text-ink"
+    >
+      <span className="text-base leading-none">+</span> Add a Postcard
+      <span className="font-mono text-[11px] text-ink-faint">or type /</span>
+    </button>
   )
 }
 
@@ -422,8 +452,7 @@ function Rail({
           onFocus={onFocus}
         />
       )}
-      <div className="flex justify-between border-rule border-t px-3.5 py-2.5 font-mono text-[10px] text-ink-muted tracking-[.1em]">
-        <span>DERIVED FROM DOCUMENT</span>
+      <div className="flex justify-end border-rule border-t px-3.5 py-2.5 text-ink-muted text-xs">
         {conflict ? (
           <button
             type="button"

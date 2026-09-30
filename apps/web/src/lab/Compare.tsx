@@ -25,7 +25,11 @@ import { buttonClass, errorText, Field, inputClass, Note, Section } from "./ui"
  * read differently, not one to hide.
  */
 
-export function Compare() {
+/**
+ * `noun` is what the two sides are called. The Lab says "persona"; the Locals
+ * page embeds this same form and says "local", the word a traveller has there.
+ */
+export function Compare({ noun = "persona" }: { noun?: "persona" | "local" } = {}) {
   const personas = usePersonas()
   const [form, setForm] = useState({ a: "", b: "", query: "", sourceId: "", k: "20" })
   // The submitted values, not the typed ones. A query that ran on every keystroke
@@ -53,11 +57,11 @@ export function Compare() {
 
   return (
     <Section
-      title="Two personas, one question"
+      title={`Two ${noun}s, one question`}
       hint="The newest run each identity has for this exact query. Not the best run — the newest, whatever it returned."
     >
       <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-        <Field label="persona A">
+        <Field label={`${noun} A`}>
           {(id) => (
             <PersonaSelect
               id={id}
@@ -67,7 +71,7 @@ export function Compare() {
             />
           )}
         </Field>
-        <Field label="persona B">
+        <Field label={`${noun} B`}>
           {(id) => (
             <PersonaSelect
               id={id}

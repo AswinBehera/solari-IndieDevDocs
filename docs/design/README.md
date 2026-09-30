@@ -26,7 +26,7 @@ Tokens read off the canvas, for `@dt/ui`:
 | Surface, raised | `#EDE9DF` |
 | Ink | `#23242A` |
 | Ink, muted | `#5B584F` |
-| Ink, faint | `#8A867B` |
+| Ink, faint | `#66625A` (the canvas's `#8A867B` failed AA contrast at label sizes) |
 | Rule | `#D9D4C7` |
 | Accent, neon pink | `#FF2D95` |
 | Accent, midnight blue | `#16204A` |

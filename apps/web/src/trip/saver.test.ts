@@ -80,7 +80,7 @@ describe("DocumentSaver", () => {
     s.change("ab")
     await s.flush()
     expect(calls).toHaveLength(1)
-    expect(statusLine(s.status)).toBe("CHANGED ELSEWHERE (v5) · RELOAD")
+    expect(statusLine(s.status)).toBe("Changed in another tab · Reload")
   })
 
   it("keeps an edit that failed to send, and sends it on the next flush", async () => {
@@ -102,6 +102,6 @@ describe("DocumentSaver", () => {
     const { s, calls } = saver(ok)
     await s.flush()
     expect(calls).toHaveLength(0)
-    expect(statusLine(s.status)).toBe("v1 · SAVED")
+    expect(statusLine(s.status)).toBe("Saved")
   })
 })

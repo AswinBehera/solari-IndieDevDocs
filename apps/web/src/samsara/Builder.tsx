@@ -243,9 +243,9 @@ export function Builder({
         </legend>
         {locked && (
           <p className="rounded-lg bg-note px-3 py-2 text-ink-muted text-xs">
-            {draft.name || "This character"} has already browsed {persona?.stats.sessions} time
+            {draft.name || "This local"} has already browsed {persona?.stats.sessions} time
             {persona?.stats.sessions === 1 ? "" : "s"}, so where they live is fixed. Moving them
-            would mix two identities' results. Hire a new character to browse from somewhere else.
+            would mix two identities' results. Add a new local to browse from somewhere else.
           </p>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
@@ -303,7 +303,7 @@ export function Builder({
             </select>
           </label>
           <label className="flex flex-col gap-1 text-ink-muted text-xs">
-            Internet exit
+            Browsing from
             <select
               className="rounded-lg border border-rule bg-surface px-3 py-1.5 text-ink text-sm disabled:opacity-60"
               disabled={locked}
@@ -322,7 +322,7 @@ export function Builder({
           </label>
         </div>
         <p className="text-ink-faint text-xs">
-          There is no Thai exit on our browser provider, so Thai characters connect from Singapore.
+          There is no Thai exit on our browser provider, so Thai locals connect from Singapore.
           Their language, clock and searches do more to make them local than the address does.
         </p>
       </fieldset>
@@ -402,7 +402,7 @@ export function Builder({
           disabled={save.isPending || !dirty || !draft.name.trim() || draft.sources.length === 0}
           className="rounded-full bg-ink px-5 py-2 font-medium text-paper text-sm disabled:opacity-40"
         >
-          {save.isPending ? "Saving…" : persona ? "Save changes" : "Add to cast"}
+          {save.isPending ? "Saving…" : persona ? "Save changes" : "Add to your locals"}
         </button>
         {save.isError && <span className="text-signal-red text-xs">{errorText(save.error)}</span>}
         {save.isSuccess && !dirty && <span className="text-signal-green text-xs">Saved.</span>}

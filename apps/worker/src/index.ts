@@ -1,20 +1,16 @@
-// @dt/worker — the scheduled runner (ADR-0014). Wakes, claims, drains, exits.
+// @rd/worker — the scheduled runner (ADR-0014). Wakes, claims, drains, exits.
 //
 // All Solari sessions in this system are opened from this process and no other.
 
 import { now } from "@samsara/kernel"
 import { boot } from "./boot.js"
-import { personaSweepJobKey } from "./persona-sweep.js"
-import { probeSweepJobKey } from "./probe-sweep.js"
 import { drain } from "./runner.js"
-import { dayOf, sweepJobKey } from "./sweep.js"
 
 export * from "./boot.js"
 export * from "./handlers.js"
-export * from "./packs.js"
 export * from "./runner.js"
 
-export const PACKAGE = "@dt/worker" as const
+export const PACKAGE = "@rd/worker" as const
 
 /**
  * The lifecycle, and specifically the shutdown path P0.5 exists to get right.
@@ -68,24 +64,6 @@ export async function main(): Promise<number> {
     // Rows the *previous* run left open. Under ADR-0014 a cancelled runner is
     // routine, so this is a normal startup step, not recovery.
     await app.registry.reconcile()
-    // One sweep a day: the key is the UTC date, so the every-15-minute cron queues it
-    // once and every later tick is a no-op. Opt-out, not opt-in, but `TRIP_SWEEP_MAX=0`
-    // makes it queue nothing.
-    await app.jobs.enqueue({
-      type: "persona.sweep",
-      idempotencyKey: personaSweepJobKey(dayOf(new Date())),
-    })
-    await app.jobs.enqueue({
-      type: "probe.sweep",
-      domainId: "travel",
-      idempotencyKey: probeSweepJobKey(dayOf(new Date())),
-    })
-    await app.jobs.enqueue({
-      type: "trip.sweep",
-      domainId: "travel",
-      idempotencyKey: sweepJobKey(dayOf(new Date())),
-    })
-
     const summary = await drain(
       {
         jobs: app.jobs,

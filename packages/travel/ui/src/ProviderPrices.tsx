@@ -132,9 +132,8 @@ function ViewpointStamp({ country }: { country: string }) {
     <div className="absolute top-4 right-5 rotate-[5deg]">
       <div className="sb-stamp">
         <div className="flex w-[74px] flex-col items-center border border-accent-blue/40 px-1 py-1.5 text-accent-blue">
-          <span className="font-mono text-[8px] tracking-[.1em]">VIEWED FROM</span>
+          <span className="font-mono text-[8px] tracking-[.1em]">CHECKED FROM</span>
           <span className="font-display text-[26px] leading-none">{country.toUpperCase()}</span>
-          <span className="font-mono text-[8px] tracking-[.1em]">SAMSARA</span>
         </div>
       </div>
     </div>
@@ -222,7 +221,8 @@ function AddSite({
           setDraft(e.target.value)
           setRefusal(null)
         }}
-        placeholder="+ Paste the same hotel on another site, then Enter"
+        // Short enough for a phone: the longer "on another site, then Enter" ran off the card.
+        placeholder="+ Same hotel, another site"
         aria-label="Another site's hotel page"
         aria-invalid={refusal ? true : undefined}
         className="w-full bg-transparent font-mono text-accent-blue text-xs placeholder:text-ink-faint focus:outline-none"

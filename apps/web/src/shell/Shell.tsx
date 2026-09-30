@@ -1,125 +1,59 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router"
-import type { ReactNode } from "react"
+import { Link, Outlet } from "@tanstack/react-router"
 import { useHealth } from "./health"
 
 /**
- * The frame every signed-in page sits in: the brand, the nav, and the strip under
- * them that says what the machinery is doing.
- *
- * Read off the design canvas's top bar, including its "TRAVEL OS" tag, which is
- * product language and stays (ADR-0011). The nav is grouped the way the canvas
- * groups it — the product, then the lab — and holds only pages that exist; the
- * canvas's Hundred Eyes and Plans groups arrive with their screens.
- *
- * The strip is where the canvas puts the kernel's live line ("Reading Yaowarat
- * from a Thai IP"). Until an endpoint reports sessions, it carries the one thing
- * P0.6's dev shell existed to show: whether the API answers at all — the same
- * `/health` call, which deliberately never touches Postgres.
+ * The frame every page sits in: the brand, a strip that appears only when the API
+ * cannot be reached, and the footer that says what does the reading.
  */
-
-interface NavItem {
-  to: string
-  label: string
-}
-
-interface NavGroup {
-  label: string
-  items: NavItem[]
-}
-
-const NAV: NavGroup[] = [
-  { label: "PRODUCT", items: [{ to: "/", label: "Trips" }] },
-  // The kernel, with a face: the characters who do the browsing. Its own group
-  // because it is the part of the product that is not a trip planner.
-  { label: "SAMSARA", items: [{ to: "/samsara", label: "Characters" }] },
-  // The lab, named for a traveller: what it is, not what the code calls it.
-  {
-    label: "UNDER THE HOOD",
-    items: [
-      { to: "/lab", label: "Lab" },
-      { to: "/lab/places", label: "Place scores" },
-      { to: "/lab/kernel", label: "Spend & jobs" },
-    ],
-  },
-]
-
-/** Longest match wins, so `/lab/places` does not also light up `/lab`. */
-export function activeNav(pathname: string, groups: readonly NavGroup[] = NAV): string | null {
-  let best: string | null = null
-  for (const group of groups) {
-    for (const item of group.items) {
-      const matches =
-        item.to === "/"
-          ? pathname === "/" || pathname.startsWith("/trips") || pathname === "/onboarding"
-          : pathname === item.to || pathname.startsWith(`${item.to}/`)
-      if (matches && (best === null || item.to.length > best.length)) best = item.to
-    }
-  }
-  return best
-}
-
 export function Shell() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const active = activeNav(pathname)
   return (
     <div className="flex min-h-dvh flex-col bg-surface font-body text-ink">
-      <header className="sticky top-0 z-20 flex min-h-13 flex-wrap items-center gap-5 border-rule border-b bg-surface px-7 py-2">
+      <header className="sticky top-0 z-20 flex min-h-13 items-center gap-x-5 border-rule border-b bg-surface px-4 py-2 sm:px-7">
         <Link to="/" className="flex flex-none items-baseline gap-2 whitespace-nowrap">
-          <span className="font-display text-[22px] tracking-tight">Doen Thang</span>
-          <span className="font-mono text-[10px] text-ink-faint tracking-[.08em]">TRAVEL OS</span>
+          <span className="font-display text-[24px] tracking-tight">
+            Sourced<span className="text-marker">.</span>
+          </span>
+          <span className="font-mono text-[10px] text-ink-faint tracking-[.08em]">STEAM RESEARCH</span>
         </Link>
-        <nav className="flex min-w-0 flex-1 flex-wrap justify-end gap-x-3 gap-y-0.5 text-xs">
-          {NAV.map((group) => (
-            <div key={group.label} className="flex items-center gap-0.5 whitespace-nowrap">
-              <span className="mr-1 font-mono text-[9px] text-ink-faint tracking-[.1em]">
-                {group.label}
-              </span>
-              {group.items.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={`border-b-2 px-1.5 py-1 ${
-                    active === item.to
-                      ? "border-accent-pink text-ink"
-                      : "border-transparent text-ink-muted hover:text-ink"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          ))}
+        <nav className="ml-auto flex items-center gap-1 text-sm">
+          <Link to="/" className="px-2 py-1 text-ink-muted hover:text-ink">
+            Documents
+          </Link>
         </nav>
       </header>
       <StatusStrip />
       <Outlet />
+      <footer className="mt-auto bg-night text-surface">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-end gap-x-10 gap-y-4 px-4 py-6 sm:px-12">
+          <div className="min-w-0 flex-1 basis-72">
+            <p className="font-mono text-[11px] text-marker tracking-[.12em]">BUILT ON SOLARI</p>
+            <p className="mt-1.5 max-w-2xl text-sm text-surface/85 leading-relaxed">
+              Store pages are read in{" "}
+              <a
+                href="https://getsolari.com"
+                className="underline decoration-surface/40 underline-offset-2 hover:decoration-surface"
+              >
+                Solari
+              </a>{" "}
+              cloud browsers, one session per page, and kept as HTML plus a screenshot with the cited region
+              marked. Numbers from Steam's public API keep the raw response. Receipts stay on the machine that
+              ran the block: they are Steam's content, not ours to republish.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
 
-/**
- * Only when something is wrong. "API up" on every page told a traveller nothing
- * and read as a developer's console left open.
- */
+/** Only when something is wrong: the API is not answering, so nothing will save. */
 function StatusStrip() {
   const health = useHealth()
   if (!health.isError) return null
-  const line: { tone: "up" | "down" | "waiting"; text: ReactNode } = health.isPending
-    ? { tone: "waiting", text: "Checking the API…" }
-    : health.isError
-      ? {
-          tone: "down",
-          text: "Can't reach the server right now. Changes won't save until it's back.",
-        }
-      : { tone: "up", text: "API up" }
-  const dot =
-    line.tone === "up" ? "bg-accent-pink" : line.tone === "down" ? "bg-red-700" : "bg-rule"
   return (
-    <div className="flex items-center gap-3.5 overflow-hidden whitespace-nowrap border-rule border-b bg-surface-raised px-7 py-1 font-mono text-[10px] text-ink-muted tracking-[.04em]">
-      <span className="inline-flex items-center gap-1.5">
-        <span className={`inline-block size-1.5 rounded-full ${dot}`} aria-hidden />
-        {line.text}
-      </span>
+    <div className="flex items-center gap-2 border-rule border-b bg-surface-raised px-7 py-1 font-mono text-[10px] text-ink-muted">
+      <span className="inline-block size-1.5 rounded-full bg-signal-red" aria-hidden />
+      Can't reach the API. Changes won't save until it's back.
     </div>
   )
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "runs" ADD COLUMN "params" jsonb DEFAULT '{}'::jsonb NOT NULL;

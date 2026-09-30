@@ -8,5 +8,8 @@
     "jsx": "react-jsx",
     "types": ["vite/client"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  // The travel app this repo started as, left on disk until it is deleted by hand.
+  // Nothing imports it, and it no longer has its packages to compile against.
+  "exclude": ["src/trip", "src/trips", "src/places", "src/lab", "src/samsara", "src/share", "src/onboarding", "src/kernel"]
 }

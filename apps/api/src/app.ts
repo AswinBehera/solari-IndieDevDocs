@@ -10,10 +10,7 @@ import { streamSSE } from "hono/streaming"
 import { requireAuth, type Verifier } from "./auth.js"
 import type { Dispatcher } from "./dispatch.js"
 import { type KernelDeps, kernelRoutes } from "./kernel.js"
-import { type LabDeps, labRoutes } from "./lab.js"
-import { type PlacesDeps, placeSearchRoutes, placesRoutes } from "./places.js"
-import { type ProbesDeps, probesRoutes } from "./probes.js"
-import { type TripsDeps, tripsRoutes } from "./trips.js"
+import { type ResearchDeps, researchRoutes } from "./research.js"
 
 /**
  * The API (ADR-0014: Hono on Cloudflare Workers, free plan).
@@ -37,20 +34,12 @@ export interface AppDeps {
   verifier: Verifier
   dispatcher: Dispatcher
   /**
-   * The Persona Lab's stores (P1.7). Optional, and the API is complete without
-   * them: `/jobs` and `/health` are what a deployment needs to work, and a
-   * deployment that has not been given persona and harvest stores should answer
-   * 404 on `/lab/*` rather than 500 on the first read.
+   * Research documents, blocks, facts and receipts. Optional so a deployment
+   * without a database answers 404 on them rather than 500 on the first read.
    */
-  lab?: Omit<LabDeps, "verifier" | "jobs">
-  /** The Place Postcard grid's read (P2.7), and `/place`'s search. Optional for the reason `lab` is. */
-  places?: Omit<PlacesDeps, "verifier">
-  /** Hundred Eyes: paste a URL, read one price per country. Optional for the reason `lab` is. */
-  probes?: Omit<ProbesDeps, "verifier">
+  research?: Pick<ResearchDeps, "store">
   /** The ops dashboard (P5.5). Optional for the reason `lab` is. */
   kernel?: Omit<KernelDeps, "verifier">
-  /** Trips, documents and Postcards (P4.1). Optional for the reason `lab` is. */
-  trips?: Omit<TripsDeps, "verifier">
   /** Injectable for tests; production gets the defaults. */
   clock?: () => number
   sleep?: (ms: number) => Promise<void>
@@ -187,29 +176,22 @@ export function createApp(deps: AppDeps) {
     })
   })
 
-  // Mounted, not inlined. `/lab/*` is the internal tool's whole surface, so it is
-  // one thing to gate or drop; and a deployment with no `lab` in its deps simply
-  // has no such routes, which is the difference between "not configured" and
-  // "configured and broken".
-  // Before `/lab`, and the order is load-bearing: the Lab's `use("*")` would
-  // otherwise match `/lab/places` too and verify every token twice, against a
-  // 10 ms CPU ceiling. Registered first, this route answers and the Lab's
-  // middleware never runs. `places.test.ts` counts the verifications.
-  if (deps.probes) {
-    app.route("/probes", probesRoutes({ ...deps.probes, verifier: deps.verifier, jobs: deps.jobs }))
-  }
+  // Mounted, not inlined: a deployment without these deps simply has no such
+  // routes, which is the difference between "not configured" and "configured
+  // and broken".
   if (deps.kernel) {
     app.route("/lab/kernel", kernelRoutes({ ...deps.kernel, verifier: deps.verifier }))
   }
-  if (deps.places) {
-    app.route("/lab/places", placesRoutes({ ...deps.places, verifier: deps.verifier }))
-    app.route("/places", placeSearchRoutes({ ...deps.places, verifier: deps.verifier }))
-  }
-  if (deps.trips) {
-    app.route("/", tripsRoutes({ ...deps.trips, verifier: deps.verifier, jobs: deps.jobs }))
-  }
-  if (deps.lab) {
-    app.route("/lab", labRoutes({ ...deps.lab, verifier: deps.verifier, jobs: deps.jobs }))
+  if (deps.research) {
+    app.route(
+      "/",
+      researchRoutes({
+        ...deps.research,
+        jobs: deps.jobs,
+        verifier: deps.verifier,
+        dispatcher: deps.dispatcher,
+      }),
+    )
   }
 
   app.onError((e, c) => {

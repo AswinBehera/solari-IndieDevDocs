@@ -26,7 +26,9 @@
   --color-surface-raised: #ede9df;
   --color-ink: #23242a;
   --color-ink-muted: #5b584f;
-  --color-ink-faint: #8a867b;
+  /* Darker than the canvas's #8a867b, which was 3.2:1 on the page and 3.0:1 on a
+     raised panel: too faint for the 9–11px labels it sets. This is 5.4:1 and 5.0:1. */
+  --color-ink-faint: #66625a;
   --color-rule: #d9d4c7;
   --color-accent-pink: #ff2d95;
   --color-accent-blue: #16204a;

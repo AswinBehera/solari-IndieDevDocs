@@ -1,6 +1,7 @@
 packages:
   - "apps/*"
   - "packages/samsara/*"
+  - "packages/research/*"
   - "packages/travel/*"
 
 allowBuilds:

@@ -1,176 +1,85 @@
 @import "tailwindcss";
-
-/* The design tokens `@dt/ui` generates its utilities from. Imported here rather
-   than by a component, because `@theme` has to reach Tailwind's compiler. */
-@import "@dt/ui/theme.css";
-
-/* `@dt/ui` reaches this app as a symlink into `node_modules`, and Tailwind's
-   automatic content detection skips `node_modules` — so without this line the
-   card's own classes are never generated and it renders unstyled while every
-   class used directly in `apps/web` works. The path is to the real directory,
-   not the symlink, because that is what the scanner walks. */
-@source "../../../packages/travel/ui/src";
+@import "./theme.css";
 
 /* Keyboard focus, for every control that does not draw its own. `:where` keeps
-   it at zero specificity, so a component's `focus:outline-none` still wins where
-   it has a better cue of its own. */
-:where(a, button, summary, [role="button"], [tabindex]):focus-visible {
-  outline: 2px solid var(--color-accent-blue);
+   it at zero specificity, so a component's own cue still wins. */
+:where(a, button, input, select, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--color-link);
   outline-offset: 2px;
 }
 
-/* ---- The Trip Document (P4.1) -------------------------------------------------
-   Tiptap renders plain elements with no classes, so the document's type is set
-   here against its root rather than utility by utility. Sizes are the canvas's:
-   17px prose at 1.6, 30px serif day headings with the date beside them in mono. */
+/* ---- The research document -----------------------------------------------------
+   Tiptap renders plain elements with no classes, so the prose is set here against
+   the editor's root. Rules reach only the document's own children, never into a
+   block's node view, whose markup is styled by its utilities. */
 
-.card-flash > * {
-  outline: 2px solid var(--color-accent-pink);
-  outline-offset: 6px;
-  transition: outline-color 1s;
-}
-.trip-doc {
+.rd-doc {
   outline: none;
   font-family: var(--font-body);
   color: var(--color-ink);
 }
-/* Prose rules reach only the document's own blocks (direct children, and lists and
-   quotes inside them), never into a Postcard's node view, whose markup is styled
-   by its utilities: an unlayered `.trip-doc p` outranks every Tailwind class. */
-.trip-doc > p,
-.trip-doc li > p,
-.trip-doc blockquote > p {
+.rd-doc > p,
+.rd-doc li > p,
+.rd-doc blockquote > p {
   font-size: 17px;
-  line-height: 1.6;
-  margin: 0 0 18px;
+  line-height: 1.65;
+  margin: 0 0 16px;
 }
-.trip-doc > h2 {
+.rd-doc > h1 {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 1.1;
+  margin: 8px 0 16px;
+}
+.rd-doc > h2 {
   font-family: var(--font-display);
   font-size: 30px;
   font-weight: 400;
   line-height: 1.2;
-  margin: 36px 0 12px;
+  margin: 40px 0 12px;
 }
-.trip-doc > h3 {
+.rd-doc > h3 {
   font-family: var(--font-display);
   font-size: 22px;
   font-weight: 400;
-  margin: 24px 0 8px;
+  margin: 28px 0 8px;
 }
-.trip-doc > ul,
-.trip-doc > ol,
-.trip-doc li > ul,
-.trip-doc li > ol {
+.rd-doc > ul,
+.rd-doc > ol {
   font-size: 17px;
-  line-height: 1.6;
-  margin: 0 0 18px;
+  line-height: 1.65;
+  margin: 0 0 16px;
   padding-left: 1.4em;
 }
-.trip-doc > ul,
-.trip-doc li > ul {
+.rd-doc > ul {
   list-style: disc;
 }
-.trip-doc > ol,
-.trip-doc li > ol {
+.rd-doc > ol {
   list-style: decimal;
 }
-.trip-doc li > p {
+.rd-doc li > p {
   margin: 0;
 }
-.trip-doc > blockquote {
-  border-left: 2px solid var(--color-accent-gold);
-  padding-left: 12px;
-  font-style: italic;
+.rd-doc > blockquote {
+  border-left: 3px solid var(--color-marker);
+  padding-left: 14px;
+  color: var(--color-ink-muted);
 }
-.trip-doc > p a,
-.trip-doc li a {
-  color: var(--color-accent-blue);
-  text-decoration: underline;
-  text-decoration-color: var(--color-rule);
-}
-.trip-doc > p.is-empty::before {
+.rd-doc > p.is-empty::before,
+.rd-doc > h2.is-empty::before {
   content: attr(data-placeholder);
   color: var(--color-ink-faint);
   float: left;
   height: 0;
   pointer-events: none;
 }
-/* Read-only (the share page): the empty paragraphs a writer leaves between
-   cards are room to type, and to a reader they are only gaps. */
-.trip-doc[contenteditable="false"] > p:has(> br.ProseMirror-trailingBreak:only-child),
-.trip-doc[contenteditable="false"] > p:empty {
-  display: none;
+.rd-doc .ProseMirror-selectednode > .rd-block {
+  outline: 2px solid var(--color-link);
+  outline-offset: 3px;
 }
-.trip-doc .day-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--color-ink-faint);
-  margin-left: 12px;
-  user-select: none;
-}
-.trip-doc .ProseMirror-selectednode > * {
-  outline: 2px solid var(--color-accent-pink);
-  outline-offset: 4px;
-}
-
-/* ---- Map pins (P4.4) -----------------------------------------------------------
-   HTML markers, because MapLibre draws text only from a glyph server and there is
-   none hosted yet (ADR-0018). The canvas's pin: a pink dot with a soft ring. */
-
-.map-pin {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-}
-.map-pin-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--color-accent-pink);
-  box-shadow: 0 0 0 5px rgb(255 45 149 / 0.25);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  color: #fff;
-  transition: transform 0.15s;
-}
-.map-pin-many {
-  width: 20px;
-  height: 20px;
-}
-.map-pin:hover .map-pin-dot {
-  transform: scale(1.15);
-}
-.map-pin-label {
-  font-family: var(--font-body);
-  font-size: 11px;
-  color: var(--color-surface);
-  white-space: nowrap;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
-}
-.maplibregl-ctrl-attrib {
-  font-family: var(--font-mono);
-  font-size: 9px;
-}
-/* The attribution stays (ODbL), dressed for the midnight plane rather than as a
-   white pill on it. */
-/* Scoped under the map so they outrank MapLibre's own rules, whose stylesheet
-   arrives later with the lazy route and would otherwise win at equal weight. */
-.maplibregl-map .maplibregl-ctrl.maplibregl-ctrl-attrib,
-.maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact {
-  background-color: rgb(22 32 74 / 0.7);
-  color: rgb(244 241 234 / 0.7);
-}
-.maplibregl-map .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button {
-  background-color: rgb(244 241 234 / 0.5);
-}
-.maplibregl-map .maplibregl-ctrl-attrib a {
-  color: rgb(244 241 234 / 0.8);
+/* A cited fact inside a sentence: highlighter under the value. */
+.rd-doc .ProseMirror-selectednode > .rd-chip {
+  outline: 2px solid var(--color-link);
+  outline-offset: 1px;
 }

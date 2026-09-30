@@ -1,5 +1,5 @@
 {
-  "name": "@dt/api",
+  "name": "@rd/api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,12 +14,14 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
     "test": "vitest run --passWithNoTests",
-    "dev": "wrangler dev --port 8788",
+    "dev": "wrangler dev --port 8789",
     "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@dt/db": "workspace:*",
     "@dt/travel-pack": "workspace:*",
+    "@rd/db": "workspace:*",
+    "@rd/research": "workspace:*",
     "@samsara/core": "workspace:*",
     "@samsara/harvest": "workspace:*",
     "@samsara/kernel": "workspace:*",

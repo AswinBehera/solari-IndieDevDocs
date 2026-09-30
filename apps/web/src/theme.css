@@ -1,0 +1,40 @@
+/**
+ * Sourced's tokens, declared once, in CSS. Tailwind v4 derives utilities from the
+ * variable names, so `--color-ink-muted` is what makes `text-ink-muted` exist.
+ *
+ * The idea the palette carries: a research document is paper, and what a claim
+ * rests on is marked the way a reader marks a printout — in highlighter. The marker
+ * yellow is reserved for evidence (a cited fact, the box on a screenshot), so it
+ * always means "this is where the number came from".
+ */
+
+@theme {
+  --color-surface: #f5f4ef;
+  --color-surface-raised: #ebe9e1;
+  --color-paper: #ffffff;
+  --color-ink: #16181d;
+  --color-ink-muted: #4f525a;
+  /* 5.0:1 on the surface, for the 10–11px mono labels. */
+  --color-ink-faint: #666972;
+  --color-rule: #dad8cf;
+
+  /* Evidence. */
+  --color-marker: #ffe066;
+  --color-marker-soft: #fff4c2;
+  /* Receipts and the dark panels that hold them. */
+  --color-night: #161c26;
+  --color-night-raised: #212a38;
+  --color-link: #1d5bbf;
+
+  --color-signal-red: #b3261e;
+  --color-signal-green: #2b7a3b;
+  /* A game that discloses generative AI. Not red: disclosure is not wrongdoing. */
+  --color-signal-amber: #b45309;
+
+  --shadow-card: 0 1px 0 rgb(22 24 29 / 0.04), 0 8px 24px -16px rgb(22 24 29 / 0.3);
+
+  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-body: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, SFMono-Regular, monospace;
+}

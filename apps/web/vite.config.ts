@@ -11,8 +11,8 @@ import { defineConfig } from "vite"
  * disagreement would surface as a bug on the day of the first deploy. Same-origin
  * `/api/*` here matches same-origin `/api/*` behind Cloudflare.
  *
- * The port is 8788 rather than wrangler's default 8787, which collides with tooling
- * that is commonly already listening there. If the API is not running the request
+ * The API's port is 8789 rather than wrangler's default 8787, which collides with
+ * tooling that is commonly already listening there. If the API is not running the request
  * fails and the UI says so — which is the correct thing for it to say.
  *
  * `127.0.0.1` rather than `localhost` on purpose: on macOS `localhost` resolves to
@@ -22,10 +22,10 @@ import { defineConfig } from "vite"
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    port: 5173,
+    port: 5174,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8788",
+        target: "http://127.0.0.1:8789",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },

@@ -4,7 +4,7 @@
 # is why a handler here may hold an SSE stream open for fifteen minutes and still
 # fit. `cpu.test.ts` measures the CPU side of that in CI; the authoritative number
 # is the dashboard's, because a Worker cannot time itself from inside.
-name = "doen-thang-api"
+name = "research-docs-api"
 main = "src/index.ts"
 compatibility_date = "2025-09-01"
 
@@ -23,7 +23,7 @@ compatibility_flags = ["nodejs_compat"]
 # ceiling, and `stream.test.ts` asserts the SSE loop's share of it.
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-# `wrangler hyperdrive create doen-thang --connection-string=...` prints this.
+# `wrangler hyperdrive create research-docs --connection-string=...` prints this.
 # Still a placeholder because no Cloudflare account has been created yet: the id
 # is issued by that command and cannot be invented. Nothing local needs it —
 # `wrangler dev` uses `localConnectionString` below — so this line is the first
@@ -33,13 +33,13 @@ id = "REPLACE_WITH_HYPERDRIVE_ID"
 # instead of standing up a real Hyperdrive. Committed on purpose — these are the
 # throwaway credentials from `docker-compose.yml`, and a dev setup that needs a
 # secret before it will start is a dev setup people work around.
-localConnectionString = "postgres://postgres:postgres@localhost:5432/doen_thang"
+localConnectionString = "postgres://postgres:postgres@localhost:5432/research_docs"
 
 [vars]
 # Public, non-secret configuration only. Everything with a key in it is a secret
 # (`wrangler secret put NAME`) and appears in `src/env.ts`, never here:
 #   SUPABASE_URL, GITHUB_TOKEN
-GITHUB_REPOSITORY = "AswinBehera/solari-TravelOS"
+GITHUB_REPOSITORY = "AswinBehera/solari-Sourced"
 GITHUB_WORKFLOW = "worker.yml"
 GITHUB_REF = "main"
 

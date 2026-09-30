@@ -10,8 +10,10 @@ export function Kernel() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-6 pt-10 pb-20 font-body text-ink sm:px-12">
       <header>
-        <p className="mb-2 font-mono text-[11px] text-ink-faint tracking-[.1em]">/lab/kernel</p>
-        <h1 className="font-display text-[44px] leading-none tracking-tight">Kernel</h1>
+        <p className="mb-2 font-mono text-[11px] text-ink-faint tracking-[.1em]">
+          /lab/kernel · BUILT ON SOLARI · INTERNAL
+        </p>
+        <h1 className="font-display text-[44px] leading-none tracking-tight">Spend</h1>
       </header>
       {q.isPending ? (
         <Note>Loading…</Note>

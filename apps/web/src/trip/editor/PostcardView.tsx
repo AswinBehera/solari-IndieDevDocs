@@ -212,7 +212,7 @@ function PriceCardLive({ id, payload, editable, store }: PriceProps) {
         <DealStubs
           deals={deals.data.deals}
           searched={deals.data.searched}
-          hunter={{ name: DEAL_HUNTER.name, href: `/samsara?persona=${DEAL_HUNTER.id}` }}
+          hunter={{ name: DEAL_HUNTER.name, href: `/locals?persona=${DEAL_HUNTER.id}` }}
         />
       )}
     </ProviderPricesPostcard>

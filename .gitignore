@@ -36,3 +36,6 @@ coverage/
 .osm/
 
 apps/web/public/shots/
+
+# Receipts captured from Steam: evidence for local docs, not ours to redistribute.
+apps/web/public/receipts/

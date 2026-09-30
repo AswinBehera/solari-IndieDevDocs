@@ -163,23 +163,23 @@ function Runs({
 }) {
   if (!personaId) {
     return (
-      <p className="mt-3">
+      <div className="mt-3">
         <Note tone="muted">Choose a persona to see its runs.</Note>
-      </p>
+      </div>
     )
   }
   if (error) {
     return (
-      <p className="mt-3">
+      <div className="mt-3">
         <Note tone="error">{errorText(error)}</Note>
-      </p>
+      </div>
     )
   }
   if (rows.length === 0) {
     return (
-      <p className="mt-3">
+      <div className="mt-3">
         <Note tone="muted">No runs for this persona yet.</Note>
-      </p>
+      </div>
     )
   }
   return (

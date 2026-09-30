@@ -1,5 +1,5 @@
 {
-  "name": "@dt/web",
+  "name": "@rd/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,9 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@dt/core": "workspace:*",
-    "@dt/travel-pack": "workspace:*",
-    "@dt/ui": "workspace:*",
+    "@rd/research": "workspace:*",
     "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-router": "^1.170.40",
     "@tiptap/core": "^3.31.3",
@@ -22,7 +20,6 @@
     "@tiptap/react": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
     "@tiptap/suggestion": "^3.31.3",
-    "maplibre-gl": "^6.11.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
