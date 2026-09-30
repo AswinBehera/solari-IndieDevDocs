@@ -132,7 +132,7 @@ export function linkLine(kind: LinkKind): string {
       return "YouTube video, kept as a link. Turning videos into places is coming soon."
     case "booking":
     case "agoda":
-      return "A hotel page. Check what each country is shown for it."
+      return "A hotel page. Put it on a /price card to compare booking sites."
     case "maps":
       return "A map link."
     default:
@@ -221,4 +221,107 @@ export function priceSpread(rows: readonly PriceRow[]): string | null {
   const hi = Math.max(...usd)
   const pct = Math.round(((hi - lo) / lo) * 100)
   return pct === 0 ? "Same price everywhere we could read." : `Highest is ${pct}% above the lowest.`
+}
+
+/** A hotel site the price card knows by name, from its URL. */
+export function providerOf(url: string): { id: string; label: string } | null {
+  const kind = linkKind(url)
+  if (kind === "booking") return { id: "booking", label: "Booking.com" }
+  if (kind === "agoda") return { id: "agoda", label: "Agoda" }
+  return null
+}
+
+/** One site's line on the price card: one link, read from one viewpoint. */
+export interface OfferRow {
+  url: string
+  provider: { id: string; label: string } | null
+  /** Where the offer stands: not checked, being read, read, or read and refused. */
+  status: "unchecked" | "reading" | "price" | "no_price" | "blocked"
+  label: string
+  usd: number | null
+  /** Nights the page was asked for, so two sites are compared on the same stay. */
+  nights: number | null
+  checkIn: string | null
+  screenshotRef: string | null
+  cheapest: boolean
+}
+
+export interface OfferWire {
+  url: string
+  /** The stored probe target's `parsed`, when one has been read. */
+  parsed?: unknown
+  /** The observation from the card's viewpoint, if it has landed. */
+  observation?: ObservationWire | null
+  started?: boolean
+}
+
+/** Two sites within 2% of each other are level: see `offerRows`. */
+export const NEAR_LEVEL = 0.02
+
+/**
+ * Rows for the provider comparison, cheapest first.
+ *
+ * "Cheapest" is only claimed between offers for the same stay (check-in and
+ * nights) read from the same viewpoint in dollars; a two-night page against a
+ * one-night page is not a saving, it is a different question.
+ */
+export function offerRows(offers: readonly OfferWire[]): OfferRow[] {
+  const rows: OfferRow[] = offers.map((o) => {
+    const parsed = (o.parsed ?? {}) as { checkIn?: string; checkOut?: string }
+    const nights =
+      parsed.checkIn && parsed.checkOut
+        ? Math.round((Date.parse(parsed.checkOut) - Date.parse(parsed.checkIn)) / 86_400_000)
+        : null
+    const base = {
+      url: o.url,
+      provider: providerOf(o.url),
+      nights,
+      checkIn: parsed.checkIn ?? null,
+      cheapest: false,
+    }
+    if (!o.observation) {
+      return {
+        ...base,
+        status: o.started ? "reading" : "unchecked",
+        label: o.started ? "reading…" : "not checked",
+        usd: null,
+        screenshotRef: null,
+      }
+    }
+    const [row] = priceRows([o.observation])
+    return {
+      ...base,
+      status: row?.status ?? "no_price",
+      label: row?.label ?? "no price shown",
+      usd: row?.usd ?? null,
+      screenshotRef: row?.screenshotRef ?? null,
+    }
+  })
+  rows.sort((a, b) => (a.usd ?? Infinity) - (b.usd ?? Infinity))
+  const priced = rows.filter((r) => r.usd !== null)
+  const sameStay =
+    priced.length >= 2 &&
+    priced.every((r) => r.nights === priced[0]?.nights && r.checkIn === priced[0]?.checkIn)
+  // A gap inside NEAR_LEVEL is smaller than the tax and "from"-price differences
+  // between sites, so naming a winner would be a claim the figures cannot back.
+  const lo = priced[0]?.usd ?? 0
+  const hi = priced[priced.length - 1]?.usd ?? 0
+  if (sameStay && priced[0] && (hi - lo) / lo >= NEAR_LEVEL) priced[0].cheapest = true
+  return rows
+}
+
+/** "Agoda is $80 less than Booking.com for the same night." or why no saving is claimed. */
+export function offerVerdict(rows: readonly OfferRow[]): string | null {
+  const priced = rows.filter((r) => r.usd !== null)
+  if (priced.length < 2) return null
+  const lo = priced[0] as OfferRow
+  const hi = priced[priced.length - 1] as OfferRow
+  const sameStay = priced.every((r) => r.nights === lo.nights && r.checkIn === lo.checkIn)
+  if (!sameStay) return "These links are for different stays, so the prices are not compared."
+  const gap = Math.round((hi.usd as number) - (lo.usd as number))
+  const nights = lo.nights === 1 ? "the same night" : `the same ${lo.nights} nights`
+  if (gap === 0) return "Same price on every site we read."
+  if (!lo.cheapest)
+    return `Level: within $${gap} for ${nights}, less than tax differences between sites. A code would decide it.`
+  return `${lo.provider?.label ?? "One site"} is $${gap} less than ${hi.provider?.label ?? "the dearest"} for ${nights}.`
 }

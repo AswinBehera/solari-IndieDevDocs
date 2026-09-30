@@ -79,7 +79,8 @@ export class MemoryHarvestRunStore implements HarvestRunStore {
         (r) =>
           (filter.sourceId === undefined || r.sourceId === filter.sourceId) &&
           (filter.personaId === undefined || r.personaId === filter.personaId) &&
-          (filter.query === undefined || r.query === filter.query),
+          (filter.query === undefined || r.query === filter.query) &&
+          (filter.domainId === undefined || r.domainId === filter.domainId),
       )
       .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
       .slice(0, boundedLimit(filter.limit, RUN_LIST_LIMIT))

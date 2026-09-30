@@ -351,6 +351,47 @@ describe("what the extractor found", () => {
     expect(body.mentions[0]?.payload).toEqual({ localName: "ร้านหอมดิน", quote: "อร่อยมาก" })
   })
 
+  it("folds the deals domain into one row per code, filtered by provider", async () => {
+    const deal = (id: string, provider: string, code: string) =>
+      mention({
+        id,
+        domainId: "deals",
+        payload: {
+          provider,
+          code,
+          offer: null,
+          expires: null,
+          conditions: null,
+          quote: `use ${code}`,
+        },
+      })
+    mentions.add(
+      mention(),
+      deal("d1", "agoda", "AG8"),
+      deal("d2", "agoda", "AG8"),
+      deal("d3", "booking", "BK5"),
+    )
+    const res = await build().request("/lab/deals?providers=agoda", { headers: AUTH })
+    const body = (await res.json()) as { deals: { code: string; sightings: number }[] }
+    expect(body.deals.map((d) => [d.code, d.sightings])).toEqual([["AG8", 2]])
+  })
+
+  it("says what the Deal hunter searched, so no codes reads as looked and found none", async () => {
+    runs.runs.set("r1", run({ id: "r1", personaId: "beam", domainId: "deals", itemCount: 205 }))
+    runs.runs.set(
+      "r2",
+      run({ id: "r2", personaId: "beam", domainId: "deals", itemCount: 0, outcome: "blocked" }),
+    )
+    runs.runs.set("r3", run({ id: "r3", personaId: "a", itemCount: 9 }))
+    const res = await build().request("/lab/deals", { headers: AUTH })
+    const body = (await res.json()) as {
+      deals: unknown[]
+      searched: { runs: number; blocked: number; items: number; personaIds: string[] }
+    }
+    expect(body.deals).toEqual([])
+    expect(body.searched).toMatchObject({ runs: 2, blocked: 1, items: 205, personaIds: ["beam"] })
+  })
+
   it("carries the item each claim came from, so a claim can be checked", async () => {
     mentions.add(mention())
     const res = await build().request("/lab/mentions", { headers: AUTH })

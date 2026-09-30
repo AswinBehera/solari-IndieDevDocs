@@ -145,7 +145,7 @@ function Loaded({ record }: { record: TripRecord }) {
               void create({ kind: "link", payload: { url: "" } })
               return
             case "price":
-              void create({ kind: "price", payload: { url: "" } })
+              void create({ kind: "price", payload: { offers: [], viewpoint: "us" } })
               return
             case "photo":
               photoInput.current?.click()

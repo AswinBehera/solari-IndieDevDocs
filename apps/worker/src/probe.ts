@@ -2,6 +2,7 @@ import type { Kernel } from "@samsara/kernel"
 import {
   type FxRates,
   type ObservationStore,
+  PROBE_VIEWPOINTS,
   type ProbeAdapter,
   type ProbeTargetStore,
   runProbe,
@@ -37,6 +38,14 @@ export function createProbeHandler(deps: ProbeHandlerDeps): JobHandler {
     if (typeof targetId !== "string" || targetId.length === 0) {
       throw new Error("probe.run: payload.targetId must be a non-empty string")
     }
+    // Optional subset of viewpoints; an unknown code is dropped, not guessed at.
+    const wanted = (ctx.job.payload as { countries?: unknown }).countries
+    const viewpoints = Array.isArray(wanted)
+      ? PROBE_VIEWPOINTS.filter((vp) => wanted.includes(vp.country))
+      : undefined
+    if (viewpoints && viewpoints.length === 0) {
+      throw new Error("probe.run: payload.countries names no known viewpoint")
+    }
     const target = await deps.targets.get(targetId)
     if (!target) {
       await ctx.heartbeat("target is gone, nothing to do")
@@ -51,7 +60,7 @@ export function createProbeHandler(deps: ProbeHandlerDeps): JobHandler {
         archive: deps.archive,
         ...(deps.rates ? { rates: deps.rates } : {}),
       },
-      { target, adapter, signal: ctx.signal },
+      { target, adapter, signal: ctx.signal, ...(viewpoints ? { viewpoints } : {}) },
     )
     const observed = report.results.filter((r) => r.outcome === "observed").length
     await ctx.heartbeat(`${observed}/${report.results.length} countries observed`)

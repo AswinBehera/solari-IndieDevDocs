@@ -5,6 +5,8 @@ import {
   linkKind,
   linkLine,
   localPercent,
+  offerRows,
+  offerVerdict,
   photoLine,
   priceRows,
   priceSpread,
@@ -146,5 +148,46 @@ describe("priceRows", () => {
   it("reports the spread honestly, and nothing for fewer than two figures", () => {
     expect(priceSpread(priceRows(obs))).toBe("Highest is 11% above the lowest.")
     expect(priceSpread(priceRows(obs.slice(0, 1)))).toBeNull()
+  })
+})
+
+describe("offerRows", () => {
+  const offer = (url: string, usd: number | null, checkOut = "2026-10-30") => ({
+    url,
+    parsed: { checkIn: "2026-10-29", checkOut },
+    observation: {
+      country: "us",
+      payload:
+        usd === null ? { status: "blocked" } : { status: "price", displayed: `USD ${usd}`, usd },
+    },
+  })
+  const booking = "https://www.booking.com/hotel/th/x.html"
+  const agoda = "https://www.agoda.com/x/hotel/bangkok-th.html"
+
+  it("flags the cheaper site when both are the same stay, and says by how much", () => {
+    const rows = offerRows([offer(booking, 729), offer(agoda, 649)])
+    expect(rows.map((r) => [r.provider?.id, r.cheapest, r.nights])).toEqual([
+      ["agoda", true, 1],
+      ["booking", false, 1],
+    ])
+    expect(offerVerdict(rows)).toBe("Agoda is $80 less than Booking.com for the same night.")
+  })
+
+  it("calls a gap smaller than tax noise level, and names no winner", () => {
+    const rows = offerRows([offer(booking, 729), offer(agoda, 724)])
+    expect(rows.some((r) => r.cheapest)).toBe(false)
+    expect(offerVerdict(rows)).toMatch(/^Level: within \$5 for the same night/)
+  })
+
+  it("claims no saving between different stays", () => {
+    const rows = offerRows([offer(booking, 729), offer(agoda, 649, "2026-10-31")])
+    expect(rows.some((r) => r.cheapest)).toBe(false)
+    expect(offerVerdict(rows)).toMatch(/different stays/)
+  })
+
+  it("keeps an unread or blocked site on the card without a price", () => {
+    const rows = offerRows([offer(booking, null), { url: agoda, started: true }])
+    expect(rows.map((r) => r.status).sort()).toEqual(["blocked", "reading"])
+    expect(offerVerdict(rows)).toBeNull()
   })
 })

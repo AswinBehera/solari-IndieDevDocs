@@ -32,7 +32,7 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
   {
     id: "price",
     command: "/price",
-    description: "Paste a hotel link; compare what 7 countries are charged",
+    description: "Compare one hotel across booking sites, plus codes locals share",
   },
 ]
 

@@ -41,6 +41,14 @@ describe("parseStayUrl", () => {
       "https://www.agoda.com/the-siam-hotel/hotel/bangkok-th.html?checkIn=2026-10-29&los=1&adults=2&rooms=1&children=0",
     )
   })
+  it("reads an Agoda stay length from `los`, the way Agoda's own links carry it", () => {
+    const r = parseStayUrl(
+      "https://www.agoda.com/x/hotel/bangkok-th.html?checkIn=2026-11-02&los=1&adults=2",
+      NOW,
+    )
+    expect(r.ok && [r.parsed.checkIn, r.parsed.checkOut]).toEqual(["2026-11-02", "2026-11-03"])
+    expect(r.ok && r.parsed.url).toContain("los=1")
+  })
   it("refuses everything else by name", () => {
     for (const url of [
       "not a url",

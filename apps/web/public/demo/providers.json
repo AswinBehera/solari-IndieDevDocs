@@ -1,0 +1,83 @@
+{
+  "hotel": "Mandarin Oriental, Bangkok",
+  "viewpoint": "us",
+  "readAt": "2026-09-30",
+  "offers": [
+    {
+      "provider": "agoda",
+      "url": "https://www.agoda.com/mandarin-oriental-bangkok_12/hotel/bangkok-th.html?checkIn=2026-10-29&los=1&adults=2&rooms=1&children=0",
+      "parsed": {
+        "site": "agoda",
+        "url": "https://www.agoda.com/mandarin-oriental-bangkok_12/hotel/bangkok-th.html?checkIn=2026-10-29&los=1&adults=2&rooms=1&children=0",
+        "checkIn": "2026-10-29",
+        "checkOut": "2026-10-30",
+        "adults": 2
+      },
+      "observation": {
+        "country": "us",
+        "capturedAt": "2026-09-30T11:21:15.856Z",
+        "payload": {
+          "status": "price",
+          "site": "agoda",
+          "country": "us",
+          "finalUrl": "https://www.agoda.com/mandarin-oriental-bangkok_12/hotel/bangkok-th.html?checkIn=2026-10-29&los=1&adults=2&rooms=1&children=0",
+          "title": "Mandarin Oriental, Bangkok, Bangkok | 2026 Updated Prices, Deals",
+          "displayed": "USD 724",
+          "source": "element",
+          "amount": 724,
+          "currency": "USD",
+          "caveats": [
+            "a member or sign-in rate may apply"
+          ],
+          "wall": null,
+          "context": null,
+          "judge": {
+            "wall": 0.06,
+            "property": 0.94,
+            "priceVisible": 0.18
+          },
+          "usd": 724
+        },
+        "screenshotRef": "providers/agoda-us.jpg",
+        "notes": null
+      }
+    },
+    {
+      "provider": "booking",
+      "url": "https://www.booking.com/hotel/th/mandarin-oriental-bangkok.html?checkin=2026-10-29&checkout=2026-10-30&group_adults=2&no_rooms=1&group_children=0",
+      "parsed": {
+        "site": "booking",
+        "url": "https://www.booking.com/hotel/th/mandarin-oriental-bangkok.html?checkin=2026-10-29&checkout=2026-10-30&group_adults=2&no_rooms=1&group_children=0",
+        "checkIn": "2026-10-29",
+        "checkOut": "2026-10-30",
+        "adults": 2
+      },
+      "observation": {
+        "country": "us",
+        "capturedAt": "2026-09-30T09:19:13.112Z",
+        "payload": {
+          "status": "price",
+          "site": "booking",
+          "country": "us",
+          "finalUrl": "https://www.booking.com/hotel/th/mandarin-oriental-bangkok.html?checkin=2026-10-29&checkout=2026-10-30&group_adults=2&no_rooms=1&group_children=0",
+          "title": "Mandarin Oriental, Bangkok, Bangkok (updated prices 2026)",
+          "displayed": "$729",
+          "source": "element",
+          "amount": 729,
+          "currency": "USD",
+          "caveats": [],
+          "wall": null,
+          "context": null,
+          "judge": {
+            "wall": 0.04,
+            "property": 0.97,
+            "priceVisible": 0.03
+          },
+          "usd": 729
+        },
+        "screenshotRef": "providers/booking-us.jpg",
+        "notes": null
+      }
+    }
+  ]
+}

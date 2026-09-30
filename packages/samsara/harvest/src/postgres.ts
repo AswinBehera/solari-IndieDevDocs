@@ -126,6 +126,7 @@ export class PostgresHarvestRunStore implements HarvestRunStore {
       ...(filter.sourceId ? [eq(harvestRuns.sourceId, filter.sourceId)] : []),
       ...(filter.personaId ? [eq(harvestRuns.personaId, filter.personaId)] : []),
       ...(filter.query ? [eq(harvestRuns.query, filter.query)] : []),
+      ...(filter.domainId ? [eq(harvestRuns.domainId, filter.domainId)] : []),
     ]
     const rows = await this.db
       .select()

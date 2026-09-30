@@ -59,6 +59,8 @@ export interface HarvestRunFilter {
   personaId?: string
   /** Exact match. The comparison in the Lab is only meaningful within one question. */
   query?: string
+  /** The pack a run was harvested for. */
+  domainId?: string
   limit?: number
 }
 

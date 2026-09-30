@@ -52,3 +52,88 @@
   --font-body: "Work Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "DM Mono", ui-monospace, SFMono-Regular, monospace;
 }
+
+/* ---- Scrapbook pieces ----------------------------------------------------------
+   Plain classes rather than tokens, because each is a shape and not a colour: a
+   postage stamp's perforated edge, a strip of washi tape, a starburst sticker and a
+   ticket stub's notches. Drawn with masks and gradients so nothing is an image. */
+
+.sb-stamp {
+  --perf: 5px;
+  padding: calc(var(--perf) + 4px);
+  background: var(--color-paper);
+  -webkit-mask:
+    radial-gradient(circle at var(--perf) var(--perf), #0000 calc(var(--perf) * 0.55), #000 0)
+    calc(var(--perf) * -1) calc(var(--perf) * -1) / calc(var(--perf) * 2) calc(var(--perf) * 2)
+    round,
+    linear-gradient(#000 0 0) content-box;
+  mask:
+    radial-gradient(circle at var(--perf) var(--perf), #0000 calc(var(--perf) * 0.55), #000 0)
+    calc(var(--perf) * -1) calc(var(--perf) * -1) / calc(var(--perf) * 2) calc(var(--perf) * 2)
+    round,
+    linear-gradient(#000 0 0) content-box;
+  filter: drop-shadow(0 2px 3px rgb(35 36 42 / 0.25));
+}
+
+.sb-tape {
+  position: absolute;
+  width: 92px;
+  height: 22px;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgb(255 45 149 / 0.28) 0 6px,
+    rgb(255 45 149 / 0.18) 6px 12px
+  );
+  box-shadow: 0 1px 2px rgb(35 36 42 / 0.12);
+  clip-path: polygon(3% 0, 97% 4%, 100% 50%, 96% 100%, 2% 96%, 0 50%);
+  pointer-events: none;
+}
+.sb-tape.gold {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgb(201 162 39 / 0.35) 0 6px,
+    rgb(201 162 39 / 0.22) 6px 12px
+  );
+}
+
+.sb-starburst {
+  display: inline-grid;
+  place-items: center;
+  aspect-ratio: 1;
+  clip-path: polygon(
+    50% 0,
+    61% 17%,
+    79% 9%,
+    79% 29%,
+    98% 32%,
+    86% 50%,
+    98% 68%,
+    79% 71%,
+    79% 91%,
+    61% 83%,
+    50% 100%,
+    39% 83%,
+    21% 91%,
+    21% 71%,
+    2% 68%,
+    14% 50%,
+    2% 32%,
+    21% 29%,
+    21% 9%,
+    39% 17%
+  );
+}
+
+.sb-stub {
+  --notch: 9px;
+  -webkit-mask:
+    radial-gradient(circle at 0 50%, #0000 var(--notch), #000 calc(var(--notch) + 0.5px)) left / 51%
+    100% no-repeat,
+    radial-gradient(circle at 100% 50%, #0000 var(--notch), #000 calc(var(--notch) + 0.5px)) right /
+    51% 100% no-repeat;
+  mask:
+    radial-gradient(circle at 0 50%, #0000 var(--notch), #000 calc(var(--notch) + 0.5px)) left / 51%
+    100% no-repeat,
+    radial-gradient(circle at 100% 50%, #0000 var(--notch), #000 calc(var(--notch) + 0.5px)) right /
+    51% 100% no-repeat;
+}

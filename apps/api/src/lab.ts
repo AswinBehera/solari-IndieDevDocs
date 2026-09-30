@@ -1,3 +1,4 @@
+import { DEALS_DOMAIN, groupDeals } from "@dt/travel-pack/deals"
 import { countryCode, locale, personaTier, personaTraits, resolutionState } from "@samsara/core"
 // Subpath imports, never the barrels, for the reason `app.ts` gives about
 // `@samsara/kernel/jobs`: this app is compiled against the Workers runtime, and
@@ -106,6 +107,7 @@ export interface HarvestRunStoreReader {
     sourceId?: string
     personaId?: string
     query?: string
+    domainId?: string
     limit?: number
   }): Promise<HarvestRunRecord[]>
 }
@@ -373,6 +375,37 @@ export function labRoutes(deps: LabDeps) {
    * first and bounded, and a reviewer who needs an older window wants a different
    * screen rather than a longer one.
    */
+  /**
+   * Discount codes the Deal hunter has seen, one row per code (`groupDeals`).
+   *
+   * The mentions table read under the deals domain, folded by the pack's own
+   * function. Nothing here checks a code works; the card says so.
+   */
+  lab.get("/deals", async (c) => {
+    const providers = c.req.query("providers")?.split(",").filter(Boolean)
+    const rows = await deps.stores(c.env).mentions.list({ domainId: DEALS_DOMAIN, limit: 200 })
+    const deals = groupDeals(
+      rows.map((m) => ({
+        payload: m.payload,
+        createdAt: m.createdAt.toISOString(),
+        item: { sourceId: m.item.sourceId, url: m.item.url },
+      })),
+      providers,
+    )
+    // What was searched, so an empty list reads as "looked, found none" rather
+    // than as nothing having happened.
+    const runs = await deps.stores(c.env).runs.list({ domainId: DEALS_DOMAIN, limit: 50 })
+    const searched = {
+      runs: runs.length,
+      blocked: runs.filter((r) => r.outcome === "blocked").length,
+      items: runs.reduce((n, r) => n + r.itemCount, 0),
+      personaIds: [...new Set(runs.map((r) => r.personaId))],
+      lastAt: runs[0]?.startedAt.toISOString() ?? null,
+      queries: [...new Set(runs.map((r) => r.query))],
+    }
+    return c.json({ deals, searched })
+  })
+
   lab.get("/mentions", async (c) => {
     const domainId = c.req.query("domainId")
     const packVersion = c.req.query("packVersion")

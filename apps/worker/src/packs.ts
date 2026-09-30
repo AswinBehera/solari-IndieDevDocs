@@ -1,14 +1,14 @@
-import { createTravelPack, type TravelPackDeps, travelPack } from "@dt/travel-pack"
+import { createTravelPack, dealsPack, type TravelPackDeps, travelPack } from "@dt/travel-pack"
 import { PackRegistry } from "@samsara/refine"
 
 /**
  * Domain packs, wired in at boot (section 2.5, ADR-0010).
  *
- * **One pack, registered in one line, and that is the point of the file.** P0.5
- * shipped this with zero packs to prove the runner had no vertical compiled into
- * it. P2.2 registers the travel pack — and the claim held: it is the single line
- * below, with nothing accompanying it. Had it needed anything else, the seam would
- * have a hole in it.
+ * **One line per pack, and that is the point of the file.** P0.5 shipped this
+ * with zero packs to prove the runner had no vertical compiled into it. P2.2
+ * registered the travel pack as a single line with nothing accompanying it, and
+ * the deals pack went in the same way. A pack that needed more than its line
+ * here would mean the seam has a hole in it.
  *
  * It is a function rather than a module-level constant so that a test can build an
  * independent registry, and so that registration order is somewhere a reader can
@@ -35,5 +35,7 @@ export interface PackRegistryDeps {
 export function createPackRegistry(deps: PackRegistryDeps = {}): PackRegistry {
   const registry = new PackRegistry()
   registry.register(deps.travel ? createTravelPack(deps.travel) : travelPack)
+  // Discount codes: extract only, so their harvests stop after `refine.extract`.
+  registry.register(dealsPack)
   return registry
 }

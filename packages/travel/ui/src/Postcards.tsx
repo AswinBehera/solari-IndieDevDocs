@@ -15,9 +15,7 @@ import {
   type LinkKind,
   linkLine,
   localPercent,
-  type PriceRow,
   photoLine,
-  priceSpread,
   sourceBadge,
   stateTag,
   whyRows,
@@ -317,91 +315,6 @@ export function ChecklistPostcard({
   )
 }
 
-/** Where a price check stands, as the card shows it. */
-export type PriceCheck =
-  | { state: "idle" }
-  | { state: "starting" }
-  | { state: "running"; rows: PriceRow[] }
-  | { state: "done"; rows: PriceRow[] }
-  | { state: "error"; message: string }
-
-/**
- * What each country is shown for one property (P3.4). Cheapest is highlighted only
- * where a converted figure backs it, and the note says why prices differ without
- * promising a saving: a price is what a site displays to a visitor, and booking
- * from another country may not be possible or honoured.
- */
-export function PriceTable({ check, onCheck }: { check: PriceCheck; onCheck?: () => void }) {
-  const rows = check.state === "running" || check.state === "done" ? check.rows : []
-  const spread = priceSpread(rows)
-  return (
-    <div className="mt-4">
-      {check.state === "idle" && onCheck && (
-        <button
-          type="button"
-          onClick={onCheck}
-          className="border border-ink px-3 py-1.5 font-mono text-[11px] tracking-[.08em] hover:bg-ink hover:text-surface"
-        >
-          {/* Seven, not the eight viewpoints: the proxy pool has no `th` and that row
-              fails by name (kernel `countries.ts`). */}
-          CHECK PRICES IN 7 COUNTRIES
-        </button>
-      )}
-      {check.state === "starting" && (
-        <p className="font-mono text-[11px] text-ink-muted tracking-[.06em]">STARTING…</p>
-      )}
-      {check.state === "error" && <p className="text-[#B3261E] text-sm">{check.message}</p>}
-      {rows.length > 0 && (
-        <ul className="divide-y divide-rule border-rule border-y">
-          {rows.map((r) => (
-            <li key={r.country} className="flex items-center gap-3 py-1.5 font-mono text-[12px]">
-              <span className="w-8 text-ink-muted uppercase">{r.country}</span>
-              <span className={r.status === "price" ? "" : "text-ink-faint"}>{r.label}</span>
-              {r.usd !== null && (
-                <span className="ml-auto text-ink-muted">≈ ${r.usd.toFixed(0)}</span>
-              )}
-              {r.screenshotRef && (
-                <a
-                  href={`/shots/${r.screenshotRef}`}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-[10px] text-accent-blue tracking-[.08em] underline"
-                >
-                  SCREENSHOT
-                </a>
-              )}
-              {r.cheapest && (
-                <span className="border border-accent-gold px-1.5 text-[10px] text-accent-gold tracking-[.1em]">
-                  CHEAPEST
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {check.state === "running" && (
-        <>
-          <p className="mt-2 font-mono text-[11px] text-ink-muted tracking-[.06em]">
-            {rows.length} COUNTRIES BACK · READING THE REST
-          </p>
-          {/* A browser visits the page once per country, queued behind other work, so
-              this takes minutes rather than seconds. Say so, or it looks stuck. */}
-          <p className="mt-1 text-ink-faint text-xs">
-            Usually a few minutes. You can leave this page; the prices land here when they are back.
-          </p>
-        </>
-      )}
-      {check.state === "done" && (
-        <p className="mt-2 text-ink-muted text-sm">
-          {spread ? `${spread} ` : ""}
-          Sites show a price to each visitor; booking from another country may not be possible or
-          honoured, and taxes or member rates can differ.
-        </p>
-      )}
-    </div>
-  )
-}
-
 export function LinkPostcard({
   id,
   url,
@@ -500,94 +413,6 @@ export function PhotoPostcard({
         )}
         <span className="flex-none">{photoLine(geo, takenAt)}</span>
       </div>
-    </div>
-  )
-}
-
-/**
- * The Price Postcard, v0 (P3.4), in the state it can honestly be in today:
- * pending. Hundred Eyes' fan-out (P3.1 to P3.3) is not built, so the card holds
- * the URL and says that no eye has read it, in the canvas's own words for that
- * state, and makes no claim about what anyone will save (§6.4).
- */
-export function PricePostcard({
-  id,
-  url,
-  host,
-  onChangeUrl,
-  validateUrl,
-  check = { state: "idle" },
-  onCheck,
-}: {
-  id: string
-  url: string
-  host: string | null
-  onChangeUrl?: (url: string) => void
-  /** Why a pasted URL cannot be checked, or null if it can. Refusing on paste
-   *  beats refusing after the reader has pressed Check and waited. */
-  validateUrl?: (url: string) => string | null
-  check?: PriceCheck
-  onCheck?: () => void
-}) {
-  const [draft, setDraft] = useState(url)
-  const [refusal, setRefusal] = useState<string | null>(null)
-  return (
-    <div
-      style={tilted(id, 0.4)}
-      className="rotate-(--tilt) border border-track bg-paper px-6 py-5 shadow-postcard"
-    >
-      <div className="flex justify-between font-mono text-[10px] text-ink-muted tracking-[.1em]">
-        <span>HOTEL{host ? ` · ${host.toUpperCase()}` : ""}</span>
-        <span>ONE-OFF</span>
-      </div>
-      {onChangeUrl && !url ? (
-        <form
-          className="mt-3"
-          onSubmit={(e) => {
-            e.preventDefault()
-            const next = draft.trim()
-            const why = validateUrl?.(next) ?? null
-            setRefusal(why)
-            if (!why) onChangeUrl(next)
-          }}
-        >
-          <input
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value)
-              setRefusal(null)
-            }}
-            placeholder="Paste a Booking or Agoda URL, then Enter"
-            aria-label="Hotel page URL"
-            aria-invalid={refusal ? true : undefined}
-            className="w-full bg-transparent font-mono text-accent-blue text-xs placeholder:text-ink-faint focus:outline-none"
-          />
-          {refusal && (
-            <p role="alert" className="mt-2 text-signal-red text-xs">
-              {refusal}
-            </p>
-          )}
-        </form>
-      ) : (
-        <p className="mt-3 truncate font-mono text-accent-blue text-xs">{url}</p>
-      )}
-      <div className="mt-5 flex items-center gap-3">
-        <span className="h-px w-10 bg-accent-blue" aria-hidden />
-        <span className="font-mono text-[10px] text-accent-gold tracking-[.1em]">
-          {check.state === "done"
-            ? "PRICES BY COUNTRY"
-            : check.state === "running"
-              ? "READING"
-              : "NOT CHECKED YET"}
-        </span>
-      </div>
-      {url && (onCheck || check.state !== "idle") ? (
-        <PriceTable check={check} {...(onCheck ? { onCheck } : {})} />
-      ) : (
-        <p className="mt-2 text-ink-muted text-sm">
-          {url ? "Nobody has checked this yet." : "Paste a property URL to check it."}
-        </p>
-      )}
     </div>
   )
 }

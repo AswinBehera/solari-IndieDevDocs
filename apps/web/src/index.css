@@ -34,51 +34,61 @@
   font-family: var(--font-body);
   color: var(--color-ink);
 }
-.trip-doc p {
+/* Prose rules reach only the document's own blocks (direct children, and lists and
+   quotes inside them), never into a Postcard's node view, whose markup is styled
+   by its utilities: an unlayered `.trip-doc p` outranks every Tailwind class. */
+.trip-doc > p,
+.trip-doc li > p,
+.trip-doc blockquote > p {
   font-size: 17px;
   line-height: 1.6;
   margin: 0 0 18px;
 }
-.trip-doc h2 {
+.trip-doc > h2 {
   font-family: var(--font-display);
   font-size: 30px;
   font-weight: 400;
   line-height: 1.2;
   margin: 36px 0 12px;
 }
-.trip-doc h3 {
+.trip-doc > h3 {
   font-family: var(--font-display);
   font-size: 22px;
   font-weight: 400;
   margin: 24px 0 8px;
 }
-.trip-doc ul,
-.trip-doc ol {
+.trip-doc > ul,
+.trip-doc > ol,
+.trip-doc li > ul,
+.trip-doc li > ol {
   font-size: 17px;
   line-height: 1.6;
   margin: 0 0 18px;
   padding-left: 1.4em;
 }
-.trip-doc ul {
+.trip-doc > ul,
+.trip-doc li > ul {
   list-style: disc;
 }
-.trip-doc ol {
+.trip-doc > ol,
+.trip-doc li > ol {
   list-style: decimal;
 }
-.trip-doc li p {
+.trip-doc li > p {
   margin: 0;
 }
-.trip-doc blockquote {
+.trip-doc > blockquote {
   border-left: 2px solid var(--color-accent-gold);
   padding-left: 12px;
   font-style: italic;
 }
-.trip-doc a {
+.trip-doc > p a,
+.trip-doc li a {
   color: var(--color-accent-blue);
   text-decoration: underline;
   text-decoration-color: var(--color-rule);
 }
-.trip-doc p.is-empty::before {
+.trip-doc > p.is-empty::before {
   content: attr(data-placeholder);
   color: var(--color-ink-faint);
   float: left;
@@ -87,8 +97,8 @@
 }
 /* Read-only (the share page): the empty paragraphs a writer leaves between
    cards are room to type, and to a reader they are only gaps. */
-.trip-doc[contenteditable="false"] p:has(> br.ProseMirror-trailingBreak:only-child),
-.trip-doc[contenteditable="false"] p:empty {
+.trip-doc[contenteditable="false"] > p:has(> br.ProseMirror-trailingBreak:only-child),
+.trip-doc[contenteditable="false"] > p:empty {
   display: none;
 }
 .trip-doc .day-label {

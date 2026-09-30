@@ -25,7 +25,19 @@ export interface ProbesDeps {
   clock?: () => Date
 }
 
-const body = z.object({ url: z.string().trim().min(1).max(2000) })
+const body = z.object({
+  url: z.string().trim().min(1).max(2000),
+  /**
+   * Which viewpoints to read from. Absent means all of them, the cross-country
+   * check; one country is the provider comparison, where the question is which
+   * site is cheaper, not which country is.
+   */
+  countries: z
+    .array(z.string().regex(/^[a-z]{2}$/))
+    .min(1)
+    .max(8)
+    .optional(),
+})
 
 export function probesRoutes(deps: ProbesDeps & { jobs: (env: unknown) => JobStore }) {
   const routes = new Hono<{ Bindings: Record<string, unknown> }>()
@@ -44,12 +56,15 @@ export function probesRoutes(deps: ProbesDeps & { jobs: (env: unknown) => JobSto
       parsed: parsed.parsed,
     })
     const now = (deps.clock?.() ?? new Date()).getTime()
+    const countries = parsedBody.data.countries
+      ? [...new Set(parsedBody.data.countries)].sort()
+      : null
     const queued = await deps.jobs(c.env).enqueue({
       type: "probe.run",
       domainId: "travel",
       ownerId,
-      payload: { targetId: target.id },
-      idempotencyKey: `probe.run:${target.id}:${Math.floor(now / 3_600_000)}`,
+      payload: { targetId: target.id, ...(countries ? { countries } : {}) },
+      idempotencyKey: `probe.run:${target.id}:${Math.floor(now / 3_600_000)}${countries ? `:${countries.join(",")}` : ""}`,
     })
     return c.json({ targetId: target.id, jobId: queued.id, deduped: queued.deduped }, 202)
   })

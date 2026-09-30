@@ -3,6 +3,8 @@
 // object itself; P2.3 added the entity, ADR-0017's tiers and the pack factory that wires
 // them. P2.4 added the dedup keys; the scorer lands with P2.5.
 
+export * from "./deals.js"
+export * from "./deals-pack.js"
 export * from "./dedup.js"
 export * from "./entity.js"
 export * from "./mention.js"

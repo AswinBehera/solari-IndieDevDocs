@@ -75,7 +75,13 @@ export function parseStayUrl(raw: string, now: Date): ParseResult {
       }
     }
     const checkIn = validDay(q.get("checkIn")) ? (q.get("checkIn") as string) : dflt.checkIn
-    const checkOut = validDay(q.get("checkOut")) ? (q.get("checkOut") as string) : dflt.checkOut
+    // Agoda's own links carry the stay as `los` (nights), not a checkout date.
+    const los = Number(q.get("los"))
+    const checkOut = validDay(q.get("checkOut"))
+      ? (q.get("checkOut") as string)
+      : validDay(q.get("checkIn")) && Number.isInteger(los) && los >= 1 && los <= 30
+        ? new Date(Date.parse(checkIn) + los * DAY_MS).toISOString().slice(0, 10)
+        : dflt.checkOut
     const adults = clampAdults(q.get("adults"), dflt.adults)
     // The language segment is stripped: it picks the site's locale, and the probe's
     // whole point is that the viewpoint, not the URL, decides what is shown.

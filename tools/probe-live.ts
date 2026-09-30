@@ -108,6 +108,25 @@ try {
     )
   }
   console.log(`wall clock ${(Date.now() - started) / 1000}s`)
+  // The rows as `export-demo-probe.ts` writes them, so a good reading can become a fixture.
+  writeFileSync(
+    join(outDir, "observations.json"),
+    `${JSON.stringify(
+      {
+        url: parsed.parsed.url,
+        parsed: parsed.parsed,
+        observations: observations.rows.map((o) => ({
+          country: o.country,
+          capturedAt: o.capturedAt,
+          payload: o.payload,
+          screenshotRef: `${o.country}.png`,
+          notes: o.notes,
+        })),
+      },
+      null,
+      2,
+    )}\n`,
+  )
 } finally {
   await launcher.dispose()
 }

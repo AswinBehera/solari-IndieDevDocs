@@ -29,10 +29,13 @@ export function cardTitle(card: Pick<Postcard, "kind" | "payload">): string {
     }
     case "photo":
       return str("caption") || "Photo"
-    case "link":
     case "price": {
+      const offers = Array.isArray(payload.offers) ? payload.offers.length : str("url") ? 1 : 0
+      return offers ? `Prices · ${offers} site${offers === 1 ? "" : "s"}` : "Prices"
+    }
+    case "link": {
       const url = str("url")
-      const label = card.kind === "price" ? "Hotel" : "Link"
+      const label = "Link"
       try {
         return url ? `${label} · ${new URL(url).hostname.replace(/^www\./, "")}` : label
       } catch {

@@ -9,6 +9,7 @@
 
 export * from "./PlaceCard.js"
 export * from "./Postcards.js"
+export * from "./ProviderPrices.js"
 export * from "./paper.js"
 export * from "./place-card.js"
 export * from "./postcard-rules.js"

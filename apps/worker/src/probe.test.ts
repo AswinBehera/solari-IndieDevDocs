@@ -83,6 +83,20 @@ describe("probe.run", () => {
     expect(s.observations.rows).toHaveLength(7)
     expect(s.notes.at(-1)).toBe("7/8 countries observed")
   })
+  it("probes only the named countries when the payload lists some", async () => {
+    const s = setup()
+    const t = await s.targets.upsert({
+      ownerId: "o",
+      sourceId: "price.stay",
+      url: "https://x.invalid/",
+      parsed: {},
+    })
+    await s.handler(s.ctx({ targetId: t.id, countries: ["us"] }))
+    expect(s.observations.rows.map((o) => o.country)).toEqual(["us"])
+    await expect(s.handler(s.ctx({ targetId: t.id, countries: ["zz"] }))).rejects.toThrow(
+      "no known viewpoint",
+    )
+  })
   it("rejects a bad payload, a missing adapter, and tolerates a vanished target", async () => {
     const s = setup()
     await expect(s.handler(s.ctx({}))).rejects.toThrow("targetId")

@@ -190,11 +190,12 @@ describe("the pack registry", () => {
     // vertical compiled into it. One pack exists now, so the assertion that still
     // means something is the count: a second id appearing here without a second
     // pack being written is the seam leaking, which is what P2.8 tries to break.
-    expect(createPackRegistry().ids()).toEqual(["travel"])
+    // The second is the Deal hunter's pack: extract only, no places to resolve.
+    expect(createPackRegistry().ids()).toEqual(["travel", "deals"])
   })
 
   it("names what is registered when a job asks for a pack that is not", () => {
     const packs = createPackRegistry()
-    expect(() => packs.require("atlas")).toThrow(/registered: travel/)
+    expect(() => packs.require("atlas")).toThrow(/registered: travel, deals/)
   })
 })

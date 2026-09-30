@@ -71,12 +71,15 @@ describe("cardTitle", () => {
     expect(cardTitle({ kind: "note", payload: {} })).toBe("Note")
   })
 
-  it("names a link and a hotel by their site", () => {
+  it("names a link by its site and a price card by how many sites it compares", () => {
     expect(cardTitle({ kind: "link", payload: { url: "https://www.tiktok.com/@x/video/1" } })).toBe(
       "Link · tiktok.com",
     )
+    const offers = [{ url: "https://www.agoda.com/h" }, { url: "https://www.booking.com/h" }]
+    expect(cardTitle({ kind: "price", payload: { offers } })).toBe("Prices · 2 sites")
+    // A card saved before offers existed is one site.
     expect(cardTitle({ kind: "price", payload: { url: "https://www.agoda.com/h" } })).toBe(
-      "Hotel · agoda.com",
+      "Prices · 1 site",
     )
   })
 

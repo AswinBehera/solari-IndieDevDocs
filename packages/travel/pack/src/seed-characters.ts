@@ -22,6 +22,8 @@ import { CHARACTER_PRESETS } from "./characters.js"
 
 const USER_ID = "00000000-0000-4000-8000-000000000001"
 const FIXTURE = new URL("../fixtures/samsara-demo.json", import.meta.url)
+/** Beam's code searches, so the price card's "searched N times" is there on a clone. */
+const DEALS_FIXTURE = new URL("../fixtures/deals-demo.json", import.meta.url)
 const connectionString =
   process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/doen_thang"
 
@@ -30,6 +32,10 @@ const fixedId = (kind: "c" | "d" | "e", n: number) =>
 
 interface DemoRun {
   archetype: string
+  /** "travel" when absent; the deals runs say "deals" so `/lab/deals` finds them. */
+  domainId?: string
+  /** Taken from the item count when absent. A blocked run is kept: it was a search. */
+  outcome?: "ok" | "empty" | "blocked"
   sourceId: string
   query: string
   capturedAt: string
@@ -44,7 +50,8 @@ interface DemoRun {
 }
 
 async function main() {
-  const { runs } = JSON.parse(readFileSync(FIXTURE, "utf8")) as { runs: DemoRun[] }
+  const read = (url: URL) => (JSON.parse(readFileSync(url, "utf8")) as { runs: DemoRun[] }).runs
+  const runs = [...read(FIXTURE), ...read(DEALS_FIXTURE)]
   const { db, sql } = createDb(connectionString, { max: 1 })
 
   const personaIds = new Map<string, string>()
@@ -91,7 +98,7 @@ async function main() {
       id: sessionIds[j] as string,
       purpose: "harvest",
       ownerId: USER_ID,
-      domainId: "travel",
+      domainId: run.domainId ?? "travel",
       personaId,
       country: preset.country,
       locale: preset.locale,
@@ -99,17 +106,17 @@ async function main() {
       startedAt,
       endedAt,
       minutes: 1,
-      outcome: "ok",
+      outcome: run.outcome === "blocked" ? "blocked" : "ok",
     })
     await db.insert(harvestRuns).values({
       id: runIds[j] as string,
-      domainId: "travel",
+      domainId: run.domainId ?? "travel",
       personaId,
       sourceId: run.sourceId,
       query: run.query,
       startedAt,
       endedAt,
-      outcome: run.items.length > 0 ? "ok" : "empty",
+      outcome: run.outcome ?? (run.items.length > 0 ? "ok" : "empty"),
       itemCount: run.items.length,
       sessionId: sessionIds[j] as string,
     })

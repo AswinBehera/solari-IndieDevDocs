@@ -3,20 +3,21 @@ import { parseStayUrl } from "@dt/travel-pack/price/parse"
 import {
   type ChecklistItem,
   ChecklistPostcard,
+  DealStubs,
   LinkPostcard,
   linkKind,
   MissingPostcard,
   NotePostcard,
   PhotoPostcard,
   PlacePostcard,
-  PricePostcard,
-  PriceTable,
+  ProviderPricesPostcard,
+  providerOf,
 } from "@dt/ui"
 import { NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react"
 import { useState } from "react"
 import { type CardStore, useCard } from "../cards"
+import { DEAL_HUNTER, type Offer, offersOf, useDeals, useOffers, viewpointOf } from "../offers"
 import { frameFor, placeFromPayload, readPlace, snapshotOf } from "../places"
-import { usePriceCheck } from "../probe"
 
 /**
  * One Postcard block in the document: the node holds an id, this draws the card
@@ -135,17 +136,7 @@ export function Card({
           {...(editable
             ? { onChangeUrl: (u: string) => store.editPayload(id, { ...payload, url: u }) }
             : {})}
-        >
-          {(kind === "booking" || kind === "agoda") && (
-            <PriceCheckPanel
-              id={id}
-              url={url}
-              payload={payload}
-              editable={editable}
-              store={store}
-            />
-          )}
-        </LinkPostcard>
+        />
       )
     }
     case "photo":
@@ -161,45 +152,16 @@ export function Card({
             : {})}
         />
       )
-    case "price": {
-      const url = text("url")
-      let host: string | null = null
-      try {
-        host = url ? (new URL(url).hostname.replace(/^www\./, "").split(".")[0] ?? null) : null
-      } catch {
-        host = null
-      }
-      return (
-        <PricePostcardLive
-          id={id}
-          url={url}
-          host={host}
-          payload={payload}
-          editable={editable}
-          store={store}
-        />
-      )
-    }
+    case "price":
+      return <PriceCardLive id={id} payload={payload} editable={editable} store={store} />
   }
 }
 
 interface PriceProps {
   id: string
-  url: string
   payload: Record<string, unknown>
   editable: boolean
   store: CardStore
-}
-
-/** The probe id lives in the card's own payload, so reopening reads it and spends nothing. */
-function useCardProbe({ id, url, payload, editable, store }: PriceProps) {
-  const probeId = typeof payload.probeId === "string" ? payload.probeId : null
-  return usePriceCheck({
-    url,
-    probeId,
-    editable,
-    onStarted: (p) => store.editPayload(id, { ...payload, probeId: p }),
-  })
 }
 
 /** The API's own rule, run on paste, so an unsupported link is refused before Check. */
@@ -208,27 +170,51 @@ function stayUrlRefusal(url: string): string | null {
   return r.ok ? null : `${r.reason.charAt(0).toUpperCase()}${r.reason.slice(1)}.`
 }
 
-function PriceCheckPanel(props: PriceProps) {
-  const { check, start } = useCardProbe(props)
-  return <PriceTable check={check} {...(start ? { onCheck: start } : {})} />
-}
-
-function PricePostcardLive(props: PriceProps & { host: string | null }) {
-  const { check, start } = useCardProbe(props)
+function PriceCardLive({ id, payload, editable, store }: PriceProps) {
+  const offers = offersOf(payload)
+  const viewpoint = viewpointOf(payload)
+  // Written in the new shape whatever the card was saved as, so a legacy
+  // `{url, probeId}` becomes one offer the first time it changes.
+  const save = (next: Offer[]) => {
+    const { url: _u, probeId: _p, ...rest } = payload
+    store.editPayload(id, { ...rest, offers: next, viewpoint })
+  }
+  const { rows, verdict, checking, error, check } = useOffers({
+    offers,
+    viewpoint,
+    editable,
+    onChange: save,
+  })
+  const providers = [
+    ...new Set(offers.map((o) => providerOf(o.url)?.id).filter((p): p is string => !!p)),
+  ]
+  const deals = useDeals(providers)
   return (
-    <PricePostcard
-      id={props.id}
-      url={props.url}
-      host={props.host}
-      check={check}
-      {...(start ? { onCheck: start } : {})}
-      {...(props.editable
+    <ProviderPricesPostcard
+      id={id}
+      viewpoint={viewpoint}
+      rows={rows}
+      verdict={verdict}
+      checking={checking}
+      error={error}
+      {...(check ? { onCheck: check } : {})}
+      {...(editable
         ? {
-            onChangeUrl: (u: string) =>
-              props.store.editPayload(props.id, { ...props.payload, url: u, probeId: null }),
-            validateUrl: stayUrlRefusal,
+            onAddUrl: (u: string) => save([...offers, { url: u, probeId: null }]),
+            validateUrl: (u: string) =>
+              offers.some((o) => o.url === u)
+                ? "That link is already on the card."
+                : stayUrlRefusal(u),
           }
         : {})}
-    />
+    >
+      {providers.length > 0 && deals.data && (
+        <DealStubs
+          deals={deals.data.deals}
+          searched={deals.data.searched}
+          hunter={{ name: DEAL_HUNTER.name, href: `/samsara?persona=${DEAL_HUNTER.id}` }}
+        />
+      )}
+    </ProviderPricesPostcard>
   )
 }

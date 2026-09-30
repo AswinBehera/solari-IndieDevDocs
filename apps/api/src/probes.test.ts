@@ -54,6 +54,23 @@ describe("/probes", () => {
     expect(again.targetId).toBe(targetId)
   })
 
+  it("queues a one-viewpoint probe under its own key, for comparing providers", async () => {
+    const res = await app.request(
+      "/probes",
+      as("alice", { method: "POST", body: JSON.stringify({ url: URL_OK, countries: ["us"] }) }),
+    )
+    expect(res.status).toBe(202)
+    const { targetId } = (await res.json()) as { targetId: string }
+    const job = enqueued.at(-1)
+    expect(job?.payload).toEqual({ targetId, countries: ["us"] })
+    expect(job?.idempotencyKey).toMatch(/:us$/)
+    const bad = await app.request(
+      "/probes",
+      as("alice", { method: "POST", body: JSON.stringify({ url: URL_OK, countries: ["USA"] }) }),
+    )
+    expect(bad.status).toBe(400)
+  })
+
   it("reads observations for the owner and a 404 for anyone else", async () => {
     const { targetId } = (await (await post("alice", URL_OK)).json()) as { targetId: string }
     await observations.insert({

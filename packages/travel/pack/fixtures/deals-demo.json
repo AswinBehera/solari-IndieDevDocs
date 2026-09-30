@@ -1,0 +1,2637 @@
+{
+  "about": "Beam the Deal hunter's real searches for Agoda and Booking.com codes, 30 Sep 2026, captured by the worker's own harvest. Item text is cut to 280 characters. None of it held a working code, which is what the price card says.",
+  "runs": [
+    {
+      "archetype": "Deal hunter",
+      "domainId": "deals",
+      "sourceId": "youtube.search",
+      "query": "โค้ดส่วนลด agoda",
+      "capturedAt": "2026-09-30T11:19:43.533Z",
+      "outcome": "ok",
+      "items": [
+        {
+          "rank": 0,
+          "url": "https://www.youtube.com/watch?v=A--CQfCaHls",
+          "title": "วิธีใช้ส่วนลด AgodaCash",
+          "text": "6 ขั้นตอนจองที่พักด้วย AgodaCash เข้าใจง่ายใช้งานจริง ฟินเวอร์.",
+          "languageGuess": "th",
+          "engagement": {
+            "views": 12344,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 1,
+          "url": "https://www.youtube.com/watch?v=UAkDpSm7_IU",
+          "title": "วิธีจองที่พัก โรงแรม Agoda ราคถูก มือใหม่ทำตามได้เลย อัพเดทล่าสุด",
+          "text": "พูดคุย-สอบถามปัญหาผ่านเพจ inbox มาได้เลย https://www.facebook.com/AlocharChannel เป็นกำลังใจให้พลอยด้วยนะคะ ...",
+          "languageGuess": "th",
+          "engagement": {
+            "views": 7126,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 2,
+          "url": "https://www.youtube.com/watch?v=1R0Iwof_GlA",
+          "title": "How to Apply Promo Code in Agoda [2026 Full Guide]",
+          "text": "How to Apply Promo Code in Agoda In this video, we show you exactly how to apply promo code in Agoda to secure the best ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 2906,
+            "likes": null,
+            "comments": null
+          }
+        }
+      ],
+      "why": "Deal hunter (th-TH) looking for codes locals share. No code in any of it."
+    },
+    {
+      "archetype": "Deal hunter",
+      "domainId": "deals",
+      "sourceId": "pantip.tag",
+      "query": "Agoda",
+      "capturedAt": "2026-09-30T11:19:59.004Z",
+      "outcome": "ok",
+      "items": [
+        {
+          "rank": 0,
+          "url": "https://pantip.com/topic/31018027",
+          "title": "รบกวน ขอเบอร์ Call center Agoda ค่ะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 2,
+            "comments": 60
+          }
+        },
+        {
+          "rank": 1,
+          "url": "https://pantip.com/topic/44242551",
+          "title": "จองตั๋วเครื่องบินไป สนามบินดอนเมืองผ่าน agoda แต่เจอน้ำท่วมหมู่บ้านวิกฤตมาก สามารถเลื่อนการจองได้ไหมครับ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 7
+          }
+        },
+        {
+          "rank": 2,
+          "url": "https://pantip.com/topic/30556916",
+          "title": "จองที่พักใน agoda ไปแล้ว เราขอเลื่อนวันเข้าพักได้มั้ยคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 11
+          }
+        },
+        {
+          "rank": 3,
+          "url": "https://pantip.com/topic/44242984",
+          "title": "ใบยืนยันการจองตั๋วเครื่องบินของ Agoda ลงเวลาบินไปบินกลับผิด",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 4,
+          "url": "https://pantip.com/topic/44241419",
+          "title": "Agoda ทำไม? ไม่ซื่อตรงกับลูกค้าแบบนี้ แอบหมกเม็ด แบบนี้ก็ได้เหรอ?",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 1,
+            "comments": 14
+          }
+        },
+        {
+          "rank": 5,
+          "url": "https://pantip.com/topic/41551110",
+          "title": "ติดต่อAgodaทางไหน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 23
+          }
+        },
+        {
+          "rank": 6,
+          "url": "https://pantip.com/topic/43760973",
+          "title": "ปัญหาโลกแตก จองโรงแรมผ่าน Agoda แล้วต้องการใบกำกับภาษีมาเบิกบริษัท โยนกันไปมาระหว่าง Agoda กับโรงแรม",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 13
+          }
+        },
+        {
+          "rank": 7,
+          "url": "https://pantip.com/topic/44238640",
+          "title": "อยากเตือนภัย กรณีจองตั๋วเครื่องบินผ่าน Agoda เที่ยวบินยกเลิก แต่ Agoda คืนเงินค่าตั๋วให้ไม่ถึง 10%",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 1,
+            "comments": 19
+          }
+        },
+        {
+          "rank": 8,
+          "url": "https://pantip.com/topic/42604100",
+          "title": "[แชร์ประสบการณ์] การขอคืนเงินกับ Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 18
+          }
+        },
+        {
+          "rank": 9,
+          "url": "https://pantip.com/topic/42099775",
+          "title": "กว่า Agoda จะคืนเงินนานมั้ย",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 8
+          }
+        },
+        {
+          "rank": 10,
+          "url": "https://pantip.com/topic/44242023",
+          "title": "จ่ายเงินการจองอโกด้าแต่ไม่มีข้อมูลการจอง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 11,
+          "url": "https://pantip.com/topic/44240084",
+          "title": "จองตั๋วเครื่องบินไป สนามบินดอนเมืองผ่าน agoda แต่เจอน้ำท่วมทาง agoda จะเปลี่ยนเที่ยวบินได้มั้ยคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 8
+          }
+        },
+        {
+          "rank": 12,
+          "url": "https://pantip.com/topic/44238868",
+          "title": "Agoda แชทaiยกเลิกเองแล้วซื้อแบบโปรโมชั่นวันที่30กันยา(จองวันที่24กันยา(เมื่อวาน))",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 13,
+          "url": "https://pantip.com/topic/44237661",
+          "title": "โดนโรงแรมคิดเงินเพิ่มเพราะเป็นคนไทย เคยเจอมั้ย",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 1,
+            "comments": 34
+          }
+        },
+        {
+          "rank": 14,
+          "url": "https://pantip.com/topic/44236658",
+          "title": "ใครเคยทำเรื่องขอคืนเงินจากจาก Agoda ที่เป็นการจองแบบไม่คืนเงิน 100% บ้างค่ะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 15,
+          "url": "https://pantip.com/topic/44233574",
+          "title": "จองห้องกับอโกด้าจ่ายเงินและได้รับใบยืนยันวันเข้าพักทางเมลล์เรียบร้อย แต่ไม่กี่วันเข้าไปดูพบว่าวันเข้าพักถูกเปลี่ยน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 11
+          }
+        },
+        {
+          "rank": 16,
+          "url": "https://pantip.com/topic/44224934",
+          "title": "Agoda เว็บหลอกลวง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 28
+          }
+        },
+        {
+          "rank": 17,
+          "url": "https://pantip.com/topic/44223438",
+          "title": "ช่วยหน่อบค่ะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 18,
+          "url": "https://pantip.com/topic/44221856",
+          "title": "Agoda",
+          "text": "",
+          "languageGuess": null,
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 8
+          }
+        },
+        {
+          "rank": 19,
+          "url": "https://pantip.com/topic/44220358",
+          "title": "จองที่พักแอพไหนดี",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 20,
+          "url": "https://pantip.com/topic/44220034",
+          "title": "ไม่ได้ล็อกอินอโกด้าแล้วกดจองโอนเงินอะไรเสร็จแอปพึ่งมาขึ้นให้ล็อกอินพอล็อกอินแล้วไม่มีข้อมูลการจองติดตามอะไรได้เลว",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 21,
+          "url": "https://pantip.com/topic/44219240",
+          "title": "ที่พัก water villa ที่มัลดีฟส์อย่าง Centara, ADAARAN CLUB ฯลฯ สามารถจองผ่าน Agoda, Trip.com ได้มั้ยครับ ใครเคยจองบ้าง ?",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 22,
+          "url": "https://pantip.com/topic/44210526",
+          "title": "สอบถาม เรื่องการคืนเงินจาก Agoda ในกรณีถูกยกเลิกการจองโดยทาง Agoda เอง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 23,
+          "url": "https://pantip.com/topic/44208605",
+          "title": "จองโรงแรมกับบัตรเครดิต แต่พอถึงวันกำหนดชำระ ถ้าเงินไม่พอจะถูกยกเลิกมั้ย",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 15
+          }
+        },
+        {
+          "rank": 24,
+          "url": "https://pantip.com/topic/44208432",
+          "title": "จองที่พักกับ อโกด้า (Agoda)  แย่มากจองผิดวันยกเลิกไม่ได้โทรถามคอลเซนเตอร์ก็ตอบโยนไปโยนมากับที่พักสรุปที่จองไปได้จองใหม่",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 13
+          }
+        },
+        {
+          "rank": 25,
+          "url": "https://pantip.com/topic/44205886",
+          "title": "ทำยังไงถึงจะได้เงินคืน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 26,
+          "url": "https://pantip.com/topic/44202436",
+          "title": "“งงมาก! Agoda แจ้งคืนเงินเรียบร้อยแล้ว แต่เงินจริงยังไม่เข้า แบบนี้ต้องรออีกกี่วัน?”",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 27,
+          "url": "https://pantip.com/topic/44199130",
+          "title": "จองเที่ยวบินในAgoda ผิดวันสามารถทำอะไรได้บ้าง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 28,
+          "url": "https://pantip.com/topic/44189839",
+          "title": "ไม่สามารถยกเลิกการจองของโรมแรมได้",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 7
+          }
+        },
+        {
+          "rank": 29,
+          "url": "https://pantip.com/topic/44188571",
+          "title": "วิธีจองห้องพักผ่านแอพagoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 30,
+          "url": "https://pantip.com/topic/44186305",
+          "title": "ตามเงินคืน Agoda แต่โดนตอบกลับมาแบบนี้ เลิกกันตลอดชีวิตแหละ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 31,
+          "url": "https://pantip.com/topic/44184073",
+          "title": "Refund agoda ต้องรอประมาณกี่วันคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 32,
+          "url": "https://pantip.com/topic/44181124",
+          "title": "จองที่พักในagodaแต่ไม่ได้เข้าสู่ระบบ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 33,
+          "url": "https://pantip.com/topic/44173123",
+          "title": "ติดต่อเงินคืนได้ที่ไหนคะ😢",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 34,
+          "url": "https://pantip.com/topic/44170151",
+          "title": "ข้อควรระวังสำหรับผู้ที่จองโรงแรมผ่าน Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 35,
+          "url": "https://pantip.com/topic/44167856",
+          "title": "สวัสดีAgodaสอบถามการคืนเงืนเงิน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 36,
+          "url": "https://pantip.com/topic/44166587",
+          "title": "จองตั๋วเครื่องบินแล้วการจองไม่สำเร็จแต่โอนเงินไปแล้ว",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 37,
+          "url": "https://pantip.com/topic/44163447",
+          "title": "มีใครพอจะทราบมั้ยคะว่าจะติดต่อ call center Agoda ยังไง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 38,
+          "url": "https://pantip.com/topic/44156133",
+          "title": "จองตั๋วเครื่องบินกับ Agoda จ่ายเงินผ่าน Qr แต่ไม่ได้หมายเลขการจอง อีเมลยืนยันก็ไม่มี",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 39,
+          "url": "https://pantip.com/topic/44149551",
+          "title": "Agoda ตัดเงินค่าตั๋วเครื่องบินสูงกว่า final price",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 1,
+            "comments": 10
+          }
+        },
+        {
+          "rank": 40,
+          "url": "https://pantip.com/topic/44148745",
+          "title": "ขอสอบถามหน่อยค่ะ คือขอคืนเงินผ่านอโกด้า แล้วเค้าส่งสลิปมาให้ แต่เงินจะเช้าเรายังไงหรอคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 41,
+          "url": "https://pantip.com/topic/44147991",
+          "title": "จองตั๋วเครื่องบินในแอพAgoda แต่ใส่อีเมลผิด",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 42,
+          "url": "https://pantip.com/topic/44147116",
+          "title": "Agoda หักเงินผ่านเเอพธนาคารไปเเล้ว 2ครั้ง เเต่เเจ้งว่าจองไม่สำเร็จ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 43,
+          "url": "https://pantip.com/topic/44128011",
+          "title": "นี้คือให้ความสำคัญลำดับต้นๆแล้วนะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 44,
+          "url": "https://pantip.com/topic/44125189",
+          "title": "จองที่พักกับ Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 45,
+          "url": "https://pantip.com/topic/44123763",
+          "title": "จองโรงแรมอโกด้า",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 46,
+          "url": "https://pantip.com/topic/44112799",
+          "title": "Agoda ส่ง Voucher ไม่ใช่บัตรเข้าชม ทำให้เข้า Gardens by the Bay ไม่ได้ ขอคืนเงินได้ไหม?",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 7
+          }
+        },
+        {
+          "rank": 47,
+          "url": "https://pantip.com/topic/44103133",
+          "title": "Agoda",
+          "text": "",
+          "languageGuess": null,
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 48,
+          "url": "https://pantip.com/topic/44101368",
+          "title": "ทำไม Trip.com ไม่รับบัตรเดบิต กสิกร???",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 49,
+          "url": "https://pantip.com/topic/44101279",
+          "title": "[CR] จองเที่ยวบิน Agoda ไม่สำเร็จ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 50,
+          "url": "https://pantip.com/topic/44099555",
+          "title": "สอบถามเรื่องบัตร Central Department Store Credit Central The1 Card",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 10
+          }
+        },
+        {
+          "rank": 51,
+          "url": "https://pantip.com/topic/44091205",
+          "title": "จองตั๋วเครื่องบินผ่าน Agoda บินภายในประเทศต้องใส่หมายเลขเดินทาง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 52,
+          "url": "https://pantip.com/topic/44080143",
+          "title": "จองตั๋วเครื่องบินผ่าน agoda ไปแต่ไม่ได้รับอีเมลยืนยันการจองทำอย่างไรได้บ้าง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 53,
+          "url": "https://pantip.com/topic/44075002",
+          "title": "จองโรมแรมในAgoda แต่ไปถึงที่พัก ที่พักปิดรับปรุง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 10
+          }
+        },
+        {
+          "rank": 54,
+          "url": "https://pantip.com/topic/44067798",
+          "title": "ถูกเลื่อนตั๋วไฟล์ทบินขอนแก่น-เชียงใหม่ Air asia",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 7
+          }
+        },
+        {
+          "rank": 55,
+          "url": "https://pantip.com/topic/44064640",
+          "title": "ติดต่อ อโกด้า เรื่องคืนเงินไม่ได้เลย มีแต่ระบบอัติโนมัติ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 56,
+          "url": "https://pantip.com/topic/44060543",
+          "title": "จองตั๋วเครื่องบินกับ Agoda ตัดผ่านบัตรเครดิตแล้วแต่ไม่ได้หมายเลขการจองอีเมลยืนยันก็ไม่ได้",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 57,
+          "url": "https://pantip.com/topic/44059168",
+          "title": "ถ้าซื้อตั๋วแอร์เอเชียจาก Agoda แล้วเราจะจัดการ booking เราในเว็บแอร์เอเชียได้มั้ยครับ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 9
+          }
+        },
+        {
+          "rank": 58,
+          "url": "https://pantip.com/topic/44053816",
+          "title": "จองตั๋วยังไงให้ได้ราคาถูกคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 12
+          }
+        },
+        {
+          "rank": 59,
+          "url": "https://pantip.com/topic/44040882",
+          "title": "จองโรงแรมที่ไทเปผ่าน agoda แต่โรงแรมไม่ตรงปก",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 60,
+          "url": "https://pantip.com/topic/44038040",
+          "title": "ระวัง Scammer hack ข้อมูลจองโรงแรมผ่าน Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 30
+          }
+        },
+        {
+          "rank": 61,
+          "url": "https://pantip.com/topic/44035942",
+          "title": "อยากขอเงินคืนagodaค่ะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 62,
+          "url": "https://pantip.com/topic/44033851",
+          "title": "จองตั๋วเครื่องบินผ่าน Agoda เห็นราคา 12,070 แต่ถูกตัดจริง 29,792 แบบนี้ปกติไหมคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 13
+          }
+        },
+        {
+          "rank": 63,
+          "url": "https://pantip.com/topic/44031761",
+          "title": "[CR] Review การติดต่อขอความช่วยเหลือจาก Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 64,
+          "url": "https://pantip.com/topic/44028350",
+          "title": "จองตั๋วผ่านAgoda สามารถเลือกที่นั่งกับสายการบินโดยตรงได้ไหม",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 65,
+          "url": "https://pantip.com/topic/44025218",
+          "title": "Agoda จ่ายเงินแล้ว แต่ขึ้นว่าจองไม่สำเร็จ โทรติดต่อไม่ได้",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 66,
+          "url": "https://pantip.com/topic/44017270",
+          "title": "ยกเลิกการจองฟรี แต่ขอคืนเงินไม่ได้คือยังไงเหรอครับ Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 18
+          }
+        },
+        {
+          "rank": 67,
+          "url": "https://pantip.com/topic/44015047",
+          "title": "มีใครผิดหวังกับการจองตั๋วเครื่องบินกับ Agoda ชำระเงินผ่านคิวอาร์โค้ด ผ่านไป 2 ชม มีเมล์แจ้งไม่สามารถยืนยันการจองได้",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 7
+          }
+        },
+        {
+          "rank": 68,
+          "url": "https://pantip.com/topic/44011708",
+          "title": "มีใครเคยจองตั๋วเครื่องบินผ่าน Agoda แล้ว เจอราคา Final ในเว็บ กับยอดตอนตัดบัตร ไม่ตรงกันบ้างครับ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 15
+          }
+        },
+        {
+          "rank": 69,
+          "url": "https://pantip.com/topic/44011144",
+          "title": "จองตั๋วเครื่องบินในแอป Agoda ไป แต่ยังไม่ได้ล็อกอิน ยังไม่มีอีเมลยืนยันตอบรับแจ้งงมาเลย ต้องทำยังไงบ้างครับ ?",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 70,
+          "url": "https://pantip.com/topic/44006869",
+          "title": "สอบถามเรื่องการจ่ายเงินค่าตั๋วเครื่องบินผ่าน Agoda ค่ะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 71,
+          "url": "https://pantip.com/topic/44003153",
+          "title": "อโกด้าเก็บเงินเพิ่ม เพราอะไร Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 72,
+          "url": "https://pantip.com/topic/44002567",
+          "title": "ขอเงินคืนจาก Gulf Air และ Agoda ในช่วงสงคราม จะได้คืนหรือไม่?",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 11
+          }
+        },
+        {
+          "rank": 73,
+          "url": "https://pantip.com/topic/43999617",
+          "title": "จองตั๋วรถบัสผ่าน อโกด้า",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 74,
+          "url": "https://pantip.com/topic/43992392",
+          "title": "เงินคืนจากอโกด้า",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 75,
+          "url": "https://pantip.com/topic/43992109",
+          "title": "จองเที่ยวบิน แล้วไม่ได้รับเลขการจอง ไม่ได้รับอีเมล",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 9
+          }
+        },
+        {
+          "rank": 76,
+          "url": "https://pantip.com/topic/43992037",
+          "title": "สอบถาม Agoda เกี่ยวกับการจองเที่ยวบิน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 77,
+          "url": "https://pantip.com/topic/43990932",
+          "title": "ยกเลิกการจองโรงแรมใน agoda ไปแล้ว แต่ในรายการธุรกรรมเครดิต ยังมีเป็นรายการรอเรียกเก็บค่ะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 78,
+          "url": "https://pantip.com/topic/43990880",
+          "title": "จองตั๋วเครื่องบินชื่อนามสกุลสลับกัน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 79,
+          "url": "https://pantip.com/topic/43989170",
+          "title": "จองที่พัก ใน agoda แล้วเผลอกดยกเลิก ไป สามารถแต่ทางแอพบอกไม่ให้เงินคืนแต่เรามีวิธีไหนที่สามารถขอเงินคืนได้ไหทคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 11
+          }
+        },
+        {
+          "rank": 80,
+          "url": "https://pantip.com/topic/43982472",
+          "title": "จองตั๋วกับอโกด้าไม่ได้รับเมลและเลขการจอง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 81,
+          "url": "https://pantip.com/topic/43980455",
+          "title": "[SR] อโกด้า ไม่ออกตั๋วให้",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 82,
+          "url": "https://pantip.com/topic/43980048",
+          "title": "จองตั๋วเครื่องบิน ใส่ชื่อผิด1 ตัวอักษรเป็นอะไรมั้ยครับชำระ ตัวอักษรเป็นอะไรมั้ยครับชำระแล้ว",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 7
+          }
+        },
+        {
+          "rank": 83,
+          "url": "https://pantip.com/topic/43978337",
+          "title": "จองตั๋วเครื่องบินผ่าน agoda ยังไม่ได้อีเมลยืนยัน ไม่มีเลขการจอง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 11
+          }
+        },
+        {
+          "rank": 84,
+          "url": "https://pantip.com/topic/43972369",
+          "title": "โอนจองตั๋วกับ Agoda แล้วไม่ได้รับตั๋ว",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 85,
+          "url": "https://pantip.com/topic/43968713",
+          "title": "จองโรงแรมกับ Agoda แต่เงินไม่ตัด ทั้งที่บัตรก็ไม่ได้มีปัญหา?",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 86,
+          "url": "https://pantip.com/topic/43968643",
+          "title": "จองตั๋วเที่ยวบินในแอพ Agoda และสแกนคิวอาร์โค้ดชำระเงินแล้ว แต่ขึ้นว่าการจองไม่สำเร็จ ต้องทำอย่างไรบ้างคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 87,
+          "url": "https://pantip.com/topic/43966432",
+          "title": "จองที่พักญี่ปุ่น ผ่าน agoda ชำระเงินยังไงกันคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 88,
+          "url": "https://pantip.com/topic/43965307",
+          "title": "แอพใช้ไม่ได้ครับ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 89,
+          "url": "https://pantip.com/topic/43964904",
+          "title": "จองตั๋ว AirAsia ผ่าน agoda เช็คอินออนไลน์ไม่ได้",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 90,
+          "url": "https://pantip.com/topic/43963651",
+          "title": "โดนหักเงินการจองโรงแรมจากอโกด้า",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 7
+          }
+        },
+        {
+          "rank": 91,
+          "url": "https://pantip.com/topic/43962047",
+          "title": "จองตั๋วหักเงินแล้วแต่ไม่ขึ้นการจอง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 92,
+          "url": "https://pantip.com/topic/43961266",
+          "title": "จองเที่ยวบินผ่านAgoda ไม่ได้หมายเลขการจองค่ะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 93,
+          "url": "https://pantip.com/topic/43960287",
+          "title": "สายการบินนกแอร์ ยกเลิกทำไมไม่คืนเงินให้เร็วๆ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 94,
+          "url": "https://pantip.com/topic/43959825",
+          "title": "คืนเงินจาก agoda ใช้เวลากี่วันครับ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 95,
+          "url": "https://pantip.com/topic/43951965",
+          "title": "Agoda  รายงานว่า → แฟน ๆ ของ BTS  มีความกระตือรือร้นอย่างเหลือเชื่อ  ในการเดินทางไปยังเมืองต่าง ๆ ที่ BTS ประกาศทัวร์",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 7,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 96,
+          "url": "https://pantip.com/topic/43949656",
+          "title": "โดน agoda เปลี่ยนราคาตอนตัดเงิน ทำไงได้บ้างครับ?",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 97,
+          "url": "https://pantip.com/topic/43949321",
+          "title": "อะโกด้ายกเลิกการจองไม่ได้เงินคืน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 98,
+          "url": "https://pantip.com/topic/43939746",
+          "title": "จองโรงแรมผ่าน agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 99,
+          "url": "https://pantip.com/topic/43938204",
+          "title": "จองตั๊วกับแอพ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 100,
+          "url": "https://pantip.com/topic/43934761",
+          "title": "มีคนเอา email icloud ของผมไปจองที่พักกับ Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 7
+          }
+        },
+        {
+          "rank": 101,
+          "url": "https://pantip.com/topic/43933423",
+          "title": "จองที่พักผ่าน Agoda ใส่ Mail ผิด ไม่ได้รับเลข Booking ทำยังไงดี",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 102,
+          "url": "https://pantip.com/topic/43930571",
+          "title": "จองเที่ยวบิน+ที่พักกับ Agoda แต่ขึ้นว่าจองไม่สำเร็จ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 103,
+          "url": "https://pantip.com/topic/43929849",
+          "title": "Agoda คืนเงินยุ่งยากมากก",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 104,
+          "url": "https://pantip.com/topic/43929405",
+          "title": "จองเที่ยวบินเงินตัดจากบัญชีไปแล้วแต่แอปเด้งออกและไม่มีการจองเที่ยวบินให้เรา ตามแล้วได้คำตอบที่ไม่ถูกต้อง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 105,
+          "url": "https://pantip.com/topic/43927317",
+          "title": "เราทำไงได้บ้างคะ เราจองพูลวิลล่าพัทยาแต่เจ้าของยกเลิกทางแอปบอกรอ30วัน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 7
+          }
+        },
+        {
+          "rank": 106,
+          "url": "https://pantip.com/topic/43924719",
+          "title": "แอพ Agoda ไม่สามารถจ่ายเงินผ่าน ทรูมันนี่มาสเตอร์การ์ดได้ ทำไงดีคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 107,
+          "url": "https://pantip.com/topic/43920934",
+          "title": "Agoda ติดต่อยากไหม",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 108,
+          "url": "https://pantip.com/topic/43920927",
+          "title": "กระทู้หาย เกี่ยวกับการคืนเงินของ agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 109,
+          "url": "https://pantip.com/topic/43917282",
+          "title": "ใครมีวิธีตามเงินคืนจาก Agoda บ้าง ช่วยแนะนำที",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 110,
+          "url": "https://pantip.com/topic/43912203",
+          "title": "พอดีจองที่พักสำหรับเทศกาลหยุดยาวไปผ่านagoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 111,
+          "url": "https://pantip.com/topic/43907932",
+          "title": "ติดต่อ agoda ไม่ได้",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 112,
+          "url": "https://pantip.com/topic/43906471",
+          "title": "ต้องการติดต่อ Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 113,
+          "url": "https://pantip.com/topic/43904742",
+          "title": "AGODA : ถูกคนอื่นเอาบัตรเครดิตไปจองตั๋ว",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 114,
+          "url": "https://pantip.com/topic/43903737",
+          "title": "จองตั๋วดรีมเวิร์ลผ่านแอปAgoda จองไม่สำเร็จและยังไม่ได้เงินคืน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 115,
+          "url": "https://pantip.com/topic/43901278",
+          "title": "จองตั๋วเครื่องบินในแอพAgodaแต่ไม่มีอีเมลยืนยัน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 116,
+          "url": "https://pantip.com/topic/43900863",
+          "title": "ยกเลิกจองที่พักAgoda แล้วไม่คืนเงิน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 7
+          }
+        },
+        {
+          "rank": 117,
+          "url": "https://pantip.com/topic/43899909",
+          "title": "มีใครขอเงินคืนจาก  แล้วไม่ได้คืนบ้างมั้ยย",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 118,
+          "url": "https://pantip.com/topic/43899016",
+          "title": "agoda จองก่อนจ่ายทีหลัง แต่จองโดยใส่บัตรเครดิตแล้ว",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 10
+          }
+        },
+        {
+          "rank": 119,
+          "url": "https://pantip.com/topic/43898621",
+          "title": "อ้องเรียน! เกี่ยวกับ Thai lion air และ Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 120,
+          "url": "https://pantip.com/topic/43892111",
+          "title": "จองตั๋วเครื่องบินผ่าน Agoda แล้ว “คำนำหน้าไม่ขึ้น",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 121,
+          "url": "https://pantip.com/topic/43881703",
+          "title": "agoda  ยกเลิกจอง  คืนเงินลำบาก",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 122,
+          "url": "https://pantip.com/topic/43871678",
+          "title": "พอดีถาม Agodaแล้วหลังจากตัดบัตรเคดิต จะคืนเงิน ผมใช่กรุงไทย",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 123,
+          "url": "https://pantip.com/topic/43869317",
+          "title": "Agoda cash หายห้องจองไม่สำเร็จ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 124,
+          "url": "https://pantip.com/topic/43866699",
+          "title": "Mastercard ของทรูจ่ายเงินใน Agoda ไม่ได้",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 125,
+          "url": "https://pantip.com/topic/43866336",
+          "title": "จองห้องพักกับ Agoda แต่พอเข้าพักกลับไม่มีรายละเอียดการจอง Agodaโทษว่าเป็นความผิดของ พาร์เนอร์",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 126,
+          "url": "https://pantip.com/topic/43864457",
+          "title": "มีใครได้เงินคืนจากเวียตเจ็ต ที่ยกเลิกFlight ธันวา68บ้างคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 127,
+          "url": "https://pantip.com/topic/43862265",
+          "title": "Agodaคืนเงินไม่สำเร็จ จองไม่สำดร็ต",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 128,
+          "url": "https://pantip.com/topic/43861598",
+          "title": "[CR] จองโรงแรมกับ Agoda ไม่ตรงปกกับวิธีจัดการและการแจ้งชดเชยกลับกลอก (กลับไปกลับมา) ของ Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 129,
+          "url": "https://pantip.com/topic/43861328",
+          "title": "จองสายการบิน กับAgoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 130,
+          "url": "https://pantip.com/topic/43861190",
+          "title": "การยกเลิกการจองที่พัก และการขอรับเงินคืนจาก Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 131,
+          "url": "https://pantip.com/topic/43860407",
+          "title": "โดนยกเลิกการจอง Agoda  แต่เงินตัดผ่านคิวอาร์โค้ดไปแล้ว",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 132,
+          "url": "https://pantip.com/topic/43857713",
+          "title": "จองโรงแรมในประเทศไทย ผ่าน Agoda แล้วขอใบกำกับภาษีไม่ได้",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 8
+          }
+        },
+        {
+          "rank": 133,
+          "url": "https://pantip.com/topic/43852432",
+          "title": "agoda โกงงเงินไม่คืนเงิน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 134,
+          "url": "https://pantip.com/topic/43852212",
+          "title": "ใส่เมลagoraผิด จองตั๋วเครื่องบินยังไม่ได้รับใบยืนยันการจอง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 135,
+          "url": "https://pantip.com/topic/43851735",
+          "title": "ขอเงินคืนจากอะโกด้าได้ไหม หัก92%เลยหรอ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 136,
+          "url": "https://pantip.com/topic/43842466",
+          "title": "[CR] รีวิวที่พักแย่!ในเมืองปากช่อง ตัวย่อ ภ.บ.",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 137,
+          "url": "https://pantip.com/topic/43840419",
+          "title": "agodaหักเงินไปแล้ว แต่จองไม่สำเร็จ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 138,
+          "url": "https://pantip.com/topic/43835949",
+          "title": "โดน agoda ตัดเงินผ่านบัตรเดบิต",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 139,
+          "url": "https://pantip.com/topic/43834858",
+          "title": "จองตั๋วเครื่องบินกับagoda แล้วไม่ได้ล็อกอิน จ่ายเงินไปแล้วแต่ไม่ได้รับเมล ทำไงดีคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 140,
+          "url": "https://pantip.com/topic/43829948",
+          "title": "จองที่พักผ่าน Agoda ต้องการเปลี่ยนวันเข้าพัก ติดต่อยากมาก",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 8
+          }
+        },
+        {
+          "rank": 141,
+          "url": "https://pantip.com/topic/43828697",
+          "title": "ขอสอบถามดารยกเลิกในagodaค่ะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 1,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 142,
+          "url": "https://pantip.com/topic/43824492",
+          "title": "ยกเลิกการจองกับ agoda แบบยกเลิกฟรี บัตรตัดไปแล้ว แต่ข้อมูลการยกเลิกบอกมียอดเงินคืน 0 บาท แบบนี้เราจะได้เงินคืนมั้ย",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 143,
+          "url": "https://pantip.com/topic/43820921",
+          "title": "ช่วยด้วย ด่วนมากค่ะ. Agoda แจ้งเปลี่ยนเที่ยวบินที่ peach air เราจองไว้  ต้องทำอย่างไร (ใกล้วันเดินทางแล้วค่ะ)",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 144,
+          "url": "https://pantip.com/topic/43817869",
+          "title": "การขอเงินคืนจากAgoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 145,
+          "url": "https://pantip.com/topic/43805502",
+          "title": "ขอกำลังใจหน่อยได้มั้ยคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 16
+          }
+        },
+        {
+          "rank": 146,
+          "url": "https://pantip.com/topic/43800458",
+          "title": "Agoda Platinum แสดงราคาแพงกว่าสมาชิกระดับ Bronze ติดต่อกันมาหลายครั้งแล้ว จนต้องจองด้วย Bronze แทน อันนี้ปกติไหมครับ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 147,
+          "url": "https://pantip.com/topic/43798269",
+          "title": "จองตั๋วเครื่องบินกับแอพอโกด้าไม่ส่งเมลยืนยันให้ทำไง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 148,
+          "url": "https://pantip.com/topic/43794668",
+          "title": "จองตั๋วกับagodaไปตั้งแต่สิงหา การจองถูกยกเลิกแต่ยังไม่ได้เงินคืน ทำยังไงได้บ้างคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 149,
+          "url": "https://pantip.com/topic/43794596",
+          "title": "ใส่emailใน agodaผิด จ่ายเงินแล้ว ทำอย่างไร",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 150,
+          "url": "https://pantip.com/topic/43794132",
+          "title": "อยู่ดีๆโดนAgoda ตัดเงินไป700บาท",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 151,
+          "url": "https://pantip.com/topic/43788567",
+          "title": "ยกเลิกการจองที่พักผ่าน agoda ถูกหักค่าธรรมเนียม 92%",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 152,
+          "url": "https://pantip.com/topic/43787706",
+          "title": "จองเที่ยวบินผ่าน Agoda แล้วได้รับแจ้งว่าเที่ยวบินถูกยกเลิก thai vietjet จะขอเงินคืนได้ไหมคะ?",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 153,
+          "url": "https://pantip.com/topic/43786102",
+          "title": "Agoda ยกเลิกเที่ยวบินเอง จะได้เงินคืนเมื่อไหร่คะ เงินเป็นหมื่นเลยค่ะอาทิตย์นึงแล้วหายเงียบ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 154,
+          "url": "https://pantip.com/topic/43780272",
+          "title": "ถามถาม Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 155,
+          "url": "https://pantip.com/topic/43775814",
+          "title": "agoda จองไม่สำเร็จ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 156,
+          "url": "https://pantip.com/topic/43767807",
+          "title": "ฟ้องagodaกับทางสคบ.มีสิทธิรับเงินคืนไหมคะ ถ้าเงื่อนไขคือไม่คืนเงินที่ต้องกดดูถึงจะเห็น",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 157,
+          "url": "https://pantip.com/topic/43766110",
+          "title": "โอนเงินจองที่พักแอพ Agoda จ่ายเงินผ่าน QR เรียบร้อย แต่ขึ้นการชำระเงินไม่สำเร็จ แต่เงินโดนหักเงินแล้ว ?",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 158,
+          "url": "https://pantip.com/topic/43765424",
+          "title": "เราจองโรงแรมกับagodaไปแสกนจ่ายไปแล้วเงินออกไปแล้วแต่กลับถูกส่งเมลมาว่าการจองถูกยกเลิกเราควรทำยังไงดีค่ะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 8
+          }
+        },
+        {
+          "rank": 159,
+          "url": "https://pantip.com/topic/43763514",
+          "title": "จองตั๋วเครื่องบินผ่านอโกด้าโดยวิธีการแสหนชำระเงิน ผ่านมา 2 วันยังไม่ได้รับเมลล์แจ้งอะไรเลย ต้องทำยังไงดีคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 160,
+          "url": "https://pantip.com/topic/43762672",
+          "title": "ใส่อีเมลผิด จองตั๋วเครื่องบินใน Agoda แล้วไม่ได้แคปหมายเลขการจองไว้ทำไงได้บ้าง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 161,
+          "url": "https://pantip.com/topic/43761356",
+          "title": "Agoda - สิทธิพิเศษของ VIP Platinum คือจ่ายแพงกว่าคนทั่วไปเหรอครับ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 162,
+          "url": "https://pantip.com/topic/43760190",
+          "title": "Agoda หักเงินแล้ว แต่ขึ้นจองไม่สำเร็จ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 163,
+          "url": "https://pantip.com/topic/43759427",
+          "title": "ติดต่ออโกด้าไม่ได้เลย ทำไง #agodaK",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 164,
+          "url": "https://pantip.com/topic/43738356",
+          "title": "กรอกE-mailผิด ขอเงินคืนจาก agoda ยังไง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 165,
+          "url": "https://pantip.com/topic/43736467",
+          "title": "ทำไมพอจองตัวเครื่องบินปุป พอจองเสจ อีกแปปลงเลย แต่ละเครื่องก็ไม่เท่ากันราคา",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 8
+          }
+        },
+        {
+          "rank": 166,
+          "url": "https://pantip.com/topic/43735491",
+          "title": "แชร์ประสบการณ์ นกแอร์ยกเลิกเที่ยวบิน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 8
+          }
+        },
+        {
+          "rank": 167,
+          "url": "https://pantip.com/topic/43730272",
+          "title": "วันนี้รู้สึกผิดหวังกับagoda มากๆครับ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 168,
+          "url": "https://pantip.com/topic/43724263",
+          "title": "แชร์..ประสบการณ์..\"ทำไมการจองตั๋วผ่านเอเจนซี่ถึงกลายเป็นฝันร้าย?\"",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 1,
+            "comments": 31
+          }
+        },
+        {
+          "rank": 169,
+          "url": "https://pantip.com/topic/43724028",
+          "title": "นกแอร์ยกเลิกดที่ยวบิน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 170,
+          "url": "https://pantip.com/topic/43723967",
+          "title": "โดนนกแอร์ยกเลิกเที่ยวบิน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 171,
+          "url": "https://pantip.com/topic/43722898",
+          "title": "ติดต่อAgoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 172,
+          "url": "https://pantip.com/topic/43718905",
+          "title": "ต้องการเปลี่ยนอีเมล์ทีผูกกับแอฟ Agoda และเข้าอีเมล์เดิมไม่ได้ต้องทำอย่างไร",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 173,
+          "url": "https://pantip.com/topic/43711614",
+          "title": "จองตั๋วเครื่องบินผ่าน agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 174,
+          "url": "https://pantip.com/topic/43709787",
+          "title": "Agoda เลวร้าย จองตั๋วเครื่องบิน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 8
+          }
+        },
+        {
+          "rank": 175,
+          "url": "https://pantip.com/topic/43706405",
+          "title": "จองสายการบินไทยไลอ้อนในแอพ Agoda แก้ไขข้อมูลได้ไหม",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 176,
+          "url": "https://pantip.com/topic/43706026",
+          "title": "Agoda Cash เหลือแต่ยังไม่มีแพลนใช้ อยากหาคนที่กำลังจะจองโรงแรม",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 177,
+          "url": "https://pantip.com/topic/43695484",
+          "title": "กดยกเลิกการจองของ agoda ไปตั้งแต่1 สิงหาคม 2568 ปัจจุบัน 20สิงหาคม 2568 ยังไม่ได้รับเงินคืน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 178,
+          "url": "https://pantip.com/topic/43692514",
+          "title": "สอบถามหน่อยค่ะ agoda ส่งมาแบบนี้ ต้องทำยังบ้างค่ะ ?",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 179,
+          "url": "https://pantip.com/topic/43688733",
+          "title": "จองเที่ยวบินผ่าน agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 7
+          }
+        },
+        {
+          "rank": 180,
+          "url": "https://pantip.com/topic/43686946",
+          "title": "[CR] เตือนภัย! ซื้อตั๋วเครื่องบินผ่าน Agoda เจอปัญหาเรื่องยกเลิกเพราะเหตุผลทางการแพทย์ –  AirAsiaก็ช่วยอะไรไม่ได้",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 181,
+          "url": "https://pantip.com/topic/43686321",
+          "title": "รบกวนสอบถาม การ Refund เงินจองตั๋วเครื่องบิน ผ่าน Agoda ครับ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 182,
+          "url": "https://pantip.com/topic/43676886",
+          "title": "กดจองโรงเเรมagoda ตัดเงินเเต่ไม่ขื้นจอง",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 183,
+          "url": "https://pantip.com/topic/43676588",
+          "title": "? AgodaCash หายทั้งหมด ต้องทำยังไงคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 184,
+          "url": "https://pantip.com/topic/43672082",
+          "title": "จองห้องพักผ่าน agoda home",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 185,
+          "url": "https://pantip.com/topic/43670647",
+          "title": "ยกเลิกการจอง Agoda  โดยให้โรงแรมอนุมัติ ได้เงินคืนง่ายไหมครับ?",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 186,
+          "url": "https://pantip.com/topic/43668705",
+          "title": "ขอถาม cash back agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 187,
+          "url": "https://pantip.com/topic/43665761",
+          "title": "อยากทราบว่าขี่รถจากสิงห์ไปเชียงใหม่  ช่วงสิ้นปี 28 ธันวา",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 188,
+          "url": "https://pantip.com/topic/43663492",
+          "title": "แอป agoda ขอขึ้นคืนไม่ได้",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        },
+        {
+          "rank": 189,
+          "url": "https://pantip.com/topic/43661825",
+          "title": "จองตั๋วเครื่องบินผ่าน agoda ไม่มีใครจองกันแล้ว จริงหรือ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 190,
+          "url": "https://pantip.com/topic/43656420",
+          "title": "จองโรงเเรมผ่านอโกด้าเเล้วจ่ายผ่านแอพธนาคารไม่มีบัตรเครดิต ตอนเช็คอินจำเป็นต้องยื่นบัตรเครดิตมั้ย",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 191,
+          "url": "https://pantip.com/topic/43656178",
+          "title": "ถูกยกเลิกเที่ยวบิน แล้ว agoda คืนเงินช้า ร้องเรียนได้ทางไหน",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 192,
+          "url": "https://pantip.com/topic/43654728",
+          "title": "จองแอพอโกด้า",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 193,
+          "url": "https://pantip.com/topic/43651860",
+          "title": "วิธียกเลิกการจอง agoda คืนเงิน ทำแบบไหนครับ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 5
+          }
+        },
+        {
+          "rank": 194,
+          "url": "https://pantip.com/topic/43651351",
+          "title": "จองตั๋วเครื่องบิน Agoda ไม่สำเร็จแต่ถูกหักเงินไปแล้ว ตอนนี้ยังไม่ได้รับเงินคืนต้องทำอย่างไรคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 195,
+          "url": "https://pantip.com/topic/43643713",
+          "title": "จองตั๋วเครื่องบินกับ Agoda  แต่ไม่ได้หมายเลขการจอง อีเมลยืนยันก็ไม่มี ชำระเงินแล้ว",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 196,
+          "url": "https://pantip.com/topic/43643290",
+          "title": "ปัญหา Agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 197,
+          "url": "https://pantip.com/topic/43641743",
+          "title": "Agoda หักเงินไปแล้ว แต่จองไม่สำเร็จ จะร้อง สคบ. ดีไหม",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 6
+          }
+        },
+        {
+          "rank": 198,
+          "url": "https://pantip.com/topic/43635512",
+          "title": "โดน Agoda ตัดบัตรเดบิตที่ผูกไว้ ทั้งที่ไม่ได้ทำรายการ เราจะขอเงินคืนได้จากที่ไหนคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 1,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 199,
+          "url": "https://pantip.com/topic/43634939",
+          "title": "Agoda เกิดเหตุขัดข้องควรทำยังคะ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 2
+          }
+        },
+        {
+          "rank": 200,
+          "url": "https://pantip.com/topic/43634910",
+          "title": "ขึ้นแบบนี้คือยังไง จองผ่าน agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 4
+          }
+        },
+        {
+          "rank": 201,
+          "url": "https://pantip.com/topic/43634874",
+          "title": "จองตั๋วเครื่องบิน agoda",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 1
+          }
+        },
+        {
+          "rank": 202,
+          "url": "https://pantip.com/topic/43630987",
+          "title": "จองตั๋วผ่าน ogoda ชำระเงินแล้ว ขึ้นว่าการจองไม่สำเร็จ",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 3
+          }
+        },
+        {
+          "rank": 203,
+          "url": "https://pantip.com/topic/43630761",
+          "title": "Agoda หรือ Trip.comดี ที่พักที่ฮอกไกโด ญี่ปุ่น",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 1,
+            "comments": 9
+          }
+        },
+        {
+          "rank": 204,
+          "url": "https://pantip.com/topic/43625460",
+          "title": "การขอคืนเงิน agoda ที่ตัดผ่านบัตรเครดิต",
+          "text": "",
+          "languageGuess": "th",
+          "engagement": {
+            "views": null,
+            "likes": 0,
+            "comments": 0
+          }
+        }
+      ],
+      "why": "Deal hunter (th-TH) looking for codes locals share. No code in any of it."
+    },
+    {
+      "archetype": "Deal hunter",
+      "domainId": "deals",
+      "sourceId": "youtube.search",
+      "query": "โค้ดส่วนลด booking.com",
+      "capturedAt": "2026-09-30T11:20:19.880Z",
+      "outcome": "blocked",
+      "items": [],
+      "why": "The site answered with a block page; kept so the count of searches is honest."
+    },
+    {
+      "archetype": "Deal hunter",
+      "domainId": "deals",
+      "sourceId": "pantip.tag",
+      "query": "Booking.com",
+      "capturedAt": "2026-09-30T11:21:06.985Z",
+      "outcome": "blocked",
+      "items": [],
+      "why": "The site answered with a block page; kept so the count of searches is honest."
+    },
+    {
+      "archetype": "Deal hunter",
+      "domainId": "deals",
+      "sourceId": "youtube.search",
+      "query": "โค้ด agoda ล่าสุด ลดเพิ่ม",
+      "capturedAt": "2026-09-30T11:25:54.970Z",
+      "outcome": "ok",
+      "items": [
+        {
+          "rank": 0,
+          "url": "https://www.youtube.com/watch?v=zTfvK_vCKFA",
+          "title": "วิธีจองที่พัก Agoda จองโรงแรมราคาถูก ง่ายๆด้วยมือถือ 2026",
+          "text": "วิธีจองที่พัก Agoda จองโรงแรมราคาถูก ง่ายๆด้วยมือถือ 2026 . วิธีจองที่พัก Agoda จองโรงแรมราคาถูก ✨ วิธีจอง Agoda ง่ายๆ ด้วยมือถือ ...",
+          "languageGuess": "th",
+          "engagement": {
+            "views": 3362,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 1,
+          "url": "https://www.youtube.com/watch?v=UAkDpSm7_IU",
+          "title": "วิธีจองที่พัก โรงแรม Agoda ราคถูก มือใหม่ทำตามได้เลย อัพเดทล่าสุด",
+          "text": "พูดคุย-สอบถามปัญหาผ่านเพจ inbox มาได้เลย https://www.facebook.com/AlocharChannel เป็นกำลังใจให้พลอยด้วยนะคะ ...",
+          "languageGuess": "th",
+          "engagement": {
+            "views": 7126,
+            "likes": null,
+            "comments": null
+          }
+        }
+      ],
+      "why": "Deal hunter (th-TH) looking for codes locals share. No code in any of it."
+    },
+    {
+      "archetype": "Deal hunter",
+      "domainId": "deals",
+      "sourceId": "youtube.search",
+      "query": "agoda promo code thailand 2026",
+      "capturedAt": "2026-09-30T11:26:08.206Z",
+      "outcome": "ok",
+      "items": [
+        {
+          "rank": 0,
+          "url": "https://www.youtube.com/watch?v=I3s0alQzjY8",
+          "title": "AgodaFest Thailand 2026 | Agoda's Annual Celebration",
+          "text": "There's one celebration Agodans around the world look forward to every year: AgodaFest. More than just an annual party, it's a ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 445,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 1,
+          "url": "https://www.youtube.com/watch?v=fLWKTieYknk",
+          "title": "Agoda Coupon Codes | Agoda Discount Codes & Promo Codes",
+          "text": "... promo codes,agoda coupon codes,agoda promo code,how to get discount on agoda,agoda offers,agoda promo code 2026 ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 323,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 2,
+          "url": "https://www.youtube.com/watch?v=0eKlQuG6fsQ",
+          "title": "How to Find Agoda Promo Code That Actually Works in 2026",
+          "text": "Find working Agoda promo code that actually works in 2026. Learn how to search on Google, verify real codes, and apply them on ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 173,
+            "likes": null,
+            "comments": null
+          }
+        },
+        {
+          "rank": 3,
+          "url": "https://www.youtube.com/watch?v=1R0Iwof_GlA",
+          "title": "How to Apply Promo Code in Agoda [2026 Full Guide]",
+          "text": "How to Apply Promo Code in Agoda In this video, we show you exactly how to apply promo code in Agoda to secure the best ...",
+          "languageGuess": null,
+          "engagement": {
+            "views": 2906,
+            "likes": null,
+            "comments": null
+          }
+        }
+      ],
+      "why": "Deal hunter (th-TH) looking for codes locals share. No code in any of it."
+    }
+  ]
+}

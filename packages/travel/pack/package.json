@@ -10,7 +10,8 @@
     "./price": "./src/price/index.ts",
     "./price/parse": "./src/price/parse.ts",
     "./interests": "./src/interests.ts",
-    "./characters": "./src/characters.ts"
+    "./characters": "./src/characters.ts",
+    "./deals": "./src/deals.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

@@ -29,7 +29,11 @@ type Selection =
 export function Samsara() {
   const personas = usePersonas()
   const cast = personas.data ?? []
-  const [selected, setSelected] = useState<Selection | null>(null)
+  // `?persona=<id>` opens on that character: the price card links here to its deal hunter.
+  const [selected, setSelected] = useState<Selection | null>(() => {
+    const id = new URLSearchParams(window.location.search).get("persona")
+    return id ? { kind: "persona", id } : null
+  })
 
   const hired = useMemo(() => new Set(cast.map((p) => p.traits?.archetype).filter(Boolean)), [cast])
   const presets = CHARACTER_PRESETS.map((preset, index) => ({ preset, index })).filter(
