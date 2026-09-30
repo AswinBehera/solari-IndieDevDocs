@@ -72,6 +72,11 @@ on:
         required: false
         default: "4"
         type: string
+      shards:
+        description: "Parallel drains in this run (1-6). Each claims its own rows; use it for a queued batch of slow jobs."
+        required: false
+        default: "1"
+        type: string
 
 # One runner at a time. A double-click that slipped past the API's idempotency
 # check still cannot spend two runners, and two concurrent drains would only
@@ -85,8 +90,37 @@ permissions:
   contents: read
 
 jobs:
-  drain:
+  # A matrix cannot be sized by an input directly, so this turns `shards` into the
+  # list the drain job fans out over. The cron has no inputs and gets one shard.
+  plan:
     runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - id: plan
+        run: |
+          n="$SHARDS"
+          case "$n" in ''|*[!0-9]*) n=1 ;; esac
+          [ "$n" -lt 1 ] && n=1
+          [ "$n" -gt 6 ] && n=6
+          list=1; i=2
+          while [ "$i" -le "$n" ]; do list="$list,$i"; i=$((i + 1)); done
+          echo "shards=[$list]" >> "$GITHUB_OUTPUT"
+        env:
+          SHARDS: ${{ inputs.shards || '1' }}
+
+  # The concurrency group above is per workflow run, so shards run side by side
+  # inside one run while a second run still waits. `FOR UPDATE SKIP LOCKED` hands
+  # each shard different rows. A shard is sequential, and an extraction is about
+  # six minutes of model calls, so a hundred queued extractions are ten hours on
+  # one shard and under two on six.
+  drain:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     # Hard stop. The drain's own budget (WORKER_BUDGET_MS) is four minutes on the
     # cron, at most 45 on a dispatch, so it finishes on its own before this; the
     # timeout is the backstop for a handler that hangs on something that never
@@ -138,6 +172,9 @@ jobs:
           # A dispatch may ask for longer (`budgetMinutes`); the cron has no inputs
           # and gets four. Clamped in the step below, not trusted as typed.
           WORKER_BUDGET_MINUTES: ${{ inputs.budgetMinutes || '4' }}
-          WORKER_LEASE_MS: "300000"
+          # Longer than the slowest handler that does not heartbeat. An extraction
+          # runs about six minutes; on a five-minute lease another shard would
+          # reclaim it mid-call and pay for the same batch twice.
+          WORKER_LEASE_MS: "900000"
           # Logged for correlation only. The runner does not read it.
           WORKER_TRIGGER_JOB_ID: ${{ inputs.jobId }}
