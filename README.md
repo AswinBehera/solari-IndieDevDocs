@@ -2,8 +2,8 @@
 
 **Research documents for indie game developers, where every number carries its receipt.**
 
-You write the case for your game (the pitch, the go/no-go, the postmortem) as you would
-anyway. The numbers in it come from blocks that go and read Steam. Some read Steam's
+Start a document the day you start thinking about a game. Write down the idea and the
+doubts, as you would anyway. The numbers in it come from blocks that go and read Steam. Some read Steam's
 public API. Others open each store page in a [Solari](https://getsolari.com) cloud browser
 and keep the HTML plus a screenshot with the cited region marked. Every number in the
 document opens the receipt it was read from, and the receipt drawer re-hashes the
@@ -43,15 +43,18 @@ Document → Block → Run → Receipt → Fact
   quoted text, CSS selector, screenshot box, or the facts it was computed from).
   Prose cites facts, never receipts.
 
-Blocks form a DAG. A snapshot reads its games from a comparables block, and the AI share
-reads from a snapshot. Change or prune a source and the blocks below it say they are
-stale and what re-running would cost. They never re-run on their own.
+Blocks form a DAG. A snapshot and a breadth map read their niche from a comparables block,
+and the AI share reads from a snapshot. Change or prune a source and the blocks below it say they are
+stale and what re-running would cost. They never re-run on their own. A decision has no
+source: it goes stale when the evidence it cites moves.
 
 | Block | Reads | Runtime |
 | --- | --- | --- |
 | `/comparables` | Steam store search for games carrying every tag you pick. Strike rows that aren't real comparables; the list refills from the same search. | API |
 | `/snapshot` | For each comparable: price, release date and developers (appdetails), review counts (appreviews), and the store page itself: tags and Steam's AI-generated-content disclosure. | API + Solari browser |
 | `/ai-share` | The share of those store pages that disclose generative AI. Pages that could not be read are left out of the denominator and named, never counted as clean. | Derived |
+| `/breadth` | The niche's neighbourhood. One tag narrower: the tags the niche's games most often carry besides yours, each searched as niche + tag, with its size, median price, median reviews and most-reviewed games. One tag broader: the niche minus each of its own tags. Tags nearly every game carries are named as describing the niche, not splitting it. | API |
+| `/decision` | Your call, in a sentence, with the numbers it rests on attached from anywhere in the document. Recording it keeps those numbers as they stood. When a later run reads one differently, the decision says which number moved and offers the new reading. It never changes by itself. | Derived |
 
 ## Built on Solari
 

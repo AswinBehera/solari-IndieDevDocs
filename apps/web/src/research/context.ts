@@ -23,6 +23,12 @@ export interface DocContextValue {
   patch(blockId: string, params: Record<string, unknown>): void
   /** Progress lines for runs started from this tab, by block id. */
   progress: Map<string, string>
+  /**
+   * The decision block collecting evidence, if one is. While set, every Cite
+   * button in the document attaches its fact to that decision instead.
+   */
+  attaching: string | null
+  setAttaching(blockId: string | null): void
 }
 
 export const DocContext = createContext<DocContextValue | null>(null)

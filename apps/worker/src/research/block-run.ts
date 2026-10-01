@@ -6,9 +6,14 @@ import {
   type BlockRecord,
   type ComparableValue,
   currentComparables,
+  type DecisionValue,
   emptyStats,
   type FactKey,
+  formatFact,
+  type LaneRow,
+  laneOf,
   type Locator,
+  neighbourTags,
   parseParams,
   type ReceiptKind,
   type RunOutcome,
@@ -28,6 +33,8 @@ import {
   SteamClient,
   searchUrl,
   storePageUrl,
+  type SearchRow,
+  tagName,
 } from "@rd/steam"
 import type { JobStore } from "@samsara/kernel"
 import type { JobContext, JobHandler } from "../handlers.js"
@@ -58,6 +65,7 @@ type Store = Pick<
   | "putReceipt"
   | "putFacts"
   | "factsForRuns"
+  | "ownedFacts"
 >
 
 export interface BlockRunDeps {
@@ -130,7 +138,15 @@ class Recorder {
   }
 
   fact(receiptId: string, subject: string, key: FactKey, value: unknown, locator: Locator) {
-    this.pending.push({ blockId: this.block.id, runId: this.runId, receiptId, subject, key, value, locator })
+    this.pending.push({
+      blockId: this.block.id,
+      runId: this.runId,
+      receiptId,
+      subject,
+      key,
+      value,
+      locator,
+    })
   }
 
   async flush() {
@@ -145,7 +161,8 @@ type Outcome = { outcome: Exclude<RunOutcome, "running">; note: string | null }
 export function createBlockRunHandler(deps: BlockRunDeps): JobHandler {
   return async (ctx) => {
     const payload = (ctx.job.payload ?? {}) as Payload
-    if (typeof payload.blockId !== "string") throw new Error("block.run: payload.blockId is required")
+    if (typeof payload.blockId !== "string")
+      throw new Error("block.run: payload.blockId is required")
     const block = await deps.store.block(payload.blockId)
     if (!block) {
       // Deleted between the click and the claim. Nothing to answer.
@@ -203,12 +220,20 @@ async function answer(
       return snapshot(block, rec, steam, deps, ctx)
     case "slop_share":
       return slopShare(block, rec, deps)
+    case "niche_map":
+      return nicheMap(block, rec, steam, deps, ctx)
+    case "decision":
+      return decision(block, rec, deps, ctx)
   }
 }
 
 // ---- comparables ----------------------------------------------------------------
 
-async function comparables(block: BlockRecord, rec: Recorder, steam: SteamClient): Promise<Outcome> {
+async function comparables(
+  block: BlockRecord,
+  rec: Recorder,
+  steam: SteamClient,
+): Promise<Outcome> {
   const p = parseParams("comparables", block.params)
   if (!p.ok) return { outcome: "failed", note: p.error }
   const url = searchUrl({ tagIds: p.value.tagIds, sort: p.value.sort, count: 25 })
@@ -236,7 +261,10 @@ async function comparables(block: BlockRecord, rec: Recorder, steam: SteamClient
       reviewPct: share?.pct ?? null,
       reviewCount: share?.count ?? null,
     }
-    rec.fact(receipt.id, appSubject(row.appid), "comparable", value, { ...row.at, path: "$.results_html" })
+    rec.fact(receipt.id, appSubject(row.appid), "comparable", value, {
+      ...row.at,
+      path: "$.results_html",
+    })
   }
   rec.stats.planned = 25
   rec.stats.covered = page.rows.length
@@ -250,7 +278,8 @@ async function comparables(block: BlockRecord, rec: Recorder, steam: SteamClient
 
 async function sourceFacts(deps: BlockRunDeps, sourceId: string, kind: BlockRecord["kind"]) {
   const src = await deps.store.block(sourceId)
-  if (!src || src.kind !== kind) return { error: `Its source block is missing or is not a ${kind} block` } as const
+  if (!src || src.kind !== kind)
+    return { error: `Its source block is missing or is not a ${kind} block` } as const
   if (!src.lastRunId) return { error: "Its source block has not run yet" } as const
   return { src, facts: await deps.store.factsForRuns([src.lastRunId]) } as const
 }
@@ -268,7 +297,9 @@ async function snapshot(
   if ("error" in source) return { outcome: "failed", note: source.error }
   const srcParams = parseParams("comparables", source.src.params)
   if (!srcParams.ok) return { outcome: "failed", note: srcParams.error }
-  const games = currentComparables(source.facts, srcParams.value).map((f) => f.value as ComparableValue)
+  const games = currentComparables(source.facts, srcParams.value).map(
+    (f) => f.value as ComparableValue,
+  )
   rec.stats.planned = games.length
   if (games.length === 0) return { outcome: "failed", note: "The comparables list is empty" }
 
@@ -282,7 +313,11 @@ async function snapshot(
       if (page) rec.stats.covered++
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
-      const r = await rec.computation(`unavailable:${g.appid}`, { appid: g.appid, url: storePageUrl(g.appid), error: message })
+      const r = await rec.computation(`unavailable:${g.appid}`, {
+        appid: g.appid,
+        url: storePageUrl(g.appid),
+        error: message,
+      })
       rec.fact(r.id, subject, "unavailable", { reason: message }, { path: "$.error" })
       notes.add(message.slice(0, 120))
     }
@@ -291,13 +326,16 @@ async function snapshot(
   }
 
   const queue = [...games]
-  const workers = Array.from({ length: Math.min(deps.concurrency ?? 3, queue.length) }, async () => {
-    while (queue.length > 0) {
-      if (ctx.signal.aborted) return
-      const g = queue.shift()
-      if (g) await one(g)
-    }
-  })
+  const workers = Array.from(
+    { length: Math.min(deps.concurrency ?? 3, queue.length) },
+    async () => {
+      while (queue.length > 0) {
+        if (ctx.signal.aborted) return
+        const g = queue.shift()
+        if (g) await one(g)
+      }
+    },
+  )
   await Promise.all(workers)
 
   const { covered, planned } = rec.stats
@@ -323,7 +361,13 @@ async function readApi(g: ComparableValue, subject: string, rec: Recorder, steam
   if (details) {
     rec.fact(dr.id, subject, "name", details.name.value, details.name.at)
     rec.fact(dr.id, subject, "developers", details.developers.value, details.developers.at)
-    rec.fact(dr.id, subject, "price", details.price?.value ?? null, details.price?.at ?? { path: `$.${g.appid}.data.is_free` })
+    rec.fact(
+      dr.id,
+      subject,
+      "price",
+      details.price?.value ?? null,
+      details.price?.at ?? { path: `$.${g.appid}.data.is_free` },
+    )
     rec.fact(dr.id, subject, "release", details.releaseDate.value, details.releaseDate.at)
   } else {
     rec.fact(dr.id, subject, "name", g.name, { path: `$.${g.appid}.success` })
@@ -345,7 +389,12 @@ async function readApi(g: ComparableValue, subject: string, rec: Recorder, steam
       rr.id,
       subject,
       "reviews",
-      { total: reviews.total.value, positive: reviews.positive, negative: reviews.negative, label: reviews.label.value },
+      {
+        total: reviews.total.value,
+        positive: reviews.positive,
+        negative: reviews.negative,
+        label: reviews.label.value,
+      },
       reviews.total.at,
     )
   }
@@ -437,16 +486,27 @@ function pageFacts(
 ): boolean {
   const page = parseStorePage(html)
   if (page.gated) {
-    rec.fact(receiptId, subject, "unavailable", { reason: "age gate" }, { selector: "#app_agegate" })
+    rec.fact(
+      receiptId,
+      subject,
+      "unavailable",
+      { reason: "age gate" },
+      { selector: "#app_agegate" },
+    )
     return false
   }
-  const value: AiDisclosureValue = page.ai.disclosed ? { disclosed: true, text: page.ai.text } : { disclosed: false }
+  const value: AiDisclosureValue = page.ai.disclosed
+    ? { disclosed: true, text: page.ai.text }
+    : { disclosed: false }
   rec.fact(receiptId, subject, "ai.disclosure", value, {
     ...page.ai.at,
     ...(page.ai.disclosed && boxes?.ai ? { box: boxes.ai } : {}),
   })
   if (page.tags.value.length > 0) {
-    rec.fact(receiptId, subject, "tags", page.tags.value, { ...page.tags.at, ...(boxes?.tags ? { box: boxes.tags } : {}) })
+    rec.fact(receiptId, subject, "tags", page.tags.value, {
+      ...page.tags.at,
+      ...(boxes?.tags ? { box: boxes.tags } : {}),
+    })
   }
   return true
 }
@@ -462,7 +522,11 @@ async function slopShare(block: BlockRecord, rec: Recorder, deps: BlockRunDeps):
   const { value, from } = aiShare(source.facts)
   const inputs = source.facts
     .filter((f) => f.key === "ai.disclosure")
-    .map((f) => ({ factId: f.id, subject: f.subject, disclosed: (f.value as AiDisclosureValue).disclosed }))
+    .map((f) => ({
+      factId: f.id,
+      subject: f.subject,
+      disclosed: (f.value as AiDisclosureValue).disclosed,
+    }))
   const receipt = await rec.computation("ai-share", {
     formula: "disclosed / pages read",
     rule:
@@ -478,5 +542,208 @@ async function slopShare(block: BlockRecord, rec: Recorder, deps: BlockRunDeps):
   return {
     outcome: value.total > 0 ? "ok" : "failed",
     note: value.total > 0 ? null : "The snapshot read no store pages",
+  }
+}
+
+// ---- niche breadth ---------------------------------------------------------------
+
+const laneRow = (r: SearchRow): LaneRow => {
+  const share = r.reviewTooltip ? reviewShareFromTooltip(r.reviewTooltip) : null
+  return { ...r, reviewPct: share?.pct ?? null, reviewCount: share?.count ?? null }
+}
+
+/** Tags the picker offers, by name; null for the rest, so they are never searched. */
+const knownTag = (id: number): string | null => {
+  const n = tagName(id)
+  return n.startsWith("tag ") ? null : n
+}
+
+/**
+ * How wide the niche is, read from Steam's own search: the niche, the niche plus
+ * each tag its games most often carry besides, and the niche minus each of its
+ * own tags. Every number is one search's `total_count`, with the search kept.
+ */
+async function nicheMap(
+  block: BlockRecord,
+  rec: Recorder,
+  steam: SteamClient,
+  deps: BlockRunDeps,
+  ctx: JobContext,
+): Promise<Outcome> {
+  const p = parseParams("niche_map", block.params)
+  if (!p.ok) return { outcome: "failed", note: p.error }
+  const src = await deps.store.block(p.value.source)
+  if (!src || src.kind !== "comparables")
+    return { outcome: "failed", note: "Its source block is missing or is not a comparables block" }
+  const sp = parseParams("comparables", src.params)
+  if (!sp.ok) return { outcome: "failed", note: sp.error }
+  const base = sp.value.tagIds
+
+  const search = async (tagIds: number[], count: number) => {
+    const url = searchUrl({ tagIds, count })
+    const { fetched, json } = await steam.json(url)
+    const receipt = await rec.receipt({
+      kind: "json",
+      runtime: "api",
+      url,
+      body: fetched.body,
+      contentType: fetched.contentType,
+      viewpoint: "us",
+      at: fetched.fetchedAt,
+    })
+    const page = parseSearch(json)
+    if (!page) throw new Error(`Steam's search did not answer for tags ${tagIds.join(",")}`)
+    return { receipt, page }
+  }
+
+  // The niche itself, sampled wide: its first 100 games are what the neighbouring
+  // tags are counted over.
+  const home = await search(base, 100)
+  const homeRows = home.page.rows.map(laneRow)
+  rec.fact(
+    home.receipt.id,
+    "set",
+    "lane",
+    laneOf({
+      relation: "this",
+      tagIds: base,
+      pivot: null,
+      overlap: null,
+      total: home.page.total,
+      rows: homeRows.slice(0, 25),
+    }),
+    {
+      path: "$.total_count",
+    },
+  )
+  const neighbours = neighbourTags(homeRows, base, knownTag, p.value.neighbours)
+  const counted = await rec.computation("neighbours", {
+    rule:
+      "Tags counted over the niche's first page of up to 100 games. A tag carried by at least 80% of them is " +
+      "the niche's baseline, not a lane. Tags the product does not offer are not counted.",
+    searchReceipt: home.receipt.id,
+    output: neighbours,
+  })
+  rec.fact(counted.id, "set", "neighbours", neighbours, { path: "$.output" })
+  await rec.flush()
+
+  const pivots = [
+    ...neighbours.lanes.map((t) => ({
+      relation: "narrower" as const,
+      tag: t,
+      tagIds: [...base, t.id],
+    })),
+    ...(base.length >= 2
+      ? base.map((id) => ({
+          relation: "broader" as const,
+          tag: { id, name: tagName(id), carry: homeRows.length },
+          tagIds: base.filter((b) => b !== id),
+        }))
+      : []),
+  ]
+  rec.stats.planned = 1 + pivots.length
+  rec.stats.covered = 1
+  const notes: string[] = []
+  for (const [i, lane] of pivots.entries()) {
+    if (ctx.signal.aborted) break
+    try {
+      const { receipt, page } = await search(lane.tagIds, 25)
+      const value = laneOf({
+        relation: lane.relation,
+        tagIds: lane.tagIds,
+        pivot: { id: lane.tag.id, name: lane.tag.name },
+        overlap:
+          lane.relation === "narrower" ? { carry: lane.tag.carry, of: homeRows.length } : null,
+        total: page.total,
+        rows: page.rows.map(laneRow),
+      })
+      const subject = lane.relation === "narrower" ? `tag:${lane.tag.id}` : `without:${lane.tag.id}`
+      rec.fact(receipt.id, subject, "lane", value, { path: "$.total_count" })
+      rec.stats.covered++
+    } catch (e) {
+      const why =
+        e instanceof Error && e.name === "TimeoutError"
+          ? "timed out"
+          : e instanceof Error
+            ? e.message
+            : String(e)
+      notes.push(`${lane.relation === "narrower" ? "+" : "−"}${lane.tag.name}: ${why}`)
+    }
+    await rec.flush()
+    await ctx.heartbeat(
+      `${i + 1}/${pivots.length} ${lane.relation === "narrower" ? "+" : "−"}${lane.tag.name}`,
+    )
+  }
+  const { covered, planned } = rec.stats
+  return {
+    outcome: covered === planned ? "ok" : "partial",
+    note: notes.length > 0 ? notes.join("; ") : null,
+  }
+}
+
+// ---- decision ----------------------------------------------------------------------
+
+/**
+ * Write down the call and what it rested on, as printed at that moment. Nothing
+ * is fetched, and nothing is swapped: if a block has since read a different
+ * number, the page shows the move and the writer chooses to take it.
+ */
+async function decision(
+  block: BlockRecord,
+  rec: Recorder,
+  deps: BlockRunDeps,
+  ctx: JobContext,
+): Promise<Outcome> {
+  const p = parseParams("decision", block.params)
+  if (!p.ok) return { outcome: "failed", note: p.error }
+  if (!p.value.statement) return { outcome: "failed", note: "Write the decision first" }
+  if (!ctx.job.ownerId)
+    return {
+      outcome: "failed",
+      note: "A decision is recorded for its owner, and this job has none",
+    }
+  const inDoc = new Map((await deps.store.blocksForDoc(block.docId)).map((b) => [b.id, b]))
+  const facts = (await deps.store.ownedFacts(ctx.job.ownerId, p.value.evidence)).filter((f) =>
+    inDoc.has(f.blockId),
+  )
+  const order = new Map(p.value.evidence.map((id, i) => [id, i]))
+  facts.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+
+  const evidence: DecisionValue["evidence"] = facts.map((f) => ({
+    factId: f.id,
+    blockId: f.blockId,
+    subject: f.subject,
+    key: f.key,
+    printed: formatFact(f),
+  }))
+  const value: DecisionValue = { statement: p.value.statement, evidence }
+  const receipt = await rec.computation("decision", {
+    statement: value.statement,
+    evidence: facts.map((f) => ({
+      factId: f.id,
+      block: { id: f.blockId, kind: inDoc.get(f.blockId)?.kind },
+      subject: f.subject,
+      key: f.key,
+      value: f.value,
+      printed: formatFact(f),
+      receiptId: f.receiptId,
+      runId: f.runId,
+    })),
+  })
+  rec.fact(receipt.id, "set", "decision", value, {
+    path: "$.statement",
+    from: facts.map((f) => f.id),
+  })
+  rec.stats.planned = p.value.evidence.length
+  rec.stats.covered = facts.length
+  const missing = p.value.evidence.length - facts.length
+  return {
+    outcome: "ok",
+    note:
+      facts.length === 0
+        ? "Recorded with no evidence attached"
+        : missing > 0
+          ? `${missing} cited ${missing === 1 ? "fact is" : "facts are"} no longer in this document`
+          : null,
   }
 }

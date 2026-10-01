@@ -7,19 +7,23 @@ import {
   type ComparablesParams,
   type ComparableValue,
   currentComparables,
+  type DecisionValue,
   type FactRecord,
+  formatCents,
   formatFact,
-  parseParams,
+  type LaneValue,
+  type NeighboursValue,
   paramsChanged,
+  parseParams,
   type ReviewsValue,
   sourceOf,
 } from "@rd/research"
+import { searchTags, tagName } from "@rd/steam/tags"
 import { NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react"
 import { useMemo, useState } from "react"
 import type { BlockView } from "../api"
 import { useDocContext } from "../context"
-import { searchTags, tagName } from "../tags"
-import { ago, CiteButton, Evidence, nameOf } from "./parts"
+import { ago, CiteButton, decisionEvidence, Evidence, nameOf } from "./parts"
 
 /**
  * One research block in the document. The node holds an id; this draws the block
@@ -61,6 +65,8 @@ function Card({ block, onRemove }: { block: BlockView; onRemove: () => void }) {
         {block.kind === "comparables" && <ComparablesBody block={block} />}
         {block.kind === "store_snapshot" && <SnapshotBody block={block} />}
         {block.kind === "slop_share" && <ShareBody block={block} />}
+        {block.kind === "niche_map" && <NicheBody block={block} />}
+        {block.kind === "decision" && <DecisionBody block={block} />}
       </div>
       <Footer block={block} />
     </>
@@ -73,6 +79,8 @@ const KIND_TAGS: Record<BlockKind, string> = {
   comparables: "STORE SEARCH",
   store_snapshot: "API + CLOUD BROWSER",
   slop_share: "DERIVED",
+  niche_map: "STORE SEARCHES",
+  decision: "YOUR CALL",
 }
 
 function Header({ block, onRemove }: { block: BlockView; onRemove: () => void }) {
@@ -85,7 +93,9 @@ function Header({ block, onRemove }: { block: BlockView; onRemove: () => void })
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-rule border-b bg-surface-raised px-4 py-2.5">
       <div className="mr-auto flex items-baseline gap-2.5">
         <span className="font-serif text-[21px] leading-none">{BLOCK_TITLES[block.kind]}</span>
-        <span className="font-mono text-[10px] text-ink-faint tracking-wider">{KIND_TAGS[block.kind]}</span>
+        <span className="font-mono text-[10px] text-ink-faint tracking-wider">
+          {KIND_TAGS[block.kind]}
+        </span>
       </div>
       {busy ? (
         <span className="flex items-center gap-2 font-mono text-[11px] text-ink-muted">
@@ -96,17 +106,28 @@ function Header({ block, onRemove }: { block: BlockView; onRemove: () => void })
         <>
           {downstream && (
             <label className="flex items-center gap-1.5 text-ink-muted text-xs">
-              <input type="checkbox" checked={cascade} onChange={(e) => setCascade(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={cascade}
+                onChange={(e) => setCascade(e.target.checked)}
+              />
               then the blocks below
             </label>
           )}
           <button
             type="button"
             title={block.estimate.label}
+            disabled={!runnable(block)}
             onClick={() => run(block.id, downstream && cascade)}
-            className="rounded-sm bg-ink px-3 py-1 font-medium text-paper text-xs hover:bg-night-raised"
+            className="rounded-sm bg-ink px-3 py-1 font-medium text-paper text-xs hover:bg-night-raised disabled:opacity-40"
           >
-            {block.run ? "Run again" : "Run"}
+            {block.kind === "decision"
+              ? block.run
+                ? "Record again"
+                : "Record"
+              : block.run
+                ? "Run again"
+                : "Run"}
           </button>
         </>
       )}
@@ -120,26 +141,42 @@ function Header({ block, onRemove }: { block: BlockView; onRemove: () => void })
         ×
       </button>
       {!busy && (
-        <p className="basis-full font-mono text-[10.5px] text-ink-faint">Costs: {block.estimate.label}</p>
+        <p className="basis-full font-mono text-[10.5px] text-ink-faint">
+          Costs: {block.estimate.label}
+        </p>
       )}
     </div>
   )
 }
 
+/** A decision can only be recorded once it says something. */
+const runnable = (b: BlockView): boolean =>
+  b.kind !== "decision" || decisionParams(b).statement.length > 0
+
 function StaleBanner({ block }: { block: BlockView }) {
   const { run } = useDocContext()
   if (!block.stale || block.status === "queued" || block.status === "running") return null
   const asked = block.run && paramsChanged(block.kind, block.run.params, block.params)
+  const message =
+    block.kind === "decision"
+      ? asked
+        ? "You edited the decision or its evidence since it was recorded."
+        : `${block.moves.length === 1 ? "A number" : `${block.moves.length} numbers`} it rests on ${block.moves.length === 1 ? "has" : "have"} moved since you decided. Check them below.`
+      : asked
+        ? "You changed the question since this ran. The answer below is for the old one."
+        : "The block this reads from has changed since this ran."
   return (
     <div className="flex items-center gap-3 border-marker border-b bg-marker-soft px-4 py-2 text-sm">
-      <span className="mr-auto">
-        {asked
-          ? "You changed the question since this ran. The answer below is for the old one."
-          : "The block this reads from has changed since this ran."}
-      </span>
-      <button type="button" onClick={() => run(block.id, false)} className="font-medium underline">
-        Re-run ({block.estimate.label})
-      </button>
+      <span className="mr-auto">{message}</span>
+      {(block.kind !== "decision" || asked) && runnable(block) && (
+        <button
+          type="button"
+          onClick={() => run(block.id, false)}
+          className="font-medium underline"
+        >
+          {block.kind === "decision" ? "Record again" : `Re-run (${block.estimate.label})`}
+        </button>
+      )}
     </div>
   )
 }
@@ -150,13 +187,16 @@ function Footer({ block }: { block: BlockView }) {
   const s = r.stats
   const parts = [
     `ran ${ago(r.startedAt)}`,
-    `${s.facts} facts from ${s.receipts} receipts`,
+    `${s.facts} ${s.facts === 1 ? "fact" : "facts"} from ${s.receipts} ${s.receipts === 1 ? "receipt" : "receipts"}`,
     s.requests > 0 ? `${s.requests} requests` : null,
-    s.browserSessions > 0 ? `${s.browserSessions} Solari browser sessions (${s.browserMinutes.toFixed(1)} min)` : null,
+    s.browserSessions > 0
+      ? `${s.browserSessions} Solari browser sessions (${s.browserMinutes.toFixed(1)} min)`
+      : null,
   ].filter(Boolean)
   return (
     <div className="border-rule border-t px-4 py-2 font-mono text-[10.5px] text-ink-faint">
-      <span className={OUTCOME_CLASS[r.outcome]}>{r.outcome.toUpperCase()}</span> · {parts.join(" · ")}
+      <span className={OUTCOME_CLASS[r.outcome]}>{r.outcome.toUpperCase()}</span> ·{" "}
+      {parts.join(" · ")}
       {r.note && <p className="mt-1 whitespace-pre-wrap text-signal-red">{r.note}</p>}
     </div>
   )
@@ -187,8 +227,12 @@ function ComparablesBody({ block }: { block: BlockView }) {
   const [showSpare, setShowSpare] = useState(false)
   const set = (p: Partial<ComparablesParams>) => patch(block.id, p)
 
-  const listed = rows.filter((f) => kept.has(f.id) || excluded.has((f.value as ComparableValue).appid))
-  const spare = rows.filter((f) => !kept.has(f.id) && !excluded.has((f.value as ComparableValue).appid))
+  const listed = rows.filter(
+    (f) => kept.has(f.id) || excluded.has((f.value as ComparableValue).appid),
+  )
+  const spare = rows.filter(
+    (f) => !kept.has(f.id) && !excluded.has((f.value as ComparableValue).appid),
+  )
 
   return (
     <div>
@@ -241,19 +285,36 @@ function ComparablesBody({ block }: { block: BlockView }) {
       {listed.length > 0 && (
         <ol className="mt-3 divide-y divide-rule border-rule border-y">
           {listed.map((f) => (
-            <ComparableRow key={f.id} fact={f} struck={excluded.has((f.value as ComparableValue).appid)} params={params} block={block} />
+            <ComparableRow
+              key={f.id}
+              fact={f}
+              struck={excluded.has((f.value as ComparableValue).appid)}
+              params={params}
+              block={block}
+            />
           ))}
         </ol>
       )}
       {spare.length > 0 && (
         <div className="mt-2 text-xs">
-          <button type="button" onClick={() => setShowSpare(!showSpare)} className="text-ink-muted underline">
+          <button
+            type="button"
+            onClick={() => setShowSpare(!showSpare)}
+            className="text-ink-muted underline"
+          >
             {showSpare ? "Hide" : "Show"} {spare.length} more from the same search
           </button>
           {showSpare && (
             <ol className="mt-2 divide-y divide-rule border-rule border-y opacity-70">
               {spare.map((f) => (
-                <ComparableRow key={f.id} fact={f} struck={false} params={params} block={block} spare />
+                <ComparableRow
+                  key={f.id}
+                  fact={f}
+                  struck={false}
+                  params={params}
+                  block={block}
+                  spare
+                />
               ))}
             </ol>
           )}
@@ -292,12 +353,20 @@ function ComparableRow({
       <span className={`min-w-0 flex-1 truncate ${struck ? "line-through" : ""}`}>
         <Evidence fact={fact}>{v.name}</Evidence>
       </span>
-      <span className="hidden w-24 font-mono text-[11px] text-ink-faint sm:block">{v.released}</span>
+      <span className="hidden w-24 font-mono text-[11px] text-ink-faint sm:block">
+        {v.released}
+      </span>
       <span className="w-14 text-right font-mono text-[11px]">
-        {v.priceCents === null ? "—" : v.priceCents === 0 ? "Free" : `$${(v.priceCents / 100).toFixed(2)}`}
+        {v.priceCents === null
+          ? "—"
+          : v.priceCents === 0
+            ? "Free"
+            : `$${(v.priceCents / 100).toFixed(2)}`}
       </span>
       <span className="w-28 text-right font-mono text-[11px] text-ink-muted">
-        {v.reviewPct === null ? "no reviews" : `${v.reviewPct}% of ${(v.reviewCount ?? 0).toLocaleString("en-US")}`}
+        {v.reviewPct === null
+          ? "no reviews"
+          : `${v.reviewPct}% of ${(v.reviewCount ?? 0).toLocaleString("en-US")}`}
       </span>
       {!spare && (
         <button
@@ -313,7 +382,13 @@ function ComparableRow({
   )
 }
 
-export function TagPicker({ tagIds, onChange }: { tagIds: number[]; onChange: (ids: number[]) => void }) {
+export function TagPicker({
+  tagIds,
+  onChange,
+}: {
+  tagIds: number[]
+  onChange: (ids: number[]) => void
+}) {
   const [q, setQ] = useState("")
   const [active, setActive] = useState(0)
   const hits = q.trim() ? searchTags(q, tagIds) : []
@@ -327,7 +402,10 @@ export function TagPicker({ tagIds, onChange }: { tagIds: number[]; onChange: (i
     <div className="relative">
       <div className="flex flex-wrap items-center gap-1.5">
         {tagIds.map((t) => (
-          <span key={t} className="flex items-center gap-1 rounded-sm bg-marker px-2 py-0.5 text-[13px]">
+          <span
+            key={t}
+            className="flex items-center gap-1 rounded-sm bg-marker px-2 py-0.5 text-[13px]"
+          >
             {tagName(t)}
             {tagIds.length > 1 && (
               <button
@@ -356,7 +434,9 @@ export function TagPicker({ tagIds, onChange }: { tagIds: number[]; onChange: (i
               else return
               e.preventDefault()
             }}
-            placeholder={tagIds.length === 0 ? "Add a Steam tag: roguelike, cozy, deckbuilder…" : "+ tag"}
+            placeholder={
+              tagIds.length === 0 ? "Add a Steam tag: roguelike, cozy, deckbuilder…" : "+ tag"
+            }
             aria-label="Add a Steam tag"
             className="min-w-[140px] flex-1 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-ink-faint"
           />
@@ -452,9 +532,9 @@ function SnapshotBody({ block }: { block: BlockView }) {
       <SourcePicker block={block} kind="comparables" />
       {!block.run && (
         <p className="mt-4 text-ink-faint text-sm">
-          Reads each comparable's store page in a Solari cloud browser: price, reviews, tags, and whether the page
-          carries Steam's AI-generated content disclosure. Every cell links to the API response or the
-          screenshot it came from.
+          Reads each comparable's store page in a Solari cloud browser: price, reviews, tags, and
+          whether the page carries Steam's AI-generated content disclosure. Every cell links to the
+          API response or the screenshot it came from.
         </p>
       )}
       {rows.length > 0 && (
@@ -474,11 +554,21 @@ function SnapshotBody({ block }: { block: BlockView }) {
                 <tr key={r.subject} className="align-top">
                   <td className="py-1.5 pr-3">
                     {r.name ? <Evidence fact={r.name} /> : nameOf(names, r.subject)}
-                    {r.release && <div className="font-mono text-[10.5px] text-ink-faint">{formatFact(r.release)}</div>}
+                    {r.release && (
+                      <div className="font-mono text-[10.5px] text-ink-faint">
+                        {formatFact(r.release)}
+                      </div>
+                    )}
                   </td>
-                  <td className="py-1.5 pr-3 font-mono text-[12px]">{r.price ? <Evidence fact={r.price} /> : "—"}</td>
                   <td className="py-1.5 pr-3 font-mono text-[12px]">
-                    {r.reviews ? <Evidence fact={r.reviews}>{reviewsShort(r.reviews)}</Evidence> : "—"}
+                    {r.price ? <Evidence fact={r.price} /> : "—"}
+                  </td>
+                  <td className="py-1.5 pr-3 font-mono text-[12px]">
+                    {r.reviews ? (
+                      <Evidence fact={r.reviews}>{reviewsShort(r.reviews)}</Evidence>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="py-1.5 pr-3">
                     {r.ai ? (
@@ -492,7 +582,13 @@ function SnapshotBody({ block }: { block: BlockView }) {
                     )}
                   </td>
                   <td className="py-1.5 text-[12px] text-ink-muted">
-                    {r.tags ? <Evidence fact={r.tags}>{(r.tags.value as string[]).slice(0, 4).join(", ")}</Evidence> : "—"}
+                    {r.tags ? (
+                      <Evidence fact={r.tags}>
+                        {(r.tags.value as string[]).slice(0, 4).join(", ")}
+                      </Evidence>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                 </tr>
               ))}
@@ -514,7 +610,10 @@ function AiCell({ fact }: { fact: FactRecord }) {
   const v = fact.value as AiDisclosureValue
   return (
     <span className="flex items-center gap-1.5">
-      <Evidence fact={fact} className={v.disclosed ? "bg-marker px-1 font-medium text-xs" : "text-ink-muted text-xs"}>
+      <Evidence
+        fact={fact}
+        className={v.disclosed ? "bg-marker px-1 font-medium text-xs" : "text-ink-muted text-xs"}
+      >
         {v.disclosed ? "Discloses AI" : "None"}
       </Evidence>
       {v.disclosed && <CiteButton fact={fact} />}
@@ -532,8 +631,8 @@ function ShareBody({ block }: { block: BlockView }) {
       <SourcePicker block={block} kind="store_snapshot" />
       {!share && (
         <p className="mt-4 text-ink-faint text-sm">
-          Counts the snapshot's store pages that carry Steam's AI-generated content disclosure. Pages that
-          could not be read are left out of the count and named, never treated as clean.
+          Counts the snapshot's store pages that carry Steam's AI-generated content disclosure.
+          Pages that could not be read are left out of the count and named, never treated as clean.
         </p>
       )}
       {share && v && (
@@ -545,17 +644,335 @@ function ShareBody({ block }: { block: BlockView }) {
             <p>
               {v.disclosed} of {v.total} store pages disclose generative AI.
               {v.unread > 0 && (
-                <span className="text-signal-amber"> {v.unread} could not be read and are not counted.</span>
+                <span className="text-signal-amber">
+                  {" "}
+                  {v.unread} could not be read and are not counted.
+                </span>
               )}
             </p>
             {v.disclosedApps.length > 0 && (
-              <p className="mt-1 text-ink-muted text-sm">{v.disclosedApps.map((a) => a.name).join(", ")}</p>
+              <p className="mt-1 text-ink-muted text-sm">
+                {v.disclosedApps.map((a) => a.name).join(", ")}
+              </p>
             )}
             <div className="mt-2">
               <CiteButton fact={share} />
             </div>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ---- niche breadth --------------------------------------------------------------------
+
+function NicheBody({ block }: { block: BlockView }) {
+  const { patch } = useDocContext()
+  const p = parseParams("niche_map", block.params)
+  const lanes = p.ok ? p.value.neighbours : 6
+  const home = block.facts.find((f) => f.key === "lane" && f.subject === "set")
+  const neighbours = block.facts.find((f) => f.key === "neighbours")
+  const narrower = block.facts
+    .filter((f) => f.key === "lane" && f.subject.startsWith("tag:"))
+    .sort((a, b) => (a.value as LaneValue).total - (b.value as LaneValue).total)
+  const broader = block.facts.filter((f) => f.key === "lane" && f.subject.startsWith("without:"))
+  const h = home?.value as LaneValue | undefined
+  const n = neighbours?.value as NeighboursValue | undefined
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-4">
+        <SourcePicker block={block} kind="comparables" />
+        <label className="flex items-center gap-1.5 text-ink-muted text-xs">
+          Lanes
+          <select
+            value={lanes}
+            onChange={(e) => patch(block.id, { neighbours: Number(e.target.value) })}
+            className="rounded-sm border border-rule bg-paper px-1 py-0.5 text-ink"
+          >
+            {[3, 4, 5, 6, 8, 10].map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {!block.run && (
+        <p className="mt-4 text-ink-faint text-sm">
+          Searches Steam for the niche, then for the niche plus each tag its games most often carry
+          besides, and for the niche minus each of its own tags. Every count is one store search,
+          kept as a receipt.
+        </p>
+      )}
+      {home && h && (
+        <>
+          <p className="mt-4 flex flex-wrap items-baseline gap-2 text-[15px]">
+            <Evidence fact={home} className="font-serif text-[26px] leading-none">
+              {h.total.toLocaleString("en-US")}
+            </Evidence>
+            <span>games in this niche.</span>
+            <CiteButton fact={home} />
+          </p>
+          <p className="mt-1 text-ink-muted text-sm">{laneSummary(h)}</p>
+        </>
+      )}
+      {neighbours && n && n.baseline.length > 0 && (
+        <p className="mt-2 text-sm">
+          Nearly all of them are also tagged{" "}
+          <Evidence fact={neighbours}>{n.baseline.map((t) => t.name).join(", ")}</Evidence>, so
+          those describe the niche rather than split it.
+        </p>
+      )}
+      {narrower.length > 0 && h && (
+        <div className="mt-4">
+          <h4 className="font-mono text-[10px] text-ink-faint uppercase tracking-wider">
+            One tag narrower: lanes inside the niche
+          </h4>
+          <div className="mt-1 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="border-rule border-b text-left font-mono text-[10px] text-ink-faint uppercase tracking-wider">
+                  <th className="py-1.5 pr-3 font-normal">Add</th>
+                  <th className="py-1.5 pr-3 font-normal">Games</th>
+                  <th className="py-1.5 pr-3 font-normal">Median price</th>
+                  <th className="py-1.5 pr-3 font-normal">Median reviews</th>
+                  <th className="py-1.5 font-normal">Most reviewed</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-rule">
+                {narrower.map((f) => (
+                  <LaneRow key={f.id} fact={f} of={h.total} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-1.5 text-ink-faint text-xs">
+            Medians are over each lane's first 25 games in Steam's relevance order, paid games only
+            for price.
+          </p>
+        </div>
+      )}
+      {broader.length > 0 && h && (
+        <div className="mt-4">
+          <h4 className="font-mono text-[10px] text-ink-faint uppercase tracking-wider">
+            One tag broader: what the niche sits in
+          </h4>
+          <ul className="mt-1 divide-y divide-rule border-rule border-y text-sm">
+            {broader.map((f) => {
+              const v = f.value as LaneValue
+              return (
+                <li key={f.id} className="flex flex-wrap items-baseline gap-2 py-1.5">
+                  <span className="w-40 text-ink-muted">without {v.pivot?.name}</span>
+                  <Evidence fact={f} className="font-mono text-[12px]">
+                    {v.total.toLocaleString("en-US")} games
+                  </Evidence>
+                  <span className="font-mono text-[11px] text-ink-faint">
+                    {h.total > 0 ? `${Math.round(v.total / h.total)}× the niche` : ""}
+                  </span>
+                  <span className="ml-auto">
+                    <CiteButton fact={f} />
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function laneSummary(l: LaneValue): string {
+  const parts = [
+    l.medianPriceCents !== null
+      ? `median price ${formatCents(l.medianPriceCents)}`
+      : "mostly free or unpriced",
+    l.medianReviews !== null ? `median ${l.medianReviews.toLocaleString("en-US")} reviews` : null,
+    l.medianPositivePct !== null ? `${l.medianPositivePct}% positive` : null,
+  ].filter(Boolean)
+  return `Across its first ${l.sampled}: ${parts.join(", ")}.`
+}
+
+function LaneRow({ fact, of }: { fact: FactRecord; of: number }) {
+  const v = fact.value as LaneValue
+  const share = of > 0 ? Math.max(2, Math.round((v.total / of) * 100)) : 0
+  return (
+    <tr className="align-top">
+      <td className="py-1.5 pr-3">
+        + {v.pivot?.name}
+        {v.overlap && (
+          <div className="font-mono text-[10.5px] text-ink-faint">
+            {v.overlap.carry} of the niche's first {v.overlap.of}
+          </div>
+        )}
+      </td>
+      <td className="py-1.5 pr-3">
+        <div className="flex items-center gap-2">
+          <Evidence fact={fact} className="w-14 font-mono text-[12px]">
+            {v.total.toLocaleString("en-US")}
+          </Evidence>
+          <span className="h-1.5 w-20 rounded-full bg-surface-raised">
+            <span
+              className="block h-1.5 rounded-full bg-ink"
+              style={{ width: `${Math.min(100, share)}%` }}
+            />
+          </span>
+          <CiteButton fact={fact} />
+        </div>
+      </td>
+      <td className="py-1.5 pr-3 font-mono text-[12px]">
+        {v.medianPriceCents !== null ? formatCents(v.medianPriceCents) : "—"}
+      </td>
+      <td className="py-1.5 pr-3 font-mono text-[12px]">
+        {v.medianReviews !== null ? v.medianReviews.toLocaleString("en-US") : "—"}
+        {v.medianPositivePct !== null && (
+          <span className="text-ink-faint"> · {v.medianPositivePct}%</span>
+        )}
+      </td>
+      <td className="py-1.5 text-[12px] text-ink-muted">{v.top.map((t) => t.name).join(", ")}</td>
+    </tr>
+  )
+}
+
+// ---- decision --------------------------------------------------------------------------
+
+function decisionParams(b: BlockView) {
+  const p = parseParams("decision", b.params)
+  return p.ok ? p.value : { statement: "", evidence: [] }
+}
+
+/** Which game a cited fact is about. Lanes and whole-set facts already say what they cover. */
+const subjectLabel = (names: Map<string, string>, subject: string): string | null =>
+  subject.startsWith("app:") ? nameOf(names, subject) : null
+
+function DecisionBody({ block }: { block: BlockView }) {
+  const { patch, attaching, setAttaching, blocks, names } = useDocContext()
+  const params = decisionParams(block)
+  const [draft, setDraft] = useState(params.statement)
+  const recorded = block.facts.find((f) => f.key === "decision")
+  const value = recorded?.value as DecisionValue | undefined
+  const evidence = decisionEvidence(block)
+  const byId = new Map(block.evidence.map((f) => [f.id, f]))
+  const moves = new Map(block.moves.map((m) => [m.factId, m.now]))
+  const collecting = attaching === block.id
+  const save = () =>
+    draft.trim() !== params.statement && patch(block.id, { statement: draft.trim() })
+  const swap = (from: string, to: string | null) =>
+    patch(block.id, {
+      evidence: to
+        ? evidence.map((id) => (id === from ? to : id))
+        : evidence.filter((id) => id !== from),
+    })
+
+  return (
+    <div>
+      <textarea
+        value={draft}
+        rows={2}
+        maxLength={500}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        placeholder="The call: price it at $14.99, skip multiplayer, ship in Early Access…"
+        aria-label="Decision"
+        className="field-sizing-content w-full resize-none rounded-sm border border-rule bg-paper px-3 py-2 font-serif text-[19px] leading-snug outline-none focus:border-ink"
+      />
+      <div className="mt-3 flex items-center gap-3">
+        <h4 className="mr-auto font-mono text-[10px] text-ink-faint uppercase tracking-wider">
+          Rests on{" "}
+          {evidence.length === 0
+            ? "nothing yet"
+            : `${evidence.length} ${evidence.length === 1 ? "number" : "numbers"}`}
+        </h4>
+        <button
+          type="button"
+          onClick={() => setAttaching(collecting ? null : block.id)}
+          className={`rounded-sm border px-2 py-0.5 text-xs ${collecting ? "border-ink bg-marker" : "border-rule text-ink-muted hover:border-ink hover:text-ink"}`}
+        >
+          {collecting ? "Done attaching" : "Attach evidence"}
+        </button>
+      </div>
+      {evidence.length > 0 && (
+        <ul className="mt-1.5 divide-y divide-rule border-rule border-y text-sm">
+          {evidence.map((id) => {
+            const f = byId.get(id)
+            if (!f) {
+              return (
+                <li key={id} className="flex items-center gap-2 py-1.5 text-ink-faint">
+                  <span className="mr-auto">A number that is no longer in this document</span>
+                  <button
+                    type="button"
+                    onClick={() => swap(id, null)}
+                    className="text-xs underline"
+                  >
+                    remove
+                  </button>
+                </li>
+              )
+            }
+            const moved = moves.has(id)
+            const now = moves.get(id) ?? null
+            const from = blocks.get(f.blockId)
+            return (
+              <li key={id} className="py-1.5">
+                <div className="flex items-baseline gap-2">
+                  <span className="w-40 shrink-0 truncate font-mono text-[10.5px] text-ink-faint">
+                    {from ? BLOCK_TITLES[from.kind] : "a removed block"}
+                  </span>
+                  {subjectLabel(names, f.subject) && (
+                    <span className="text-ink-muted">{subjectLabel(names, f.subject)}</span>
+                  )}
+                  <Evidence
+                    fact={f}
+                    className={moved ? "line-through decoration-signal-amber" : ""}
+                  />
+                  <span className="ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => swap(id, null)}
+                      className="text-ink-faint text-xs hover:text-ink"
+                    >
+                      remove
+                    </button>
+                  </span>
+                </div>
+                {moved && (
+                  <div className="mt-1 ml-42 flex flex-wrap items-baseline gap-2 text-signal-amber text-xs">
+                    {now ? (
+                      <>
+                        now <Evidence fact={now} className="text-ink" />
+                        <button
+                          type="button"
+                          onClick={() => swap(id, now.id)}
+                          className="font-medium underline"
+                        >
+                          Take the new reading
+                        </button>
+                      </>
+                    ) : (
+                      "the latest run did not read this at all"
+                    )}
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {recorded && value && (
+        <p className="mt-3 flex flex-wrap items-baseline gap-2 text-ink-muted text-xs">
+          <Evidence fact={recorded}>Recorded {ago(recorded.createdAt)}</Evidence>
+          with {value.evidence.length} {value.evidence.length === 1 ? "number" : "numbers"} as they
+          stood.
+          <CiteButton fact={recorded} label="Cite the decision" />
+        </p>
+      )}
+      {!recorded && (
+        <p className="mt-3 text-ink-faint text-sm">
+          Write the call, attach the numbers it rests on, then Record. If a block later reads one of
+          them differently, this block says so; it never changes by itself.
+        </p>
       )}
     </div>
   )

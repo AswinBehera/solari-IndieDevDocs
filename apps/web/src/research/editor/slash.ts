@@ -28,6 +28,16 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
     command: "/ai-share",
     description: "How many of those store pages disclose generative AI",
   },
+  {
+    id: "niche_map",
+    command: "/breadth",
+    description: "How wide the niche is: the lanes one tag narrower and one tag broader",
+  },
+  {
+    id: "decision",
+    command: "/decision",
+    description: "A design call, with the numbers it rests on attached",
+  },
 ]
 
 export interface SlashState {

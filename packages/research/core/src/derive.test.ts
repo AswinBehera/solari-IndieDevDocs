@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest"
-import { aiShare, estimateCost, formatFact, isStale, paramsChanged, sha256Hex } from "./derive.js"
+import {
+  aiShare,
+  estimateCost,
+  evidenceMoves,
+  formatFact,
+  isStale,
+  laneOf,
+  neighbourTags,
+  paramsChanged,
+  sha256Hex,
+} from "./derive.js"
 import { blockIdsIn } from "./index.js"
 import type { FactRecord } from "./model.js"
 
@@ -38,28 +48,49 @@ describe("aiShare", () => {
 
 describe("formatFact", () => {
   it("prints prices, discounts and reviews for a sentence", () => {
-    expect(formatFact({ key: "price", value: { currency: "USD", final: 1499, initial: 1499, discountPercent: 0 } })).toBe("$14.99")
-    expect(formatFact({ key: "price", value: { currency: "USD", final: 749, initial: 1499, discountPercent: 50 } })).toBe(
-      "$7.49 (50% off $14.99)",
-    )
-    expect(formatFact({ key: "reviews", value: { total: 1200, positive: 1080, negative: 120, label: "Very Positive" } })).toBe(
-      "1,200 reviews, 90% positive",
-    )
+    expect(
+      formatFact({
+        key: "price",
+        value: { currency: "USD", final: 1499, initial: 1499, discountPercent: 0 },
+      }),
+    ).toBe("$14.99")
+    expect(
+      formatFact({
+        key: "price",
+        value: { currency: "USD", final: 749, initial: 1499, discountPercent: 50 },
+      }),
+    ).toBe("$7.49 (50% off $14.99)")
+    expect(
+      formatFact({
+        key: "reviews",
+        value: { total: 1200, positive: 1080, negative: 120, label: "Very Positive" },
+      }),
+    ).toBe("1,200 reviews, 90% positive")
   })
 })
 
 describe("isStale", () => {
   it("is stale when the source finished after this run started", () => {
     expect(
-      isStale({ lastRunId: "r" }, { startedAt: "2026-09-30T10:00:00Z" }, { endedAt: "2026-09-30T11:00:00Z", outcome: "ok" }),
+      isStale(
+        { lastRunId: "r" },
+        { startedAt: "2026-09-30T10:00:00Z" },
+        { endedAt: "2026-09-30T11:00:00Z", outcome: "ok" },
+      ),
     ).toBe(true)
     expect(
-      isStale({ lastRunId: "r" }, { startedAt: "2026-09-30T12:00:00Z" }, { endedAt: "2026-09-30T11:00:00Z", outcome: "ok" }),
+      isStale(
+        { lastRunId: "r" },
+        { startedAt: "2026-09-30T12:00:00Z" },
+        { endedAt: "2026-09-30T11:00:00Z", outcome: "ok" },
+      ),
     ).toBe(false)
   })
 
   it("is never stale before its first run", () => {
-    expect(isStale({ lastRunId: null }, null, { endedAt: "2026-09-30T11:00:00Z", outcome: "ok" })).toBe(false)
+    expect(
+      isStale({ lastRunId: null }, null, { endedAt: "2026-09-30T11:00:00Z", outcome: "ok" }),
+    ).toBe(false)
   })
 })
 
@@ -101,5 +132,79 @@ describe("paramsChanged", () => {
     expect(paramsChanged("comparables", run, { ...run, tagIds: [492, 1716] })).toBe(true)
     expect(paramsChanged("comparables", run, { ...run, sort: "reviews" })).toBe(true)
     expect(paramsChanged("store_snapshot", { source: "a" }, { source: "b" })).toBe(true)
+  })
+})
+
+describe("niche breadth", () => {
+  const row = (
+    appid: number,
+    tagIds: number[],
+    priceFinal: number | null,
+    reviewCount: number | null,
+  ) => ({
+    appid,
+    name: `G${appid}`,
+    priceFinal,
+    tagIds,
+    reviewPct: reviewCount === null ? null : 90,
+    reviewCount,
+  })
+
+  it("keeps a tag nearly every game shares out of the lanes, and never names an unknown tag", () => {
+    const rows = [
+      row(1, [492, 4182, 1643], null, null),
+      row(2, [492, 4182, 1643], null, null),
+      row(3, [492, 4182, 7208], null, null),
+      row(4, [492, 4182, 666], null, null),
+      row(5, [492, 1643, 666], null, null),
+    ]
+    const names: Record<number, string> = {
+      4182: "Singleplayer",
+      1643: "Building",
+      7208: "Crafting",
+    }
+    const n = neighbourTags(rows, [492], (id) => names[id] ?? null, 6)
+    expect(n.baseline.map((t) => t.name)).toEqual(["Singleplayer"])
+    expect(n.lanes).toEqual([
+      { id: 1643, name: "Building", carry: 3 },
+      { id: 7208, name: "Crafting", carry: 1 },
+    ])
+  })
+
+  it("takes medians over paid games only, and lists the most reviewed first", () => {
+    const lane = laneOf({
+      relation: "narrower",
+      tagIds: [492, 1643],
+      pivot: { id: 1643, name: "Building" },
+      overlap: { carry: 3, of: 5 },
+      total: 40,
+      rows: [row(1, [], 0, 10), row(2, [], 999, 500), row(3, [], 1999, null), row(4, [], 1499, 50)],
+    })
+    expect(lane).toMatchObject({ sampled: 4, medianPriceCents: 1499, medianReviews: 50 })
+    expect(lane.top.map((t) => t.appid)).toEqual([2, 4, 1])
+    expect(formatFact({ key: "lane", value: lane })).toBe("40 games with Building")
+  })
+})
+
+describe("evidenceMoves", () => {
+  const at = (id: string, runId: string, value: unknown): FactRecord => ({
+    ...fact("set", "matches", value),
+    id,
+    runId,
+  })
+
+  it("reports a fact whose block now reads something else, and not one it reads the same", () => {
+    const held = at("a", "r1", 222)
+    const moved = { ...at("b", "r1", 8), subject: "app:1" }
+    const latest = [at("a2", "r2", 222), { ...at("b2", "r2", 9), subject: "app:1" }]
+    expect(evidenceMoves([held, moved], () => "r2", latest)).toEqual([
+      { factId: "b", now: expect.objectContaining({ id: "b2", value: 9 }) },
+    ])
+  })
+
+  it("is quiet while the block has not run again, and says gone when the reading vanished", () => {
+    const f = at("a", "r1", 222)
+    expect(evidenceMoves([f], () => "r1", [])).toEqual([])
+    expect(evidenceMoves([f], () => "r2", [])).toEqual([{ factId: "a", now: null }])
   })
 })

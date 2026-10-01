@@ -70,10 +70,30 @@ export const slopShareParams = z.object({
   source: z.string().uuid(),
 })
 
+export const nicheMapParams = z.object({
+  /** The comparables block whose tags define the niche. */
+  source: z.string().uuid(),
+  /** How many neighbouring tags to search as lanes of their own. */
+  neighbours: z.number().int().min(3).max(10).default(6),
+})
+
+/**
+ * A call the writer makes, and the numbers it rests on. It never re-runs by
+ * itself: a run records the evidence as it stands, and when that evidence later
+ * moves, the block says so and waits for the writer.
+ */
+export const decisionParams = z.object({
+  statement: z.string().trim().max(500).default(""),
+  /** Fact ids from this document. */
+  evidence: z.array(z.string().uuid()).max(12).default([]),
+})
+
 export const BLOCK_PARAMS = {
   comparables: comparablesParams,
   store_snapshot: snapshotParams,
   slop_share: slopShareParams,
+  niche_map: nicheMapParams,
+  decision: decisionParams,
 } as const
 
 export type BlockKind = keyof typeof BLOCK_PARAMS
@@ -82,11 +102,15 @@ export const BLOCK_KINDS = Object.keys(BLOCK_PARAMS) as BlockKind[]
 export type ComparablesParams = z.infer<typeof comparablesParams>
 export type SnapshotParams = z.infer<typeof snapshotParams>
 export type SlopShareParams = z.infer<typeof slopShareParams>
+export type NicheMapParams = z.infer<typeof nicheMapParams>
+export type DecisionParams = z.infer<typeof decisionParams>
 
 export interface BlockParamsByKind {
   comparables: ComparablesParams
   store_snapshot: SnapshotParams
   slop_share: SlopShareParams
+  niche_map: NicheMapParams
+  decision: DecisionParams
 }
 
 export function parseParams<K extends BlockKind>(
@@ -96,12 +120,18 @@ export function parseParams<K extends BlockKind>(
   const r = BLOCK_PARAMS[kind].safeParse(params)
   return r.success
     ? { ok: true, value: r.data as BlockParamsByKind[K] }
-    : { ok: false, error: r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") }
+    : {
+        ok: false,
+        error: r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+      }
 }
 
-/** The block a kind reads from, if any. The document's blocks form a DAG through these. */
+/**
+ * The block a kind reads from, if any. The document's blocks form a DAG through
+ * these. A decision has none: it rests on facts, which may come from any block.
+ */
 export function sourceOf(kind: BlockKind, params: unknown): string | null {
-  if (kind === "comparables") return null
+  if (kind === "comparables" || kind === "decision") return null
   const p = params as { source?: unknown }
   return typeof p?.source === "string" ? p.source : null
 }
@@ -110,6 +140,8 @@ export const BLOCK_TITLES: Record<BlockKind, string> = {
   comparables: "Comparable games",
   store_snapshot: "Store snapshot",
   slop_share: "AI disclosure share",
+  niche_map: "Niche breadth",
+  decision: "Decision",
 }
 
 // ---- records ------------------------------------------------------------------
@@ -217,6 +249,9 @@ export const FACT_KEYS = [
   "tags",
   "ai.disclosure",
   "ai.share",
+  "lane",
+  "neighbours",
+  "decision",
   "unavailable",
 ] as const
 export type FactKey = (typeof FACT_KEYS)[number]
@@ -230,7 +265,12 @@ export interface ComparableValue {
   reviewCount: number | null
 }
 
-export type PriceValue = { currency: string; final: number; initial: number; discountPercent: number } | null
+export type PriceValue = {
+  currency: string
+  final: number
+  initial: number
+  discountPercent: number
+} | null
 export interface ReviewsValue {
   total: number
   positive: number
@@ -245,4 +285,37 @@ export interface AiShareValue {
   unread: number
   pct: number
   disclosedApps: { appid: number; name: string }[]
+}
+
+/** One search's worth of a niche: these tags, how many games carry them all, and what the first page looks like. */
+export interface LaneValue {
+  /** The niche itself, the niche plus one tag, or the niche minus one. */
+  relation: "this" | "narrower" | "broader"
+  tagIds: number[]
+  /** The tag added (narrower) or dropped (broader). */
+  pivot: { id: number; name: string } | null
+  total: number
+  /** Rows the medians are taken over: the first page of the lane's search. */
+  sampled: number
+  medianPriceCents: number | null
+  medianReviews: number | null
+  medianPositivePct: number | null
+  /** For a narrower lane: how many of the niche's sampled games already carry the tag. */
+  overlap: { carry: number; of: number } | null
+  top: { appid: number; name: string; reviews: number | null }[]
+}
+
+export interface NeighboursValue {
+  /** Games sampled from the niche to count tags over. */
+  of: number
+  /** Tags most of the niche shares, too common to make a lane of their own. */
+  baseline: { id: number; name: string; carry: number }[]
+  /** The tags searched as lanes, most carried first. */
+  lanes: { id: number; name: string; carry: number }[]
+}
+
+export interface DecisionValue {
+  statement: string
+  /** The evidence as printed when the decision was recorded. */
+  evidence: { factId: string; blockId: string; subject: string; key: FactKey; printed: string }[]
 }

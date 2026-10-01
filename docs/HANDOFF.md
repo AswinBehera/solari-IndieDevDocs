@@ -23,7 +23,28 @@ From the web UI (`localhost:5174`), with a Solari key:
 - **Cite** puts a chip at the last caret position, or below the block when there is none.
   The chip is saved as `factChip{factId}` and prints the fact's value, not a copy of it.
 
-Typecheck is clean across core, db, steam, worker, api and web. Core has 9 tests.
+Typecheck is clean across core, db, steam, worker, api and web. Core has 13 tests.
+
+## Added 1 October: breadth and decisions
+
+- **`/breadth` (`niche_map`)** ran on the same niche: 10 store searches in 22 seconds.
+  - The niche: 225 games, with a median price of $9.99 across its first 25.
+  - Six narrower lanes, for example +Idler: 82 games, median $3.99.
+  - Three broader ones: without Farming Sim it is 3,128 games, 14× the niche.
+  - Neighbour tags come from `data-ds-tagids` on the search rows, so they cost no
+    store pages.
+- **Steam requests now time out after 30 s** (`SteamClient` `timeoutMs`). Before this, one
+  stalled search held a breadth run for 24 minutes. A lane that fails is named in the
+  run's note, and the run is `partial`.
+- **`/decision`** was walked in the browser:
+  - Attach mode puts an Attach button beside every number from other blocks. Esc or
+    Done leaves it.
+  - Record writes a computation receipt holding the cited values.
+  - Editing the statement afterwards marks the decision stale.
+  - Evidence movement was checked by editing a fact in the database: the banner and the
+    "now 225 games · Take the new reading" row appeared, and taking it swapped the fact id.
+  - `blockViews` must pass the cited blocks' latest facts to `evidenceMoves`, not the
+    decision's own facts. That bug got past the unit test.
 
 ## Things that will bite you
 
@@ -49,6 +70,8 @@ Typecheck is clean across core, db, steam, worker, api and web. Core has 9 tests
 
 ## Open
 
+0. **Solari profiles and desktops.** Proposed and not built; see the end of this file.
+
 1. **More block kinds**, on the same Recorder:
    - price history across regions (`cc=` per viewpoint)
    - review language mix
@@ -59,3 +82,32 @@ Typecheck is clean across core, db, steam, worker, api and web. Core has 9 tests
 3. **Disclosure coverage.** `ai.disclosure` reads Steam's "AI Generated Content
    Disclosure" section. A game that uses AI without disclosing it reads as "none". The UI
    says "disclose", never "uses".
+
+## Proposed: Solari profiles and desktops
+
+Ordered by value for the risk. None of these is built yet.
+
+1. **Replays as receipts.** Pass `recording: true` on store-page sessions, then
+   `downloadReplay` and archive the NDJSON content-addressed like any other receipt,
+   paired with the HTML and screenshot. The drawer gets a third tab, "how it was read".
+   Cost: storage only.
+2. **A pinned viewpoint profile.** Create one Solari profile per viewpoint (US English,
+   age-gate cookie, mature-content preference), `profiles.save` its storage state, and
+   record `{profileId, version}` in each receipt's viewpoint. Two runs a month apart then
+   differ because Steam changed, not because the browser did. Store pages that are gated
+   by age today become readable without clicking through the gate on every run.
+3. **Regional viewpoints.** Same profile shape, plus `proxy: {country}`, which needs
+   `stealth: true`. This is the "price across regions" block in Open #1. It needs a check
+   that the README's "no evading bot checks" still holds: a proxy for locale is not
+   evasion, but captcha solving would be, so `captcha` stays off.
+4. **"Connect your Steamworks"** (needs the owner's decision): a Solari desktop streamed
+   into the page over VNC, where you sign in yourself. The cookies are saved to a profile
+   owned by you and used only for your own wishlist and traffic pages. This reverses the
+   README's "no logged-in sessions" line, and it handles credentials, so it waits for an
+   explicit yes.
+5. **A paused research desktop per document**, resumed when you open the doc
+   (`pause`/`resume` snapshot RAM and disk), for checking a page by hand inside the same
+   viewpoint the blocks used.
+6. **Prototype blocks** in a sandbox, with `previewUrl(port)` embedding a playable build in
+   the document beside the research it answers. This starts the "pipeline" half of the
+   pitch.

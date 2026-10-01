@@ -75,6 +75,9 @@ importers:
       '@rd/research':
         specifier: workspace:*
         version: link:../../packages/research/core
+      '@rd/steam':
+        specifier: workspace:*
+        version: link:../../packages/research/steam
       '@tanstack/react-query':
         specifier: ^5.102.8
         version: 5.102.8(react@19.3.0)

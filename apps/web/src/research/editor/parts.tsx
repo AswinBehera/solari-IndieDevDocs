@@ -1,4 +1,4 @@
-import { type FactRecord, formatFact } from "@rd/research"
+import { type FactRecord, formatFact, parseParams } from "@rd/research"
 import type { ReactNode } from "react"
 import { useDocContext } from "../context"
 
@@ -28,7 +28,28 @@ export function Evidence({
 }
 
 export function CiteButton({ fact, label = "Cite" }: { fact: FactRecord; label?: string }) {
-  const { cite } = useDocContext()
+  const { cite, attaching, blocks, patch } = useDocContext()
+  const decision = attaching ? blocks.get(attaching) : undefined
+  if (decision && decision.id !== fact.blockId) {
+    const evidence = decisionEvidence(decision)
+    const attached = evidence.includes(fact.id)
+    return (
+      <button
+        type="button"
+        title={
+          attached
+            ? "Already attached to the decision"
+            : "Attach this number to the decision as evidence"
+        }
+        disabled={attached}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => patch(decision.id, { evidence: [...evidence, fact.id] })}
+        className="rounded-sm border border-ink bg-marker px-1.5 py-px font-mono text-[10px] text-ink uppercase tracking-wider disabled:border-rule disabled:bg-transparent disabled:text-ink-faint"
+      >
+        {attached ? "Attached" : "Attach"}
+      </button>
+    )
+  }
   return (
     <button
       type="button"
@@ -44,12 +65,21 @@ export function CiteButton({ fact, label = "Cite" }: { fact: FactRecord; label?:
   )
 }
 
+export function decisionEvidence(block: { params: unknown }): string[] {
+  const p = parseParams("decision", block.params)
+  return p.ok ? p.value.evidence : []
+}
+
 export function ago(iso: string): string {
   const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000)
   if (s < 60) return "just now"
   if (s < 3600) return `${Math.floor(s / 60)} min ago`
   if (s < 86400) return `${Math.floor(s / 3600)} h ago`
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
 }
 
 export const nameOf = (names: Map<string, string>, subject: string): string =>

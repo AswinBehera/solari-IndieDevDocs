@@ -27,8 +27,8 @@ import {
 } from "./api"
 import { DocContext, type DocContextValue } from "./context"
 import { FactChipNode, ResearchBlockNode, SlashCommand } from "./editor/extensions"
-import { SlashMenu } from "./editor/slash"
 import { SlashMenuView } from "./editor/SlashMenuView"
+import { SlashMenu } from "./editor/slash"
 import { ReceiptDrawer } from "./receipts/ReceiptDrawer"
 import { DocumentSaver, type SaveOutcome, statusLine } from "./saver"
 
@@ -63,6 +63,8 @@ const SOURCE_KIND: Record<BlockKind, BlockKind | null> = {
   comparables: null,
   store_snapshot: "comparables",
   slop_share: "store_snapshot",
+  niche_map: "comparables",
+  decision: null,
 }
 
 function Loaded({ initial, docId }: { initial: DocResponse; docId: string }) {
@@ -82,7 +84,10 @@ function Loaded({ initial, docId }: { initial: DocResponse; docId: string }) {
             return { saved: true, version: r.version }
           } catch (e) {
             if (e instanceof ApiError && e.status === 409) {
-              return { saved: false, version: (e.body as { version?: number } | null)?.version ?? version }
+              return {
+                saved: false,
+                version: (e.body as { version?: number } | null)?.version ?? version,
+              }
             }
             throw e
           }
@@ -108,7 +113,8 @@ function Loaded({ initial, docId }: { initial: DocResponse; docId: string }) {
   const names = useMemo(() => {
     const m = new Map<string, string>()
     for (const f of facts.values()) {
-      if (f.key === "comparable" && !m.has(f.subject)) m.set(f.subject, (f.value as ComparableValue).name)
+      if (f.key === "comparable" && !m.has(f.subject))
+        m.set(f.subject, (f.value as ComparableValue).name)
       if (f.key === "name") m.set(f.subject, String(f.value))
     }
     return m
@@ -186,24 +192,31 @@ function Loaded({ initial, docId }: { initial: DocResponse; docId: string }) {
       if (!source) {
         setError(
           needs === "comparables"
-            ? "A snapshot reads its games from a comparables block. Add /comparables first."
+            ? "This block reads its niche from a comparables block. Add /comparables first."
             : "The AI share counts a snapshot's pages. Add /snapshot first.",
         )
         return
       }
       params = { source }
-    } else {
+    } else if (kind === "comparables") {
       // Indie: every game this tool is for carries it, and the writer adds the rest.
       params = { tagIds: [492] }
+    } else {
+      params = {}
     }
     try {
       const block = await createBlock(docId, kind, params)
-      qc.setQueryData<DocResponse>(docKey(docId), (d) => (d ? { ...d, blocks: [...d.blocks, block] } : d))
+      qc.setQueryData<DocResponse>(docKey(docId), (d) =>
+        d ? { ...d, blocks: [...d.blocks, block] } : d,
+      )
       blocksRef.current = new Map(blocksRef.current).set(block.id, block)
       editor
         .chain()
         .focus()
-        .insertContentAt(pos, [{ type: BLOCK_NODE, attrs: { [BLOCK_ATTR]: block.id } }, { type: "paragraph" }])
+        .insertContentAt(pos, [
+          { type: BLOCK_NODE, attrs: { [BLOCK_ATTR]: block.id } },
+          { type: "paragraph" },
+        ])
         .run()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -214,7 +227,8 @@ function Loaded({ initial, docId }: { initial: DocResponse; docId: string }) {
     extensions: [
       StarterKit.configure({ heading: { levels: [2, 3] } }),
       Placeholder.configure({
-        placeholder: ({ node }) => (node.type.name === "paragraph" ? "Write, or type / to add research" : ""),
+        placeholder: ({ node }) =>
+          node.type.name === "paragraph" ? "Write, or type / to add research" : "",
       }),
       ResearchBlockNode,
       FactChipNode,
@@ -259,12 +273,16 @@ function Loaded({ initial, docId }: { initial: DocResponse; docId: string }) {
     const pos = lastCaret.current
     const doc = ed.state.doc
     if (pos !== null && pos <= doc.content.size && doc.resolve(pos).parent.isTextblock) {
-      ed.chain().focus().insertContentAt(pos, [chip, { type: "text", text: " " }]).run()
+      ed.chain()
+        .focus()
+        .insertContentAt(pos, [chip, { type: "text", text: " " }])
+        .run()
       return
     }
     let after = doc.content.size
     doc.descendants((node, p) => {
-      if (node.type.name === BLOCK_NODE && node.attrs[BLOCK_ATTR] === fact.blockId) after = p + node.nodeSize
+      if (node.type.name === BLOCK_NODE && node.attrs[BLOCK_ATTR] === fact.blockId)
+        after = p + node.nodeSize
     })
     ed.chain()
       .focus()
@@ -274,6 +292,14 @@ function Loaded({ initial, docId }: { initial: DocResponse; docId: string }) {
 
   const [focus, setFocus] = useState<ReceiptFocus | null>(null)
   const closeDrawer = useCallback(() => setFocus(null), [])
+  const [attaching, setAttaching] = useState<string | null>(null)
+  const attachingTo = attaching ? blocks.get(attaching) : undefined
+  useEffect(() => {
+    if (!attaching) return
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setAttaching(null)
+    window.addEventListener("keydown", esc)
+    return () => window.removeEventListener("keydown", esc)
+  }, [attaching])
 
   const ctx: DocContextValue = {
     docId,
@@ -285,6 +311,8 @@ function Loaded({ initial, docId }: { initial: DocResponse; docId: string }) {
     cite,
     run: startRun,
     patch: (id, params) => patch.mutate({ id, params }, { onError: (e) => setError(e.message) }),
+    attaching: attachingTo ? attaching : null,
+    setAttaching,
   }
 
   const onTitle = (t: string) => {
@@ -323,15 +351,31 @@ function Loaded({ initial, docId }: { initial: DocResponse; docId: string }) {
           />
           <EditorContent editor={editor} />
           {error && (
-            <p role="alert" className="mt-4 rounded-sm border border-signal-red/40 px-3 py-2 text-signal-red text-sm">
+            <p
+              role="alert"
+              className="mt-4 rounded-sm border border-signal-red/40 px-3 py-2 text-signal-red text-sm"
+            >
               {error}
             </p>
           )}
           <SlashMenuView menu={menu} />
         </div>
       </div>
+      {attachingTo && (
+        <div className="-translate-x-1/2 fixed bottom-5 left-1/2 z-30 flex items-center gap-4 rounded-md bg-night px-4 py-2.5 text-paper text-sm shadow-card">
+          <span>
+            Collecting evidence: press <b>Attach</b> beside any number in the document.
+          </span>
+          <button
+            type="button"
+            onClick={() => setAttaching(null)}
+            className="rounded-sm bg-marker px-2.5 py-0.5 font-medium text-ink"
+          >
+            Done
+          </button>
+        </div>
+      )}
       {focus && <ReceiptDrawer focus={focus} onClose={closeDrawer} />}
     </DocContext.Provider>
   )
 }
-

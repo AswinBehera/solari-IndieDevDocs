@@ -29,10 +29,15 @@ export interface SteamClientOptions {
   sleep?: (ms: number) => Promise<void>
   now?: () => number
   signal?: AbortSignal
+  /** Per request, body included. A stalled connection otherwise holds the block for as long as the OS lets it. */
+  timeoutMs?: number
 }
 
 export class SteamThrottled extends Error {
-  constructor(readonly url: string, readonly status: number) {
+  constructor(
+    readonly url: string,
+    readonly status: number,
+  ) {
     super(`steam answered ${status} after backing off: ${url}`)
     this.name = "SteamThrottled"
   }
@@ -47,6 +52,7 @@ export class SteamClient {
   private readonly backoffMs: number[]
   private readonly sleep: (ms: number) => Promise<void>
   private readonly now: () => number
+  private readonly timeoutMs: number
   private queue: Promise<void> = Promise.resolve()
 
   constructor(private readonly options: SteamClientOptions = {}) {
@@ -55,6 +61,7 @@ export class SteamClient {
     this.backoffMs = options.backoffMs ?? [15_000, 60_000]
     this.sleep = options.sleep ?? defaultSleep
     this.now = options.now ?? Date.now
+    this.timeoutMs = options.timeoutMs ?? 30_000
   }
 
   /** Requests made so far. The run records it, so a block's cost is not a guess. */
@@ -64,9 +71,10 @@ export class SteamClient {
     for (let attempt = 0; ; attempt++) {
       await this.turn()
       this.requests++
+      const timeout = AbortSignal.timeout(this.timeoutMs)
       const res = await this.fetchImpl(url, {
         headers: { cookie: ageCookieHeader(), "accept-language": "en-US,en;q=0.9" },
-        ...(this.options.signal ? { signal: this.options.signal } : {}),
+        signal: this.options.signal ? AbortSignal.any([this.options.signal, timeout]) : timeout,
       })
       if (res.status === 429 || res.status === 403) {
         const wait = this.backoffMs[attempt]

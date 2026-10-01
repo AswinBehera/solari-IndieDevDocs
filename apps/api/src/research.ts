@@ -4,7 +4,9 @@ import {
   type BlockRecord,
   type ComparablesParams,
   currentComparables,
+  type EvidenceMove,
   estimateCost,
+  evidenceMoves,
   type FactRecord,
   isStale,
   paramsChanged,
@@ -60,7 +62,8 @@ export const MAX_DOCUMENT_BYTES = 512 * 1024
 
 async function boundedJson(req: { arrayBuffer(): Promise<ArrayBuffer> }): Promise<unknown> {
   const raw = await req.arrayBuffer()
-  if (raw.byteLength > MAX_DOCUMENT_BYTES) throw new HTTPException(413, { message: "body is too large" })
+  if (raw.byteLength > MAX_DOCUMENT_BYTES)
+    throw new HTTPException(413, { message: "body is too large" })
   try {
     return JSON.parse(new TextDecoder().decode(raw))
   } catch {
@@ -89,7 +92,10 @@ const saveDoc = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   content: z.unknown().optional(),
 })
-const createBlock = z.object({ kind: z.enum(BLOCK_KINDS as [string, ...string[]]), params: z.unknown() })
+const createBlock = z.object({
+  kind: z.enum(BLOCK_KINDS as [string, ...string[]]),
+  params: z.unknown(),
+})
 const runBlock = z.object({ cascade: z.boolean().default(false) })
 
 /** What the page needs to draw a block: its answer, whether that answer is behind, and the price of a new one. */
@@ -100,11 +106,28 @@ export interface BlockView extends BlockRecord {
   /** Items a run would cover, for the cost line. */
   items: number
   estimate: ReturnType<typeof estimateCost>
+  /** A decision's cited facts, whichever run they came from. Empty for other kinds. */
+  evidence: FactRecord[]
+  /** Cited facts whose block has since read a different value. */
+  moves: EvidenceMove[]
 }
 
-async function blockViews(store: Store, blocks: BlockRecord[]): Promise<BlockView[]> {
+async function blockViews(
+  store: Store,
+  ownerId: string,
+  blocks: BlockRecord[],
+): Promise<BlockView[]> {
   const runIds = blocks.flatMap((b) => (b.lastRunId ? [b.lastRunId] : []))
-  const [runs, facts] = await Promise.all([store.runsByIds(runIds), store.factsForRuns(runIds)])
+  const cited = blocks.flatMap((b) => {
+    if (b.kind !== "decision") return []
+    const p = parseParams("decision", b.params)
+    return p.ok ? p.value.evidence : []
+  })
+  const [runs, facts, citedFacts] = await Promise.all([
+    store.runsByIds(runIds),
+    store.factsForRuns(runIds),
+    store.ownedFacts(ownerId, cited),
+  ])
   const runById = new Map(runs.map((r) => [r.id, r]))
   const byId = new Map(blocks.map((b) => [b.id, b]))
   const factsByRun = new Map<string, FactRecord[]>()
@@ -117,9 +140,31 @@ async function blockViews(store: Store, blocks: BlockRecord[]): Promise<BlockVie
     if (!src?.lastRunId) return []
     const p = parseParams("comparables", src.params)
     if (!p.ok) return []
-    return currentComparables(factsByRun.get(src.lastRunId) ?? [], p.value as ComparablesParams).map(
-      (f) => f.subject,
-    )
+    return currentComparables(
+      factsByRun.get(src.lastRunId) ?? [],
+      p.value as ComparablesParams,
+    ).map((f) => f.subject)
+  }
+
+  const citedById = new Map(citedFacts.filter((f) => byId.has(f.blockId)).map((f) => [f.id, f]))
+  const evidenceOf = (b: BlockRecord): FactRecord[] => {
+    if (b.kind !== "decision") return []
+    const p = parseParams("decision", b.params)
+    return p.ok ? p.value.evidence.flatMap((id) => citedById.get(id) ?? []) : []
+  }
+
+  /** What a run would cover, for the cost line: games for a snapshot, searches for a niche map. */
+  const itemsOf = (b: BlockRecord, wanted: string[] | null): number => {
+    if (b.kind === "comparables") return 1
+    if (b.kind === "niche_map") {
+      const p = parseParams("niche_map", b.params)
+      const src = byId.get(sourceOf(b.kind, b.params) ?? "")
+      const tags = src ? parseParams("comparables", src.params) : null
+      const base = tags?.ok ? tags.value.tagIds.length : 0
+      return 1 + (p.ok ? p.value.neighbours : 6) + (base >= 2 ? base : 0)
+    }
+    if (b.kind === "decision") return evidenceOf(b).length
+    return wanted?.length ?? 0
   }
 
   return blocks.map((b) => {
@@ -131,15 +176,27 @@ async function blockViews(store: Store, blocks: BlockRecord[]): Promise<BlockVie
     // A snapshot is also behind when the list was pruned after it ran: same
     // source run, different games.
     const read = new Set(facts.map((f) => f.subject))
-    const pruned = wanted !== null && run !== null && (wanted.length !== read.size || wanted.some((s) => !read.has(s)))
-    const items = b.kind === "comparables" ? 1 : (wanted?.length ?? 0)
+    const pruned =
+      wanted !== null &&
+      run !== null &&
+      (wanted.length !== read.size || wanted.some((s) => !read.has(s)))
+    const evidence = evidenceOf(b)
+    const lastRunOf = (id: string) => byId.get(id)?.lastRunId ?? null
+    const latest = evidence.flatMap((f) => factsByRun.get(lastRunOf(f.blockId) ?? "") ?? [])
+    const moves = evidenceMoves(evidence, lastRunOf, latest)
+    const items = itemsOf(b, wanted)
     return {
       ...b,
       run,
       facts,
-      stale: isStale(b, run, srcRun) || pruned || (run !== null && paramsChanged(b.kind, run.params, b.params)),
+      stale:
+        isStale(b, run, srcRun) ||
+        pruned ||
+        (run !== null && (moves.length > 0 || paramsChanged(b.kind, run.params, b.params))),
       items,
       estimate: estimateCost(b.kind, items),
+      evidence,
+      moves,
     }
   })
 }
@@ -150,11 +207,15 @@ export function researchRoutes(deps: ResearchDeps) {
 
   // ---- documents ---------------------------------------------------------------
 
-  app.get("/docs", async (c) => c.json({ docs: await deps.store(c.env).listDocs(c.get("ownerId")) }))
+  app.get("/docs", async (c) =>
+    c.json({ docs: await deps.store(c.env).listDocs(c.get("ownerId")) }),
+  )
 
   app.post("/docs", async (c) => {
     const body = parse(createDoc, await boundedJson(c.req.raw))
-    const doc = await deps.store(c.env).createDoc(c.get("ownerId"), body.title, body.content ?? EMPTY_DOC)
+    const doc = await deps
+      .store(c.env)
+      .createDoc(c.get("ownerId"), body.title, body.content ?? EMPTY_DOC)
     return c.json({ doc }, 201)
   })
 
@@ -162,7 +223,10 @@ export function researchRoutes(deps: ResearchDeps) {
     const store = deps.store(c.env)
     const doc = await store.getDoc(c.get("ownerId"), c.req.param("id"))
     if (!doc) throw new HTTPException(404, { message: "no such document" })
-    return c.json({ doc, blocks: await blockViews(store, await store.blocksForDoc(doc.id)) })
+    return c.json({
+      doc,
+      blocks: await blockViews(store, c.get("ownerId"), await store.blocksForDoc(doc.id)),
+    })
   })
 
   app.put("/docs/:id", async (c) => {
@@ -199,11 +263,14 @@ export function researchRoutes(deps: ResearchDeps) {
     const src = sourceOf(kind, params.value)
     if (src) {
       const s = await store.ownedBlock(c.get("ownerId"), src)
-      if (!s || s.docId !== docId) throw new HTTPException(400, { message: "source block is not in this document" })
+      if (!s || s.docId !== docId)
+        throw new HTTPException(400, { message: "source block is not in this document" })
     }
     const block = await store.createBlock(c.get("ownerId"), docId, kind, params.value)
     if (!block) throw new HTTPException(404, { message: "no such document" })
-    const [view] = await blockViews(store, [block])
+    const view = (await blockViews(store, c.get("ownerId"), await store.blocksForDoc(docId))).find(
+      (b) => b.id === block.id,
+    )
     return c.json({ block: view }, 201)
   })
 
@@ -212,7 +279,9 @@ export function researchRoutes(deps: ResearchDeps) {
     const block = await store.ownedBlock(c.get("ownerId"), c.req.param("id"))
     if (!block) throw new HTTPException(404, { message: "no such block" })
     const siblings = await store.blocksForDoc(block.docId)
-    const view = (await blockViews(store, siblings)).find((b) => b.id === block.id)
+    const view = (await blockViews(store, c.get("ownerId"), siblings)).find(
+      (b) => b.id === block.id,
+    )
     return c.json({ block: view })
   })
 
@@ -222,10 +291,15 @@ export function researchRoutes(deps: ResearchDeps) {
     const block = await store.ownedBlock(c.get("ownerId"), c.req.param("id"))
     if (!block) throw new HTTPException(404, { message: "no such block" })
     const body = (await boundedJson(c.req.raw)) as { params?: unknown } | null
-    const params = parseParams(block.kind, { ...(block.params as object), ...((body?.params as object) ?? {}) })
+    const params = parseParams(block.kind, {
+      ...(block.params as object),
+      ...((body?.params as object) ?? {}),
+    })
     if (!params.ok) throw new HTTPException(400, { message: params.error })
     await store.setParams(block.id, params.value)
-    const view = (await blockViews(store, await store.blocksForDoc(block.docId))).find((b) => b.id === block.id)
+    const view = (
+      await blockViews(store, c.get("ownerId"), await store.blocksForDoc(block.docId))
+    ).find((b) => b.id === block.id)
     return c.json({ block: view })
   })
 
@@ -247,14 +321,20 @@ export function researchRoutes(deps: ResearchDeps) {
     })
     if (!result.deduped) await store.setStatus(block.id, "queued")
     const dispatched = result.deduped ? false : await deps.dispatcher.dispatch(result.id)
-    return c.json({ jobId: result.id, deduped: result.deduped, dispatched }, result.deduped ? 200 : 202)
+    return c.json(
+      { jobId: result.id, deduped: result.deduped, dispatched },
+      result.deduped ? 200 : 202,
+    )
   })
 
   // ---- facts and receipts ------------------------------------------------------------
 
   /** What fact chips resolve through. A chip whose fact is gone shows as broken, not as blank. */
   app.get("/facts", async (c) => {
-    const ids = (c.req.query("ids") ?? "").split(",").filter((s) => /^[0-9a-f-]{36}$/.test(s)).slice(0, 200)
+    const ids = (c.req.query("ids") ?? "")
+      .split(",")
+      .filter((s) => /^[0-9a-f-]{36}$/.test(s))
+      .slice(0, 200)
     return c.json({ facts: await deps.store(c.env).ownedFacts(c.get("ownerId"), ids) })
   })
 

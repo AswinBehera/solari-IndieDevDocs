@@ -3,6 +3,7 @@ import type {
   BlockRecord,
   CostEstimate,
   DocRecord,
+  EvidenceMove,
   FactRecord,
   Locator,
   ReceiptRecord,
@@ -26,6 +27,9 @@ export interface BlockView extends BlockRecord {
   stale: boolean
   items: number
   estimate: CostEstimate
+  /** For a decision: the facts it cites, and the ones whose latest reading differs. */
+  evidence: FactRecord[]
+  moves: EvidenceMove[]
 }
 
 export interface DocResponse {
@@ -64,7 +68,9 @@ export function useDoc(id: string) {
     // While a block is queued or running, look again. The stream below carries
     // the progress line; this carries the answer when it lands.
     refetchInterval: (q) =>
-      q.state.data?.blocks.some((b) => b.status === "queued" || b.status === "running") ? 2500 : false,
+      q.state.data?.blocks.some((b) => b.status === "queued" || b.status === "running")
+        ? 2500
+        : false,
   })
 }
 
@@ -88,12 +94,20 @@ export function useFacts(ids: string[]) {
 }
 
 export const createDoc = (title: string, content?: unknown) =>
-  api<{ doc: DocRecord }>("/docs", { method: "POST", body: JSON.stringify({ title, content }) }).then(
-    (r) => r.doc,
-  )
+  api<{ doc: DocRecord }>("/docs", {
+    method: "POST",
+    body: JSON.stringify({ title, content }),
+  }).then((r) => r.doc)
 
-export const saveDoc = (id: string, version: number, patch: { content?: unknown; title?: string }) =>
-  api<{ version: number }>(`/docs/${id}`, { method: "PUT", body: JSON.stringify({ version, ...patch }) })
+export const saveDoc = (
+  id: string,
+  version: number,
+  patch: { content?: unknown; title?: string },
+) =>
+  api<{ version: number }>(`/docs/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ version, ...patch }),
+  })
 
 export const createBlock = (docId: string, kind: BlockKind, params: unknown) =>
   api<{ block: BlockView }>(`/docs/${docId}/blocks`, {
@@ -112,7 +126,10 @@ export function useBlockMutations(docId: string) {
 
   const patch = useMutation({
     mutationFn: ({ id, params }: { id: string; params: Record<string, unknown> }) =>
-      api<{ block: BlockView }>(`/blocks/${id}`, { method: "PATCH", body: JSON.stringify({ params }) }),
+      api<{ block: BlockView }>(`/blocks/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ params }),
+      }),
     onSuccess: (r) => {
       put(r.block)
       // Pruning or retagging one block can make the ones reading from it stale.
