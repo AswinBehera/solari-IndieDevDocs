@@ -17,7 +17,10 @@ taken on trust.
               HTML, screenshot, and a replay of the browser that read it
 ```
 
-<!-- Demo video: drag indieDevDocs-demo.mp4 onto this line in GitHub's web editor; it becomes a user-attachments link that plays inline. -->
+[![Demo: scouting a Steam niche, opening a receipt, the charts, and a playable /prototype block (2.5 min)](docs/demo/indieDevDocs-demo.jpg)](docs/demo/indieDevDocs-demo.mp4)
+
+**[Watch the demo (2.5 min)](docs/demo/indieDevDocs-demo.mp4)**: scouting a niche, a receipt, the
+charts, and a 2048 build played inside the document.
 
 ## The question it answers
 
