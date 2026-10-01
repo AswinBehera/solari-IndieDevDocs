@@ -11,11 +11,45 @@ archived bytes in your browser, so "this is what the run saw" is checked rather 
 taken on trust.
 
 ```
-"222 games on Steam carry Indie + Farming Sim + Cozy. Of the 8 closest, [0% (0 of 8)↗]
- disclose generative AI on their store page."
-                                       └── click: the computation, its 8 inputs, and
-                                           each input's store-page screenshot
+"298 games on Steam carry Indie + Roguelike Deckbuilder + Pixel Graphics. Of the 8
+ closest, [0% (0 of 8)↗] disclose generative AI on their store page."
+          └── click: the computation, its 8 inputs, and each input's store page:
+              HTML, screenshot, and a replay of the browser that read it
 ```
+
+<!-- Demo video: drag indieDevDocs-demo.mp4 onto this line in GitHub's web editor; it becomes a user-attachments link that plays inline. -->
+
+## The question it answers
+
+**Is there room for my game in this lane, and what should it cost?** And later, once
+you have decided: **can you still show why?**
+
+Pick two or three Steam tags. One run, about two minutes and eight cloud-browser
+sessions, gives you numbers like these (Indie + Roguelike Deckbuilder + Pixel Graphics,
+read on 1 October 2026):
+
+- **How crowded the lane is.** 298 games carry all three tags. Drop Pixel Graphics and
+  it is 1,095; drop Roguelike Deckbuilder and it is 19,982.
+- **What the lane charges and how it is received.** A median price of $9.99, 628 reviews
+  and 88% positive.
+- **The closest games, row by row.** Price, release date, developer, review count and
+  Steam's label, for Balatro, Luck be a Landlord, Die in the Dungeon and five others,
+  priced from $9.99 to $14.99.
+- **Where the lane splits.** The tags most of its games also carry, each searched as a
+  narrower lane. Card Battler cuts it to 133 games with a median of 154 reviews;
+  Strategy barely narrows it (273).
+- **How much of it discloses generative AI.** 0 of the 8 closest.
+- **Your decision**, in a sentence, with the numbers it rests on attached. When a later
+  run reads one of them differently, the decision says which one moved.
+
+What it does not tell you:
+
+- **Sales, revenue or wishlists.** Review counts are the public signal, and they are
+  shown as review counts, not converted into sales estimates.
+- **The whole lane's medians.** Medians come from the first 25 games of Steam's search,
+  in Steam's order, not from every game in the lane. The lane's size is Steam's own count.
+- **Who uses AI.** The AI share counts disclosure on the store page, not use.
+- Whether your game is any good.
 
 ## Why
 
@@ -59,10 +93,12 @@ source: it goes stale when the evidence it cites moves.
 ## Built on Solari
 
 Store pages are read in Solari cloud browsers in `direct` mode, one session per page,
-three at a time. Each page yields three receipts, kept together: the HTML the browser
-rendered, a full-page screenshot with boxes around the regions facts were read from,
-and the session's replay (Solari's rrweb recording, downloaded after the browser is
-released). Every session starts from the same pinned Solari profile, a cookie jar
+three at a time. Each page yields up to three receipts, kept together: the HTML the
+browser rendered, a full-page screenshot with boxes around the regions facts were read
+from, and the session's replay (Solari's rrweb recording, downloaded after the browser
+is released). Replays are not always available: in runs on 1 October about 3 pages in
+8 got one. A page without a replay keeps its HTML and screenshot, and the run says
+which replays are missing. Every session starts from the same pinned Solari profile, a cookie jar
 holding the store's viewpoint (age gate answered, English), and each receipt names
 the profile and version it was read with. The receipt drawer shows the screenshot
 scrolled to the box, plays the replay, and lists the browser session id. Without
@@ -87,7 +123,7 @@ pnpm dev                      # API :8789 (wrangler), web :5174 (Vite), worker l
 
 Open http://localhost:5174, pick two or three Steam tags under **Scout a niche**, create
 the document, and press **Run** on the first block with "then the blocks below" ticked.
-Eight store pages take about a minute. Click any underlined number for its receipt;
+Eight store pages take about two minutes, up to one of them spent waiting for replays. Click any underlined number for its receipt;
 press **Cite** to put a number in your prose.
 
 Auth in development: `apps/api/.dev.vars` sets `DEV_OWNER_ID`, which makes the API accept
