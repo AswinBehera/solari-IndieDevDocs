@@ -18,6 +18,8 @@ export interface Locator {
   path?: string
   /** Text as it appears on the page, whitespace collapsed. */
   quote?: string
+  /** Text looked for and not found, when the value is an absence. */
+  absent?: string
   /** The CSS selector of the element the quote was read from. */
   selector?: string
   /** Pixels on the receipt's screenshot. */
@@ -205,7 +207,7 @@ export function parseStorePage(html: string): StorePage {
   if (heading === -1) {
     ai = {
       disclosed: false,
-      at: { quote: `No "${AI_HEADING}" section on the page`, selector: AI_SECTION_SELECTOR },
+      at: { absent: AI_HEADING, selector: AI_SECTION_SELECTOR },
     }
   } else {
     const end = html.indexOf("</div>", heading)

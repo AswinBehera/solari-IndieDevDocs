@@ -94,8 +94,11 @@ Ordered by value for the risk. 1 and 2 are built (1 October); the rest are propo
    The receipt drawer shows the page group (HTML, screenshot, replay) as tabs and plays
    the replay with `rrweb-player`, loaded only when that tab opens. A missing replay is
    a run note; the page's other receipts stand. In the first live run, 7 of 8 pages kept
-   a replay. The eighth failed with a 4xx whose cause was not recorded; the note now
-   carries the cause, so the next one says whether it was still uploading.
+   a replay; in later runs about 3 of 8 did. The rest stay `ReplayPending` for good:
+   the ones that arrive do so within about 6 s, and waiting 180 s instead of 60 s
+   brought none of the others. Replays are now collected at the end of the run, all
+   in parallel, with heartbeats, so a missing one costs at most 60 s once. Worth
+   raising with Solari.
 2. **A pinned viewpoint profile. Built.** Once per snapshot run, `kernel.ensureProfile`
    finds or creates `indiedevdocs-steam-us-<sha8>`, where the hash covers its cookies
    (the age-gate answer, the mature-content preference and English). A profile that

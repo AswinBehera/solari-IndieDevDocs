@@ -298,6 +298,21 @@ function Excerpt({ text, quote }: { text: string; quote: string }) {
   )
 }
 
+/** An absence, checked: the text the reader looked for is not in these bytes. */
+function Absent({ text, absent }: { text: string; absent: string }) {
+  const found = text.includes(absent)
+  return (
+    <p className="text-xs">
+      Looked for <mark className="bg-marker px-1 text-ink">{absent}</mark>:{" "}
+      {found ? (
+        <span className="text-signal-red">it IS in these bytes</span>
+      ) : (
+        <span className="text-signal-green">not in these bytes ✓</span>
+      )}
+    </p>
+  )
+}
+
 function Html({ text, locator }: { text: string; locator: Locator }) {
   const [render, setRender] = useState(false)
   return (
@@ -308,6 +323,7 @@ function Html({ text, locator }: { text: string; locator: Locator }) {
         </p>
       )}
       {locator.quote ? <Excerpt text={text} quote={locator.quote} /> : null}
+      {locator.absent ? <Absent text={text} absent={locator.absent} /> : null}
       <button type="button" onClick={() => setRender(!render)} className="text-ink-muted text-xs underline">
         {render ? "Hide the page" : "Render the archived page (scripts off; loads Steam's images)"}
       </button>

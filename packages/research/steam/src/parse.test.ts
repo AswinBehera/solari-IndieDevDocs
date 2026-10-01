@@ -67,7 +67,8 @@ describe("parseStorePage", () => {
   it("says so when there is no disclosure, rather than saying nothing", () => {
     const p = parseStorePage(fixture("store-413150.html"))
     expect(p.ai.disclosed).toBe(false)
-    expect(p.ai.at.quote).toMatch(/No "AI Generated Content Disclosure" section/)
+    expect(p.ai.at.absent).toBe("AI Generated Content Disclosure")
+    expect(p.ai.at.quote).toBeUndefined()
     expect(p.tags.value).toContain("Farming Sim")
   })
 

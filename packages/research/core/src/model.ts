@@ -39,6 +39,11 @@ export interface Box {
 export interface Locator {
   path?: string
   quote?: string
+  /**
+   * Text the reader looked for and did not find, for a fact that is an absence
+   * ("no AI disclosure"). The receipt drawer checks the bytes do not contain it.
+   */
+  absent?: string
   selector?: string
   box?: Box
   /** For a derived fact: the facts it was computed from. */

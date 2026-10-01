@@ -309,12 +309,13 @@ async function snapshot(
 
   const notes = new Set<string>()
   const viewpoint = deps.browser ? await steamViewpoint(ctx, notes) : null
+  const replays: Promise<void>[] = []
   let done = 0
   const one = async (g: ComparableValue) => {
     const subject = appSubject(g.appid)
     try {
       await readApi(g, subject, rec, steam)
-      const page = await readStorePage(g, subject, rec, steam, deps, ctx, notes, viewpoint)
+      const page = await readStorePage(g, subject, rec, steam, deps, ctx, notes, viewpoint, replays)
       if (page) rec.stats.covered++
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
@@ -342,6 +343,7 @@ async function snapshot(
     },
   )
   await Promise.all(workers)
+  await settle(replays, ctx)
 
   const { covered, planned } = rec.stats
   return {
@@ -419,6 +421,7 @@ async function readStorePage(
   ctx: JobContext,
   notes: Set<string>,
   viewpoint: Viewpoint | null,
+  replays: Promise<void>[],
 ): Promise<boolean> {
   const url = storePageUrl(g.appid)
 
@@ -472,7 +475,11 @@ async function readStorePage(
         profile,
         at,
       })
-      await keepReplay(providerId, url, html.id, sessionId, profile, rec, ctx, notes)
+      replays.push(
+        keepReplay(providerId, url, html.id, sessionId, profile, rec, ctx).catch((e: unknown) => {
+          notes.add(`replay: ${(e instanceof Error ? e.message : String(e)).slice(0, 90)}`)
+        }),
+      )
       return pageFacts(captured.value.html, subject, shot.id, rec, captured.value.boxes)
     }
     notes.add(`browser: ${captured.error.kind}, read over HTTP instead`)
@@ -530,7 +537,10 @@ async function steamViewpoint(ctx: JobContext, notes: Set<string>): Promise<View
 
 /**
  * The session's recording, kept as a receipt beside the page's HTML. Fetched
- * after the browser is released, so waiting for the upload costs no minutes. A
+ * after the browser is released, so waiting for the upload costs no minutes, and
+ * collected at the end of the run (`settle`) so no page waits on its own. On
+ * 1 October every replay that arrived did so within 6 s of release, but in two
+ * runs five of eight never did, not even after 180 s. Hence a 60 s wait. A
  * missing replay is a note, not a failed page: the HTML and screenshot stand.
  */
 async function keepReplay(
@@ -541,15 +551,11 @@ async function keepReplay(
   profile: string | null,
   rec: Recorder,
   ctx: JobContext,
-  notes: Set<string>,
 ): Promise<void> {
   if (!providerId) return
   const replay = await ctx.kernel.replay(providerId)
-  if (!replay.ok) {
-    const why = (replay.error.cause ?? replay.error.message).slice(0, 90)
-    notes.add(`replay: ${why}; kept the page without one`)
-    return
-  }
+  if (!replay.ok)
+    throw new Error(`${replay.error.cause ?? replay.error.message}; kept the page without one`)
   await rec.receipt({
     kind: "replay",
     runtime: "browser",
@@ -561,6 +567,18 @@ async function keepReplay(
     pairedWith: htmlId,
     profile,
   })
+}
+
+/** Waits for the run's replays, heartbeating so a long wait keeps the job's lease. */
+async function settle(replays: Promise<void>[], ctx: JobContext): Promise<void> {
+  let done = false
+  const all = Promise.all(replays).then(() => {
+    done = true
+  })
+  while (!done) {
+    await Promise.race([all, new Promise((r) => setTimeout(r, 15_000))])
+    if (!done) await ctx.heartbeat("waiting for session replays")
+  }
 }
 
 function pageFacts(
