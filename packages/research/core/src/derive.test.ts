@@ -6,6 +6,10 @@ import {
   formatFact,
   isStale,
   laneOf,
+  laneReviews,
+  negativeReviews,
+  recentReviews,
+  reviewTrend,
   neighbourTags,
   paramsChanged,
   sha256Hex,
@@ -206,5 +210,59 @@ describe("evidenceMoves", () => {
     const f = at("a", "r1", 222)
     expect(evidenceMoves([f], () => "r1", [])).toEqual([])
     expect(evidenceMoves([f], () => "r2", [])).toEqual([{ factId: "a", now: null }])
+  })
+})
+
+describe("review signals", () => {
+  const day = 86_400
+  const r = (votedUp: boolean, minutes: number | null, language = "english", created = 0, refunded = false) => ({
+    votedUp,
+    minutesAtReview: minutes,
+    language,
+    created,
+    refunded,
+  })
+
+  it("reads the recent score and the hours positive reviewers had played", () => {
+    const v = recentReviews([r(true, 600, "english", 10 * day), r(true, 1200), r(false, 30, "english", 4 * day)])
+    expect(v).toEqual({ sampled: 3, positive: 2, pct: 67, spanDays: 6, medianHoursUp: 15 })
+  })
+
+  it("counts negatives inside the refund window, and ignores a positive that slipped in", () => {
+    const v = negativeReviews([r(false, 45, "english", 0, true), r(false, 119), r(false, 120), r(true, 5), r(false, null)])
+    expect(v).toMatchObject({ sampled: 4, early: 2, refunded: 1, medianHours: 2 })
+  })
+
+  it("only compares games with enough recent reviews and an all-time score", () => {
+    const recent = (pct: number, sampled = 100) => ({ ...recentReviews([]), pct, sampled })
+    const t = reviewTrend([
+      { appid: 1, name: "Down", recent: recent(80), allTimePct: 90 },
+      { appid: 2, name: "Up", recent: recent(96), allTimePct: 90 },
+      { appid: 3, name: "Steady", recent: recent(88), allTimePct: 90 },
+      { appid: 4, name: "Too few", recent: recent(50, 12), allTimePct: 90 },
+      { appid: 5, name: "No score", recent: recent(50), allTimePct: null },
+    ])
+    expect(t.judged).toBe(3)
+    expect(t.lower.map((g) => g.name)).toEqual(["Down"])
+    expect(t.higher.map((g) => g.name)).toEqual(["Up"])
+  })
+
+  it("pools the lane, every sampled review once", () => {
+    const lane = laneReviews(
+      [[r(true, 600), r(true, 60, "schinese")], [r(true, 1200), r(false, 10)]],
+      [[r(false, 30), r(false, 300)], [r(false, 90, "english", 0, true)]],
+    )
+    expect(lane.hours).toEqual({ medianHoursUp: 10, medianHoursDown: 1.5, up: 3, down: 3 })
+    expect(lane.early).toEqual({ early: 2, of: 3, pct: 67, refunded: 1 })
+    expect(lane.languages.top[0]).toEqual({ language: "english", n: 3 })
+  })
+
+  it("prints a chip a sentence can hold", () => {
+    expect(formatFact(fact("set", "review.early", { early: 2, of: 3, pct: 67, refunded: 1 }))).toBe(
+      "67% of negative reviews under 2 h",
+    )
+    expect(
+      formatFact(fact("set", "review.languages", { sampled: 4, top: [{ language: "schinese", n: 1 }] })),
+    ).toBe("Simplified Chinese 25%")
   })
 })

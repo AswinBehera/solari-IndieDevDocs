@@ -126,6 +126,41 @@ export function parseReviewSummary(json: unknown): ReviewSummary | null {
   }
 }
 
+/**
+ * One review, reduced to what the product counts. The text, the author's name and
+ * Steam id stay in the receipt and are never copied into a fact.
+ */
+export interface ReviewRow {
+  id: string
+  votedUp: boolean
+  /** Minutes played when the review was written. */
+  minutesAtReview: number | null
+  language: string
+  /** Unix seconds. */
+  created: number
+  refunded: boolean
+}
+
+export function parseReviewPage(json: unknown): ReviewRow[] | null {
+  const root = obj(json)
+  if (!root || root.success !== 1 || !Array.isArray(root.reviews)) return null
+  return root.reviews.flatMap((raw) => {
+    const r = obj(raw)
+    const id = str(r?.recommendationid)
+    if (!r || !id) return []
+    return [
+      {
+        id,
+        votedUp: r.voted_up === true,
+        minutesAtReview: num(obj(r.author)?.playtime_at_review),
+        language: str(r.language) ?? "unknown",
+        created: num(r.timestamp_created) ?? 0,
+        refunded: r.refunded === true,
+      },
+    ]
+  })
+}
+
 // ---- search -------------------------------------------------------------------
 
 export interface SearchRow {

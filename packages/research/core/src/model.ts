@@ -82,6 +82,11 @@ export const nicheMapParams = z.object({
   neighbours: z.number().int().min(3).max(10).default(6),
 })
 
+export const reviewSignalsParams = z.object({
+  /** The comparables block whose games' reviews this reads. */
+  source: z.string().uuid(),
+})
+
 /**
  * A call the writer makes, and the numbers it rests on. It never re-runs by
  * itself: a run records the evidence as it stands, and when that evidence later
@@ -98,6 +103,7 @@ export const BLOCK_PARAMS = {
   store_snapshot: snapshotParams,
   slop_share: slopShareParams,
   niche_map: nicheMapParams,
+  review_signals: reviewSignalsParams,
   decision: decisionParams,
 } as const
 
@@ -108,6 +114,7 @@ export type ComparablesParams = z.infer<typeof comparablesParams>
 export type SnapshotParams = z.infer<typeof snapshotParams>
 export type SlopShareParams = z.infer<typeof slopShareParams>
 export type NicheMapParams = z.infer<typeof nicheMapParams>
+export type ReviewSignalsParams = z.infer<typeof reviewSignalsParams>
 export type DecisionParams = z.infer<typeof decisionParams>
 
 export interface BlockParamsByKind {
@@ -115,6 +122,7 @@ export interface BlockParamsByKind {
   store_snapshot: SnapshotParams
   slop_share: SlopShareParams
   niche_map: NicheMapParams
+  review_signals: ReviewSignalsParams
   decision: DecisionParams
 }
 
@@ -146,6 +154,7 @@ export const BLOCK_TITLES: Record<BlockKind, string> = {
   store_snapshot: "Store snapshot",
   slop_share: "AI disclosure share",
   niche_map: "Niche breadth",
+  review_signals: "What players say",
   decision: "Decision",
 }
 
@@ -258,6 +267,12 @@ export const FACT_KEYS = [
   "ai.share",
   "lane",
   "neighbours",
+  "review.recent",
+  "review.negative",
+  "review.languages",
+  "review.trend",
+  "review.hours",
+  "review.early",
   "decision",
   "unavailable",
 ] as const
@@ -325,4 +340,59 @@ export interface DecisionValue {
   statement: string
   /** The evidence as printed when the decision was recorded. */
   evidence: { factId: string; blockId: string; subject: string; key: FactKey; printed: string }[]
+}
+
+// ---- reviews ------------------------------------------------------------------------
+
+/** A game's newest reviews, of any kind: how it is being received now. */
+export interface ReviewRecentValue {
+  sampled: number
+  positive: number
+  pct: number
+  /** Days between the newest and the oldest review in the sample. */
+  spanDays: number
+  /** Median hours played at review, over the positive ones. */
+  medianHoursUp: number | null
+}
+
+/** A game's newest negative reviews: when players give up, and how many asked for their money back. */
+export interface ReviewNegativeValue {
+  sampled: number
+  medianHours: number | null
+  /** Written with under two hours played: inside Steam's refund window. */
+  early: number
+  refunded: number
+  spanDays: number
+}
+
+/** Steam language codes (`schinese`, `brazilian`) with their counts, most first. */
+export interface ReviewLanguagesValue {
+  sampled: number
+  top: { language: string; n: number }[]
+}
+
+/** Games whose newest reviews run well below or above their all-time score. */
+export interface ReviewTrendValue {
+  /** Games with enough recent reviews and an all-time score to compare. */
+  judged: number
+  /** Percentage points a recent score must differ by to count. */
+  margin: number
+  lower: { appid: number; name: string; recentPct: number; allTimePct: number }[]
+  higher: { appid: number; name: string; recentPct: number; allTimePct: number }[]
+}
+
+/** Hours played at review across the lane's samples, pooled. */
+export interface ReviewHoursValue {
+  medianHoursUp: number | null
+  medianHoursDown: number | null
+  up: number
+  down: number
+}
+
+/** Negative reviews written inside the refund window, across the lane. */
+export interface ReviewEarlyValue {
+  early: number
+  of: number
+  pct: number
+  refunded: number
 }

@@ -39,6 +39,11 @@ read on 1 October 2026):
   narrower lane. Card Battler cuts it to 133 games with a median of 154 reviews;
   Strategy barely narrows it (273).
 - **How much of it discloses generative AI.** 0 of the 8 closest.
+- **What players reward and punish.** From each comparable's newest 100 reviews and
+  newest 100 negative ones: a quarter of the negative reviews (169 of 665) were written
+  inside Steam's two-hour refund window; positive reviewers had played a median 12.1
+  hours, negative ones 7.5; and 2 of the 8 games are being reviewed worse lately than
+  their all-time score.
 - **Your decision**, in a sentence, with the numbers it rests on attached. When a later
   run reads one of them differently, the decision says which one moved.
 
@@ -46,6 +51,8 @@ What it does not tell you:
 
 - **Sales, revenue or wishlists.** Review counts are the public signal, and they are
   shown as review counts, not converted into sales estimates.
+- **Why players liked or left a game.** `/reviews` counts when and how they reviewed,
+  not what they wrote. Reading the text for themes is the next step (see the handoff).
 - **The whole lane's medians.** Medians come from the first 25 games of Steam's search,
   in Steam's order, not from every game in the lane. The lane's size is Steam's own count.
 - **Who uses AI.** The AI share counts disclosure on the store page, not use.
@@ -88,6 +95,7 @@ source: it goes stale when the evidence it cites moves.
 | `/snapshot` | For each comparable: price, release date and developers (appdetails), review counts (appreviews), and the store page itself: tags and Steam's AI-generated-content disclosure. | API + Solari browser |
 | `/ai-share` | The share of those store pages that disclose generative AI. Pages that could not be read are left out of the denominator and named, never counted as clean. | Derived |
 | `/breadth` | The niche's neighbourhood. One tag narrower: the tags the niche's games most often carry besides yours, each searched as niche + tag, with its size, median price, median reviews and most-reviewed games. One tag broader: the niche minus each of its own tags. Tags nearly every game carries are named as describing the niche, not splitting it. | API |
+| `/reviews` | Two pages of each comparable's Steam reviews, newest first: any kind, and negative only. Per game and pooled for the lane: hours played at review, negative reviews inside the two-hour refund window, the recent score against the all-time one, and the languages reviews are written in. Facts hold counts only; no reviewer's words or name. | API |
 | `/decision` | Your call, in a sentence, with the numbers it rests on attached from anywhere in the document. Recording it keeps those numbers as they stood. When a later run reads one differently, the decision says which number moved and offers the new reading. It never changes by itself. | Derived |
 
 ## Built on Solari

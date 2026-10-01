@@ -32,7 +32,16 @@ export const appDetailsUrl = (appid: number, cc = "us"): string =>
 export const reviewSummaryUrl = (appid: number): string =>
   `${STORE}/appreviews/${appid}?json=1&num_per_page=0&language=all&purchase_type=all`
 
-export const storePageUrl = (appid: number, cc = "us"): string =>
+/**
+ * One page of reviews, newest first: `any` for what the game is getting now,
+ * `negative` for enough complaints to say when players give up. All languages and
+ * purchase types, so the sample is the store's, not ours.
+ */
+export const reviewPageUrl = (appid: number, type: "any" | "negative", count = 100): string =>
+  `${STORE}/appreviews/${appid}?json=1&filter=recent&review_type=${type === "any" ? "all" : "negative"}` +
+  `&language=all&purchase_type=all&num_per_page=${count}&cursor=*`
+
+export const storePageUrl =(appid: number, cc = "us"): string =>
   `${STORE}/app/${appid}/?l=english&cc=${cc}`
 
 export type SearchSort = "relevance" | "reviews" | "released"

@@ -9,7 +9,7 @@ import { ago } from "./editor/parts"
 
 /**
  * The front page: your research documents, and "Scout a niche", which writes the
- * first one for you: comparables → store snapshot → AI share, chained, with the
+ * first one for you: comparables → store snapshot → AI share, breadth and reviews, with the
  * headings a pitch or a postmortem would want.
  */
 export function DocsHome() {
@@ -32,6 +32,7 @@ export function DocsHome() {
       const snap = await createBlock(doc.id, "store_snapshot", { source: comp.id })
       const share = await createBlock(doc.id, "slop_share", { source: snap.id })
       const breadth = await createBlock(doc.id, "niche_map", { source: comp.id })
+      const players = await createBlock(doc.id, "review_signals", { source: comp.id })
       const call = await createBlock(doc.id, "decision", {})
       const block = (id: string) => ({ type: BLOCK_NODE, attrs: { [BLOCK_ATTR]: id } })
       const h2 = (text: string) => ({
@@ -61,6 +62,11 @@ export function DocsHome() {
           block(snap.id),
           h2("How much of it is AI-made"),
           block(share.id),
+          h2("What players reward and punish"),
+          p(
+            "When players give up on these games, how many ask for a refund, and whether the lane is being received better or worse lately.",
+          ),
+          block(players.id),
           h2("What I conclude"),
           p(
             "Write here. Press Cite on any number above and it lands in your sentence, linked to its receipt.",

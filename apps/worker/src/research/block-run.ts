@@ -9,14 +9,23 @@ import {
   currentComparables,
   type DecisionValue,
   emptyStats,
+  type FactRecord,
   type FactKey,
   formatFact,
   type LaneRow,
   type Locator,
   laneOf,
+  laneReviews,
+  negativeReviews,
   neighbourTags,
   parseParams,
+  recentReviews,
+  reviewLanguages,
+  reviewTrend,
+  TREND_MARGIN,
+  TREND_MIN_SAMPLE,
   type ReceiptKind,
+  type ReviewRecentValue,
   type RunOutcome,
   type RunStats,
   type Runtime,
@@ -27,9 +36,12 @@ import {
   AGE_COOKIES,
   appDetailsUrl,
   parseAppDetails,
+  parseReviewPage,
   parseReviewSummary,
   parseSearch,
   parseStorePage,
+  type ReviewRow,
+  reviewPageUrl,
   reviewShareFromTooltip,
   reviewSummaryUrl,
   type SearchRow,
@@ -153,10 +165,13 @@ class Recorder {
     })
   }
 
+  /** Writes the pending facts, and returns them with their ids for a computation to cite. */
   async flush() {
     const batch = this.pending
     this.pending = []
-    this.stats.facts += (await this.deps.store.putFacts(batch)).length
+    const written = await this.deps.store.putFacts(batch)
+    this.stats.facts += written.length
+    return written
   }
 }
 
@@ -226,6 +241,8 @@ async function answer(
       return slopShare(block, rec, deps)
     case "niche_map":
       return nicheMap(block, rec, steam, deps, ctx)
+    case "review_signals":
+      return reviewSignals(block, rec, steam, deps, ctx)
     case "decision":
       return decision(block, rec, deps, ctx)
   }
@@ -778,6 +795,153 @@ async function nicheMap(
       `${i + 1}/${pivots.length} ${lane.relation === "narrower" ? "+" : "−"}${lane.tag.name}`,
     )
   }
+  const { covered, planned } = rec.stats
+  return {
+    outcome: covered === planned ? "ok" : "partial",
+    note: notes.length > 0 ? notes.join("; ") : null,
+  }
+}
+
+// ---- reviews -----------------------------------------------------------------------
+
+/**
+ * What players of the comparables do, read from Steam's reviews API: two pages per
+ * game, the newest 100 reviews of any kind and the newest 100 negative ones. Each
+ * page is kept as a receipt; facts carry only counts, never a reviewer's words or
+ * name. The lane's figures pool every sampled review once, in a computation that
+ * cites the per-game facts it was built from.
+ */
+async function reviewSignals(
+  block: BlockRecord,
+  rec: Recorder,
+  steam: SteamClient,
+  deps: BlockRunDeps,
+  ctx: JobContext,
+): Promise<Outcome> {
+  const p = parseParams("review_signals", block.params)
+  if (!p.ok) return { outcome: "failed", note: p.error }
+  const source = await sourceFacts(deps, p.value.source, "comparables")
+  if ("error" in source) return { outcome: "failed", note: source.error }
+  const srcParams = parseParams("comparables", source.src.params)
+  if (!srcParams.ok) return { outcome: "failed", note: srcParams.error }
+  const games = currentComparables(source.facts, srcParams.value)
+  rec.stats.planned = games.length
+  if (games.length === 0) return { outcome: "failed", note: "The comparables list is empty" }
+
+  const page = async (appid: number, type: "any" | "negative") => {
+    const url = reviewPageUrl(appid, type)
+    const { fetched, json } = await steam.json(url)
+    const receipt = await rec.receipt({
+      kind: "json",
+      runtime: "api",
+      url,
+      body: fetched.body,
+      contentType: fetched.contentType,
+      at: fetched.fetchedAt,
+    })
+    const rows = parseReviewPage(json)
+    if (!rows) throw new Error(`Steam's reviews API did not answer for ${appid}`)
+    return { receipt, rows }
+  }
+
+  const read: {
+    comparable: FactRecord
+    recent: { fact: FactRecord; rows: ReviewRow[] }
+    negative: { fact: FactRecord; rows: ReviewRow[] }
+  }[] = []
+  const notes: string[] = []
+  for (const [i, comparable] of games.entries()) {
+    if (ctx.signal.aborted) break
+    const g = comparable.value as ComparableValue
+    const subject = appSubject(g.appid)
+    try {
+      const any = await page(g.appid, "any")
+      const neg = await page(g.appid, "negative")
+      const at = { path: "$.reviews" }
+      rec.fact(any.receipt.id, subject, "review.recent", recentReviews(any.rows), at)
+      rec.fact(any.receipt.id, subject, "review.languages", reviewLanguages(any.rows), at)
+      rec.fact(neg.receipt.id, subject, "review.negative", negativeReviews(neg.rows), at)
+      const written = await rec.flush()
+      const recent = written.find((f) => f.key === "review.recent")
+      const negative = written.find((f) => f.key === "review.negative")
+      if (recent && negative)
+        read.push({
+          comparable,
+          recent: { fact: recent, rows: any.rows },
+          negative: { fact: negative, rows: neg.rows },
+        })
+      rec.stats.covered++
+    } catch (e) {
+      const why =
+        e instanceof Error && e.name === "TimeoutError"
+          ? "timed out"
+          : e instanceof Error
+            ? e.message
+            : String(e)
+      const r = await rec.computation(`unavailable:${g.appid}`, {
+        appid: g.appid,
+        url: reviewPageUrl(g.appid, "any"),
+        error: why,
+      })
+      rec.fact(r.id, subject, "unavailable", { reason: why }, { path: "$.error" })
+      await rec.flush()
+      notes.push(`${g.name}: ${why}`)
+    }
+    await ctx.heartbeat(`${i + 1}/${games.length} ${g.name}`)
+  }
+  if (read.length === 0) return { outcome: "failed", note: notes.join("; ") || "No reviews read" }
+
+  const trend = reviewTrend(
+    read.map((r) => {
+      const g = r.comparable.value as ComparableValue
+      return {
+        appid: g.appid,
+        name: g.name,
+        recent: r.recent.fact.value as ReviewRecentValue,
+        allTimePct: g.reviewPct,
+      }
+    }),
+  )
+  const lane = laneReviews(
+    read.map((r) => r.recent.rows),
+    read.map((r) => r.negative.rows),
+  )
+  const receipt = await rec.computation("review-signals", {
+    rule:
+      "Per game: the newest 100 reviews of any kind, and the newest 100 negative ones, all languages. " +
+      `Hours are hours played when the review was written. 'Under 2 h' is Steam's refund window. ` +
+      `A game is 'reviewed worse lately' when its newest ${TREND_MIN_SAMPLE}+ reviews score at least ` +
+      `${TREND_MARGIN} points below its all-time score from the store search. The lane's figures pool ` +
+      "every sampled review once.",
+    inputs: read.map((r) => ({
+      subject: r.comparable.subject,
+      comparableFactId: r.comparable.id,
+      recentFactId: r.recent.fact.id,
+      negativeFactId: r.negative.fact.id,
+      allTimePct: (r.comparable.value as ComparableValue).reviewPct,
+      recent: r.recent.fact.value,
+      negative: r.negative.fact.value,
+    })),
+    output: { trend, ...lane },
+  })
+  const recentIds = read.map((r) => r.recent.fact.id)
+  const negativeIds = read.map((r) => r.negative.fact.id)
+  rec.fact(receipt.id, "set", "review.trend", trend, {
+    path: "$.output.trend",
+    from: [...recentIds, ...read.map((r) => r.comparable.id)],
+  })
+  rec.fact(receipt.id, "set", "review.hours", lane.hours, {
+    path: "$.output.hours",
+    from: [...recentIds, ...negativeIds],
+  })
+  rec.fact(receipt.id, "set", "review.early", lane.early, {
+    path: "$.output.early",
+    from: negativeIds,
+  })
+  rec.fact(receipt.id, "set", "review.languages", lane.languages, {
+    path: "$.output.languages",
+    from: recentIds,
+  })
   const { covered, planned } = rec.stats
   return {
     outcome: covered === planned ? "ok" : "partial",

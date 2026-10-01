@@ -46,6 +46,24 @@ Typecheck is clean across core, db, steam, worker, api and web. Core has 13 test
   - `blockViews` must pass the cited blocks' latest facts to `evidenceMoves`, not the
     decision's own facts. That bug got past the unit test.
 
+## Added 1 October: `/reviews` (`review_signals`)
+
+- Reads a comparables block's games from Steam's reviews API: per game, the newest 100
+  reviews of any kind and the newest 100 negative ones, all languages. 16 requests for
+  8 games, no browser, about 30 s.
+- Per game: the recent score, hours played at review, negative reviews inside the
+  two-hour refund window (and how many Steam marks refunded), languages. For the
+  lane, one `review-signals` computation pools every sampled review once and cites the
+  per-game facts.
+- Facts hold counts only. Review text, author names and Steam ids stay in the JSON
+  receipts on local disk. The test fixture has them removed.
+- First run (Indie + Roguelike Deckbuilder + Pixel Graphics): 169 of 665 negative
+  reviews (25%) were written under 2 hours played. The median hours at review are 12.1
+  positive and 7.5 negative. Lost In Fantaland (71% recent vs 84% all-time) and Tower
+  Tactics (79% vs 88%) are reviewed worse lately.
+- **Read the trend with its window.** "Newest 100" spans 2 days for Balatro and 854 for
+  Cento. The card shows each game's span.
+
 ## Things that will bite you
 
 - **`pnpm test` wipes the local database.** Some older suites truncate tables. Run a single
@@ -79,7 +97,16 @@ Typecheck is clean across core, db, steam, worker, api and web. Core has 13 test
    - "what changed since last run" as a diff of two runs' facts. Runs are kept for this.
 2. **Sharing.** A read-only doc view whose chips open receipts. It needs receipts off the
    local disk first (see above).
-3. **Disclosure coverage.** `ai.disclosure` reads Steam's "AI Generated Content
+3. **Review themes, judged.** `/reviews` counts when players review, not why. The next
+   step reads the text already in the receipts:
+   - an LLM proposes themes per lane, positive and negative separately;
+   - a cheaper model tags each review against them, which gives counts;
+   - every theme fact cites review ids and verbatim quotes, and the drawer checks each
+     quote is in the archived JSON.
+   The model and prompt go into a computation receipt, and the UI labels these facts
+   "judged", never "read". `packages/samsara/llm` has an OpenRouter client from the
+   travel app. It needs a second key, so it should stay optional for reviewers.
+4. **Disclosure coverage.** `ai.disclosure` reads Steam's "AI Generated Content
    Disclosure" section. A game that uses AI without disclosing it reads as "none". The UI
    says "disclose", never "uses".
 

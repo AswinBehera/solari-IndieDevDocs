@@ -34,6 +34,11 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
     description: "How wide the niche is: the lanes one tag narrower and one tag broader",
   },
   {
+    id: "review_signals",
+    command: "/reviews",
+    description: "When players give up, how many refund, and whether reception is slipping",
+  },
+  {
     id: "decision",
     command: "/decision",
     description: "A design call, with the numbers it rests on attached",

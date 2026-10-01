@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   decodeEntities,
   parseAppDetails,
+  parseReviewPage,
   parseReviewSummary,
   parseSearch,
   parseStorePage,
@@ -80,5 +81,20 @@ describe("parseStorePage", () => {
 describe("decodeEntities", () => {
   it("decodes named and numeric entities", () => {
     expect(decodeEntities("Tom &amp; Jerry&#39;s &#x2122;")).toBe("Tom & Jerry's ™")
+  })
+})
+
+describe("parseReviewPage", () => {
+  it("keeps the vote, the playtime and the language, and nothing about the author", () => {
+    const rows = parseReviewPage(JSON.parse(fixture("reviews-recent-413150.json")))
+    expect(rows).toHaveLength(5)
+    expect(rows?.[0]).toMatchObject({ votedUp: true, minutesAtReview: 1835, language: "schinese" })
+    expect(Object.keys(rows?.[0] ?? {}).sort()).toEqual(
+      ["created", "id", "language", "minutesAtReview", "refunded", "votedUp"],
+    )
+  })
+
+  it("answers null for a failed page", () => {
+    expect(parseReviewPage({ success: 2 })).toBeNull()
   })
 })

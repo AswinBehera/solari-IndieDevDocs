@@ -12,10 +12,17 @@ import {
   formatCents,
   formatFact,
   type LaneValue,
+  languageShares,
   type NeighboursValue,
   paramsChanged,
   parseParams,
+  type ReviewEarlyValue,
+  type ReviewHoursValue,
+  type ReviewLanguagesValue,
+  type ReviewNegativeValue,
+  type ReviewRecentValue,
   type ReviewsValue,
+  type ReviewTrendValue,
   sourceOf,
 } from "@rd/research"
 import { searchTags, tagName } from "@rd/steam/tags"
@@ -66,6 +73,7 @@ function Card({ block, onRemove }: { block: BlockView; onRemove: () => void }) {
         {block.kind === "store_snapshot" && <SnapshotBody block={block} />}
         {block.kind === "slop_share" && <ShareBody block={block} />}
         {block.kind === "niche_map" && <NicheBody block={block} />}
+        {block.kind === "review_signals" && <ReviewsBody block={block} />}
         {block.kind === "decision" && <DecisionBody block={block} />}
       </div>
       <Footer block={block} />
@@ -80,6 +88,7 @@ const KIND_TAGS: Record<BlockKind, string> = {
   store_snapshot: "API + CLOUD BROWSER",
   slop_share: "DERIVED",
   niche_map: "STORE SEARCHES",
+  review_signals: "REVIEWS API",
   decision: "YOUR CALL",
 }
 
@@ -833,6 +842,204 @@ function LaneRow({ fact, of }: { fact: FactRecord; of: number }) {
       </td>
       <td className="py-1.5 text-[12px] text-ink-muted">{v.top.map((t) => t.name).join(", ")}</td>
     </tr>
+  )
+}
+
+// ---- reviews ---------------------------------------------------------------------------
+
+interface ReviewRow {
+  subject: string
+  recent?: FactRecord
+  negative?: FactRecord
+  languages?: FactRecord
+  unavailable?: FactRecord
+}
+
+function ReviewsBody({ block }: { block: BlockView }) {
+  const { names, blocks } = useDocContext()
+  const lane = (key: FactRecord["key"]) =>
+    block.facts.find((f) => f.key === key && f.subject === "set")
+  const early = lane("review.early")
+  const hours = lane("review.hours")
+  const trend = lane("review.trend")
+  const languages = lane("review.languages")
+  const rows = useMemo(() => {
+    const by = new Map<string, ReviewRow>()
+    for (const f of block.facts) {
+      if (f.subject === "set") continue
+      const row = by.get(f.subject) ?? { subject: f.subject }
+      if (f.key === "review.recent") row.recent = f
+      if (f.key === "review.negative") row.negative = f
+      if (f.key === "review.languages") row.languages = f
+      if (f.key === "unavailable") row.unavailable = f
+      by.set(f.subject, row)
+    }
+    return [...by.values()]
+  }, [block.facts])
+  // All-time scores come from the comparables block's search rows, which is what
+  // the trend compares against.
+  const allTime = useMemo(() => {
+    const src = blocks.get(sourceOf(block.kind, block.params) ?? "")
+    const m = new Map<string, number | null>()
+    for (const f of src?.facts ?? [])
+      if (f.key === "comparable") m.set(f.subject, (f.value as ComparableValue).reviewPct)
+    return m
+  }, [blocks, block.kind, block.params])
+
+  const e = early?.value as ReviewEarlyValue | undefined
+  const h = hours?.value as ReviewHoursValue | undefined
+  const t = trend?.value as ReviewTrendValue | undefined
+  return (
+    <div>
+      <SourcePicker block={block} kind="comparables" />
+      {!block.run && (
+        <p className="mt-4 text-ink-faint text-sm">
+          Reads two pages of each comparable's Steam reviews: the newest 100, and the newest 100
+          negative ones. It counts hours played, the refund window and languages. No reviewer's words
+          or name are copied into the document; the pages are kept as receipts.
+        </p>
+      )}
+      {early && e && (
+        <div className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-3">
+          <Evidence fact={early} className="font-serif text-[52px] leading-[0.9]">
+            {e.pct}%
+          </Evidence>
+          <div className="min-w-[240px] flex-1 pb-1 text-[15px]">
+            <p>
+              of {e.of.toLocaleString("en-US")} negative reviews were written with under 2 hours
+              played, inside Steam's refund window. Steam marks {e.refunded} of the {e.of} as
+              refunded.
+            </p>
+            <div className="mt-2">
+              <CiteButton fact={early} />
+            </div>
+          </div>
+        </div>
+      )}
+      {(hours || trend || languages) && (
+        <ul className="mt-4 divide-y divide-rule border-rule border-y text-sm">
+          {hours && h && (
+            <li className="flex flex-wrap items-baseline gap-2 py-1.5">
+              <span className="w-44 text-ink-muted">Hours played at review</span>
+              <Evidence fact={hours}>
+                positive {h.medianHoursUp ?? "?"} h, negative {h.medianHoursDown ?? "?"} h
+              </Evidence>
+              <span className="font-mono text-[11px] text-ink-faint">medians</span>
+              <span className="ml-auto">
+                <CiteButton fact={hours} />
+              </span>
+            </li>
+          )}
+          {trend && t && (
+            <li className="flex flex-wrap items-baseline gap-2 py-1.5">
+              <span className="w-44 text-ink-muted">Reviewed worse lately</span>
+              <Evidence fact={trend}>
+                {t.lower.length} of {t.judged} games
+              </Evidence>
+              <span className="text-[12px] text-ink-muted">
+                {t.lower.map((g) => `${g.name} (${g.recentPct}% vs ${g.allTimePct}%)`).join(", ")}
+              </span>
+              <span className="ml-auto">
+                <CiteButton fact={trend} />
+              </span>
+            </li>
+          )}
+          {languages && (
+            <li className="flex flex-wrap items-baseline gap-2 py-1.5">
+              <span className="w-44 text-ink-muted">Who is writing</span>
+              <Evidence fact={languages} />
+              <span className="ml-auto">
+                <CiteButton fact={languages} />
+              </span>
+            </li>
+          )}
+        </ul>
+      )}
+      {rows.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-rule border-b text-left font-mono text-[10px] text-ink-faint uppercase tracking-wider">
+                <th className="py-1.5 pr-3 font-normal">Game</th>
+                <th className="py-1.5 pr-3 font-normal">Newest 100</th>
+                <th className="py-1.5 pr-3 font-normal">Negative at</th>
+                <th className="py-1.5 pr-3 font-normal">Under 2 h</th>
+                <th className="py-1.5 font-normal">Languages</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-rule">
+              {rows.map((r) => {
+                const rv = r.recent?.value as ReviewRecentValue | undefined
+                const nv = r.negative?.value as ReviewNegativeValue | undefined
+                const all = allTime.get(r.subject)
+                return (
+                  <tr key={r.subject} className="align-top">
+                    <td className="py-1.5 pr-3">{nameOf(names, r.subject)}</td>
+                    {r.unavailable ? (
+                      <td colSpan={4} className="py-1.5">
+                        <Evidence fact={r.unavailable} className="text-signal-red text-xs">
+                          reviews not readable
+                        </Evidence>
+                      </td>
+                    ) : (
+                      <>
+                        <td className="py-1.5 pr-3 font-mono text-[12px]">
+                          {r.recent && rv ? (
+                            <>
+                              <Evidence fact={r.recent}>{rv.pct}%</Evidence>
+                              {all != null && <span className="text-ink-faint"> vs {all}%</span>}
+                              <div className="text-[10.5px] text-ink-faint">
+                                over {rv.spanDays} days
+                              </div>
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="py-1.5 pr-3 font-mono text-[12px]">
+                          {r.negative && nv ? (
+                            <Evidence fact={r.negative}>
+                              {nv.medianHours !== null ? `${nv.medianHours} h` : "—"}
+                            </Evidence>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="py-1.5 pr-3 font-mono text-[12px]">
+                          {nv ? (
+                            <>
+                              {nv.early} of {nv.sampled}
+                              {nv.refunded > 0 && (
+                                <span className="text-ink-faint"> · {nv.refunded} refunded</span>
+                              )}
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="py-1.5 text-[12px] text-ink-muted">
+                          {r.languages ? (
+                            <Evidence fact={r.languages}>
+                              {languageShares(r.languages.value as ReviewLanguagesValue, 2)}
+                            </Evidence>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <p className="mt-1.5 text-ink-faint text-xs">
+            "Newest 100" is the share positive among each game's latest 100 reviews, against its
+            all-time score from the store search. Hours are hours played when the review was written.
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -133,9 +133,9 @@ async function blockViews(
   const factsByRun = new Map<string, FactRecord[]>()
   for (const f of facts) factsByRun.set(f.runId, [...(factsByRun.get(f.runId) ?? []), f])
 
-  /** The subjects a snapshot would read now, from its source's last run and current pruning. */
+  /** The games a snapshot or a reviews block would read now, from its source's last run and current pruning. */
   const wantedBy = (b: BlockRecord): string[] | null => {
-    if (b.kind !== "store_snapshot") return null
+    if (b.kind !== "store_snapshot" && b.kind !== "review_signals") return null
     const src = byId.get(sourceOf(b.kind, b.params) ?? "")
     if (!src?.lastRunId) return []
     const p = parseParams("comparables", src.params)
@@ -175,7 +175,7 @@ async function blockViews(
     const wanted = wantedBy(b)
     // A snapshot is also behind when the list was pruned after it ran: same
     // source run, different games.
-    const read = new Set(facts.map((f) => f.subject))
+    const read = new Set(facts.flatMap((f) => (f.subject === "set" ? [] : [f.subject])))
     const pruned =
       wanted !== null &&
       run !== null &&

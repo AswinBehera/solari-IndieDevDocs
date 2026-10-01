@@ -64,6 +64,7 @@ const SOURCE_KIND: Record<BlockKind, BlockKind | null> = {
   store_snapshot: "comparables",
   slop_share: "store_snapshot",
   niche_map: "comparables",
+  review_signals: "comparables",
   decision: null,
 }
 

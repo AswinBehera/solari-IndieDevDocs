@@ -10,7 +10,13 @@ import type {
   LaneValue,
   NeighboursValue,
   PriceValue,
+  ReviewEarlyValue,
+  ReviewHoursValue,
+  ReviewLanguagesValue,
+  ReviewNegativeValue,
+  ReviewRecentValue,
   ReviewsValue,
+  ReviewTrendValue,
   RunRecord,
 } from "./model.js"
 
@@ -161,6 +167,160 @@ export function neighbourTags(
   }
 }
 
+// ---- reviews -----------------------------------------------------------------------------
+
+/** What a review signal needs from one review. Restated so core stays standalone. */
+export interface ReviewSample {
+  votedUp: boolean
+  minutesAtReview: number | null
+  language: string
+  created: number
+  refunded: boolean
+}
+
+/** Steam's refund window: under two hours played. */
+export const EARLY_MINUTES = 120
+
+const hours = (minutes: number | null): number | null =>
+  minutes === null ? null : Math.round((minutes / 60) * 10) / 10
+
+const minutesOf = (rows: ReviewSample[]): number[] =>
+  rows.flatMap((r) => (r.minutesAtReview !== null ? [r.minutesAtReview] : []))
+
+const spanDays = (rows: ReviewSample[]): number => {
+  const t = rows.map((r) => r.created).filter((c) => c > 0)
+  return t.length < 2 ? 0 : Math.round((Math.max(...t) - Math.min(...t)) / 86_400)
+}
+
+export function recentReviews(rows: ReviewSample[]): ReviewRecentValue {
+  const up = rows.filter((r) => r.votedUp)
+  return {
+    sampled: rows.length,
+    positive: up.length,
+    pct: rows.length === 0 ? 0 : Math.round((up.length / rows.length) * 100),
+    spanDays: spanDays(rows),
+    medianHoursUp: hours(median(minutesOf(up))),
+  }
+}
+
+/** Over a sample of negative reviews only. A positive one that slipped in is not counted. */
+export function negativeReviews(rows: ReviewSample[]): ReviewNegativeValue {
+  const down = rows.filter((r) => !r.votedUp)
+  return {
+    sampled: down.length,
+    medianHours: hours(median(minutesOf(down))),
+    early: down.filter((r) => r.minutesAtReview !== null && r.minutesAtReview < EARLY_MINUTES).length,
+    refunded: down.filter((r) => r.refunded).length,
+    spanDays: spanDays(down),
+  }
+}
+
+export function reviewLanguages(rows: Pick<ReviewSample, "language">[], top = 5): ReviewLanguagesValue {
+  const counts = new Map<string, number>()
+  for (const r of rows) counts.set(r.language, (counts.get(r.language) ?? 0) + 1)
+  return {
+    sampled: rows.length,
+    top: [...counts]
+      .map(([language, n]) => ({ language, n }))
+      .sort((a, b) => b.n - a.n || a.language.localeCompare(b.language))
+      .slice(0, top),
+  }
+}
+
+/** A recent score is compared only over at least this many reviews. */
+export const TREND_MIN_SAMPLE = 30
+export const TREND_MARGIN = 5
+
+export function reviewTrend(
+  games: { appid: number; name: string; recent: ReviewRecentValue; allTimePct: number | null }[],
+): ReviewTrendValue {
+  const judged = games.flatMap((g) =>
+    g.allTimePct !== null && g.recent.sampled >= TREND_MIN_SAMPLE
+      ? [{ appid: g.appid, name: g.name, recentPct: g.recent.pct, allTimePct: g.allTimePct }]
+      : [],
+  )
+  return {
+    judged: judged.length,
+    margin: TREND_MARGIN,
+    lower: judged.filter((g) => g.recentPct <= g.allTimePct - TREND_MARGIN),
+    higher: judged.filter((g) => g.recentPct >= g.allTimePct + TREND_MARGIN),
+  }
+}
+
+/**
+ * The lane's reviews pooled: every sampled review counts once, so a game with a
+ * long history weighs no more than its sample of 100.
+ */
+export function laneReviews(
+  recent: ReviewSample[][],
+  negative: ReviewSample[][],
+): { hours: ReviewHoursValue; early: ReviewEarlyValue; languages: ReviewLanguagesValue } {
+  const up = recent.flat().filter((r) => r.votedUp)
+  const down = negative.flat().filter((r) => !r.votedUp)
+  const early = down.filter((r) => r.minutesAtReview !== null && r.minutesAtReview < EARLY_MINUTES)
+  return {
+    hours: {
+      medianHoursUp: hours(median(minutesOf(up))),
+      medianHoursDown: hours(median(minutesOf(down))),
+      up: up.length,
+      down: down.length,
+    },
+    early: {
+      early: early.length,
+      of: down.length,
+      pct: down.length === 0 ? 0 : Math.round((early.length / down.length) * 100),
+      refunded: down.filter((r) => r.refunded).length,
+    },
+    languages: reviewLanguages(recent.flat()),
+  }
+}
+
+const LANGUAGES: Record<string, string> = {
+  english: "English",
+  schinese: "Simplified Chinese",
+  tchinese: "Traditional Chinese",
+  russian: "Russian",
+  brazilian: "Portuguese (Brazil)",
+  portuguese: "Portuguese",
+  koreana: "Korean",
+  japanese: "Japanese",
+  german: "German",
+  french: "French",
+  spanish: "Spanish",
+  latam: "Spanish (Latin America)",
+  polish: "Polish",
+  turkish: "Turkish",
+  ukrainian: "Ukrainian",
+  italian: "Italian",
+  thai: "Thai",
+  vietnamese: "Vietnamese",
+  czech: "Czech",
+  hungarian: "Hungarian",
+  dutch: "Dutch",
+  swedish: "Swedish",
+  finnish: "Finnish",
+  danish: "Danish",
+  norwegian: "Norwegian",
+  indonesian: "Indonesian",
+  romanian: "Romanian",
+  greek: "Greek",
+  bulgarian: "Bulgarian",
+  arabic: "Arabic",
+}
+
+export const languageName = (code: string): string => LANGUAGES[code] ?? code
+
+/** `English 61%, Simplified Chinese 14%`: the first `n` languages as shares of the sample. */
+export function languageShares(v: ReviewLanguagesValue, n = 3): string {
+  if (v.sampled === 0) return "no reviews"
+  return v.top
+    .slice(0, n)
+    .map((l) => `${languageName(l.language)} ${Math.round((l.n / v.sampled) * 100)}%`)
+    .join(", ")
+}
+
+const h = (x: number | null): string => (x === null ? "?" : `${x} h`)
+
 // ---- decisions -------------------------------------------------------------------------
 
 /** The same reading in a later run: same block, same subject, same key. */
@@ -249,6 +409,28 @@ export function formatFact(f: Pick<FactRecord, "key" | "value">): string {
         .slice(0, 3)
         .map((t) => t.name)
         .join(", ")
+    case "review.recent": {
+      const r = f.value as ReviewRecentValue
+      return `${r.pct}% positive in the latest ${r.sampled}`
+    }
+    case "review.negative": {
+      const r = f.value as ReviewNegativeValue
+      return `negative at ${h(r.medianHours)}, ${r.early} of ${r.sampled} under 2 h`
+    }
+    case "review.languages":
+      return languageShares(f.value as ReviewLanguagesValue)
+    case "review.trend": {
+      const t = f.value as ReviewTrendValue
+      return `${t.lower.length} of ${t.judged} reviewed worse lately`
+    }
+    case "review.hours": {
+      const r = f.value as ReviewHoursValue
+      return `positive at ${h(r.medianHoursUp)}, negative at ${h(r.medianHoursDown)}`
+    }
+    case "review.early": {
+      const r = f.value as ReviewEarlyValue
+      return `${r.pct}% of negative reviews under 2 h`
+    }
     case "decision": {
       const d = f.value as DecisionValue
       return d.statement.length > 60 ? `"${d.statement.slice(0, 57)}…"` : `"${d.statement}"`
@@ -322,6 +504,13 @@ export function estimateCost(kind: BlockKind, items: number): CostEstimate {
         browserPages: 0,
         minutes: 0,
         label: "Computed from the snapshot. Free.",
+      }
+    case "review_signals":
+      return {
+        requests: items * 2,
+        browserPages: 0,
+        minutes: Math.ceil(items * 2 * 0.05 * 10) / 10,
+        label: `${items * 2} Steam review pages, no browser`,
       }
     case "niche_map":
       return {
