@@ -54,6 +54,7 @@ import type { JobStore } from "@samsara/kernel"
 import type { JobContext, JobHandler } from "../handlers.js"
 import type { FilesystemReceiptArchive } from "./archive.js"
 import { captureStorePage, type PageLike } from "./capture.js"
+import { prototype } from "./prototype.js"
 
 /**
  * `block.run`: answer one block's question, keeping a receipt for everything it
@@ -89,6 +90,8 @@ export interface BlockRunDeps {
   steam: () => SteamClient
   /** Whether the kernel can open a browser. Without one, store pages are read over HTTP. */
   browser: boolean
+  /** Whether the kernel can start a sandbox. Prototypes need one. */
+  sandbox?: boolean
   queue?: Pick<JobStore, "enqueue">
   /** Store pages in flight at once. Three is the free plan's browser limit. */
   concurrency?: number
@@ -101,7 +104,7 @@ interface Payload {
   cascade?: unknown
 }
 
-class Recorder {
+export class Recorder {
   readonly stats: RunStats = emptyStats()
   readonly runtimes = new Set<Runtime>()
   private pending: NewFact[] = []
@@ -175,7 +178,7 @@ class Recorder {
   }
 }
 
-type Outcome = { outcome: Exclude<RunOutcome, "running">; note: string | null }
+export type Outcome = { outcome: Exclude<RunOutcome, "running">; note: string | null }
 
 export function createBlockRunHandler(deps: BlockRunDeps): JobHandler {
   return async (ctx) => {
@@ -243,6 +246,8 @@ async function answer(
       return nicheMap(block, rec, steam, deps, ctx)
     case "review_signals":
       return reviewSignals(block, rec, steam, deps, ctx)
+    case "prototype":
+      return prototype(block, rec, deps, ctx)
     case "decision":
       return decision(block, rec, deps, ctx)
   }

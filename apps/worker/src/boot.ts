@@ -14,11 +14,16 @@ import {
   PostgresJobStore,
   PostgresSessionStore,
 } from "@samsara/kernel/postgres"
-import { createSolariBrowserLauncher, solariCredentials } from "@samsara/kernel/solari"
+import {
+  createSolariBrowserLauncher,
+  createSolariSandboxLauncher,
+  solariCredentials,
+} from "@samsara/kernel/solari"
 import { PackRegistry } from "@samsara/refine"
 import { HandlerRegistry, noopHandler } from "./handlers.js"
 import { FilesystemReceiptArchive } from "./research/archive.js"
 import { BLOCK_RUN, createBlockRunHandler } from "./research/block-run.js"
+import { createPrototypeStopHandler, PROTOTYPE_STOP } from "./research/prototype.js"
 
 /**
  * Everything the runner needs, assembled once at boot.
@@ -58,7 +63,17 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
   const launcher = env.SOLARI_API_KEY
     ? createSolariBrowserLauncher(solariCredentials(env))
     : undefined
-  const kernel = new Kernel({ registry, guard, logger, ...(launcher ? { browser: launcher } : {}) })
+  // Same key, for the prototype block's sandboxes.
+  const sandbox = env.SOLARI_API_KEY
+    ? createSolariSandboxLauncher(solariCredentials(env))
+    : undefined
+  const kernel = new Kernel({
+    registry,
+    guard,
+    logger,
+    ...(launcher ? { browser: launcher } : {}),
+    ...(sandbox ? { sandbox } : {}),
+  })
 
   const jobs = new PostgresJobStore(database.db)
   const handlers = new HandlerRegistry()
@@ -71,10 +86,13 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
       archive: new FilesystemReceiptArchive(env.RECEIPT_DIR ?? "../web/public/receipts"),
       steam: () => new SteamClient(),
       browser: launcher !== undefined && env.RESEARCH_BROWSER !== "off",
+      sandbox: sandbox !== undefined,
       queue: jobs,
       concurrency: Number(env.RESEARCH_CONCURRENCY ?? 3),
     }),
   )
+
+  handlers.register(PROTOTYPE_STOP, createPrototypeStopHandler())
 
   return {
     db: database,

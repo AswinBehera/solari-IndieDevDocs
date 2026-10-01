@@ -112,6 +112,10 @@ export function createSolariSandboxLauncher(creds: SolariCredentials): SandboxLa
       const sandbox = await client.sandboxes.create({
         template: config.template,
         timeoutMs: config.timeoutMs,
+        // Spelled out: a sandbox that pauses on idle keeps its disk, and a kept
+        // one nobody stops would sit paused rather than go.
+        lifecycle: { onTimeout: "kill" },
+        ...(config.metadata ? { metadata: config.metadata } : {}),
       })
       return {
         id: sandbox.sandboxId,
@@ -119,7 +123,24 @@ export function createSolariSandboxLauncher(creds: SolariCredentials): SandboxLa
         // argv, never a shell string. `run("ls -la")` looks for a binary literally
         // named "ls -la"; anything needing pipes or globs runs `sh -c` explicitly.
         run: (cmd, args) => sandbox.commands.run(cmd, { args: [...args] }),
-        kill: () => sandbox.kill(),
+        // kill() also closes the control channel, and the SDK rejects whatever was
+        // still listening on it; the VM is gone either way.
+        kill: () => sandbox.kill().catch(() => {}),
+        previewUrl: async (port) => (await sandbox.previewUrl(port)).url,
+        keepAlive: async (ms) => {
+          await sandbox.setTimeout(ms)
+          // Drop the control channel without killing: the kept VM outlives this process.
+          sandbox.close()
+        },
+      }
+    },
+    async kill(id) {
+      try {
+        await client.sandboxes.kill(id)
+        return true
+      } catch (e) {
+        if (/not found/i.test(e instanceof Error ? e.message : String(e))) return false
+        throw e
       }
     },
     async dispose() {

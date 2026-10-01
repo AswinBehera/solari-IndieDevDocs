@@ -3,7 +3,7 @@ import { BudgetGuard, dayKey } from "./budget.js"
 import { DEFAULT_CEILINGS } from "./ceilings.js"
 import { Kernel } from "./kernel.js"
 import { MemoryLogger } from "./log.js"
-import type { BrowserHandle, BrowserLauncher } from "./ports.js"
+import type { BrowserHandle, BrowserLauncher, SandboxHandle, SandboxLauncher } from "./ports.js"
 import { SessionRegistry } from "./registry.js"
 import { MemoryCounterStore, MemorySessionStore } from "./stores/memory.js"
 
@@ -399,5 +399,97 @@ describe("shutdown", () => {
     expect(registry.openCount).toBe(0)
     expect(closes.length).toBeGreaterThanOrEqual(1)
     void running
+  })
+})
+
+/** A sandbox that never existed, recording what the kernel did to it. */
+function fakeSandboxes(seen: {
+  kills: string[]
+  kept: number[]
+  killedById: string[]
+}): SandboxLauncher {
+  let n = 0
+  return {
+    async create(): Promise<SandboxHandle> {
+      const id = `sb-${++n}`
+      return {
+        id,
+        async connect() {},
+        async run() {
+          return { exitCode: 0, stdout: "", stderr: "" }
+        },
+        async kill() {
+          seen.kills.push(id)
+        },
+        async keepAlive(ms) {
+          seen.kept.push(ms)
+        },
+      }
+    },
+    async kill(id) {
+      seen.killedById.push(id)
+      return id === "sb-1"
+    },
+    async dispose() {},
+  }
+}
+
+describe("withSandbox, kept", () => {
+  function sandboxHarness() {
+    const seen = { kills: [] as string[], kept: [] as number[], killedById: [] as string[] }
+    const counters = new MemoryCounterStore()
+    const logger = new MemoryLogger()
+    const guard = new BudgetGuard({ store: counters, ceilings: DEFAULT_CEILINGS, clock: () => AT })
+    const registry = new SessionRegistry(new MemorySessionStore(), logger)
+    const kernel = new Kernel({
+      registry,
+      guard,
+      browser: fakeLauncher(),
+      sandbox: fakeSandboxes(seen),
+      logger,
+    })
+    const minutes = async () =>
+      [
+        ...(
+          await counters.read([
+            { meter: "solari.minutes", window: "global.day", windowKey: dayKey(AT) },
+          ])
+        ).values(),
+      ][0] ?? 0
+    return { kernel, seen, minutes }
+  }
+
+  it("leaves a kept sandbox running and meters the kept minutes up front", async () => {
+    const { kernel, seen, minutes } = sandboxHarness()
+    const result = await kernel.withSandbox(
+      "probe",
+      { template: "base", keepMs: 15 * 60_000 },
+      async (sb) => sb.id,
+    )
+    expect(result).toEqual({ ok: true, value: "sb-1" })
+    expect(seen.kills).toEqual([])
+    expect(seen.kept).toEqual([15 * 60_000])
+    expect(await minutes()).toBeGreaterThanOrEqual(15)
+  })
+
+  it("still kills a sandbox whose callback failed, kept or not", async () => {
+    const { kernel, seen } = sandboxHarness()
+    const result = await kernel.withSandbox(
+      "probe",
+      { template: "base", keepMs: 15 * 60_000, attempts: 1 },
+      async () => {
+        throw new Error("git clone: repository not found")
+      },
+    )
+    expect(result.ok).toBe(false)
+    expect(seen.kills).toEqual(["sb-1"])
+    expect(seen.kept).toEqual([])
+  })
+
+  it("kills by id later, and says when the sandbox had already gone", async () => {
+    const { kernel, seen } = sandboxHarness()
+    expect(await kernel.killSandbox("sb-1")).toEqual({ ok: true, value: true })
+    expect(await kernel.killSandbox("sb-9")).toEqual({ ok: true, value: false })
+    expect(seen.killedById).toEqual(["sb-1", "sb-9"])
   })
 })

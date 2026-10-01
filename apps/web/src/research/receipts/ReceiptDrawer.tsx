@@ -68,7 +68,7 @@ export function ReceiptDrawer({ focus, onClose }: { focus: ReceiptFocus; onClose
                       shown.id === r.id ? "border-rule border-b-paper bg-paper font-medium" : "border-transparent text-ink-muted"
                     }`}
                   >
-                    {KIND_LABEL[r.kind]}
+                    {tabLabel(group, r)}
                   </button>
                 ))}
               </div>
@@ -89,6 +89,18 @@ const KIND_LABEL: Record<ReceiptRecord["kind"], string> = {
   replay: "Session replay",
   computation: "Computation",
 }
+
+/** A tab's name. A prototype's group holds a browser log and two screenshots, so kinds alone are not enough. */
+function tabLabel(group: ReceiptRecord[], r: ReceiptRecord): string {
+  let label = KIND_LABEL[r.kind]
+  if (r.kind === "html" && !isSteam(r.url)) label = "Page HTML"
+  if (r.kind === "json" && r.runtime === "browser") label = "Browser log"
+  if (r.kind === "json" && r.runtime === "sandbox") label = "Build"
+  const same = group.filter((g) => g.kind === r.kind)
+  return same.length > 1 ? `${label} ${same.indexOf(r) + 1}` : label
+}
+
+const isSteam = (url: string) => /^https:\/\/(store\.)?steampowered\.com\//.test(url)
 
 const RUNTIME_LABEL: Record<ReceiptRecord["runtime"], string> = {
   api: "Steam's public API, over HTTP",
@@ -263,7 +275,7 @@ function Screenshot({ src, box }: { src: string; box: Box | undefined }) {
       <div ref={frame} className="relative max-h-[70vh] overflow-y-auto rounded-sm border border-rule bg-night">
         <img
           src={src}
-          alt="The store page as the cloud browser saw it"
+          alt="The page as the cloud browser saw it"
           className="block w-full"
           onLoad={(e) => {
             const img = e.currentTarget

@@ -164,6 +164,10 @@ async function blockViews(
       return 1 + (p.ok ? p.value.neighbours : 6) + (base >= 2 ? base : 0)
     }
     if (b.kind === "decision") return evidenceOf(b).length
+    if (b.kind === "prototype") {
+      const p = parseParams("prototype", b.params)
+      return p.ok ? p.value.keepMinutes : 0
+    }
     return wanted?.length ?? 0
   }
 

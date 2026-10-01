@@ -76,6 +76,33 @@ Typecheck is clean across core, db, steam, worker, api and web. Core has 13 test
 - Scatter labels are placed greedily and dropped rather than overlapped; the dropped
   ones show on hover.
 
+## Added 1 October: /prototype
+
+- A static web build from a public git repository (https only; branch and folder
+  optional), cloned with `--depth=1` into a Solari sandbox (template `base`) and served
+  by a small Python server on port 8000. No install or build step runs: a repo that
+  needs `npm ci` fails with "no index.html". That was the deliberate cut; a build step
+  means running a stranger's package scripts.
+- `previewUrl(8000)` is the URL the document embeds (click to play, never on open) and
+  the recorded Solari browser opens. It carries `pt_token`, a bearer credential. It is
+  stored only in the `prototype.live` fact and scrubbed from the HTML, browser log and
+  replay receipts. Do not put it in a shared view when sharing is built.
+- Receipts: the build (commit, file count, the 20 largest files), the page HTML, a
+  screenshot at boot and one after a click and Space/Enter/arrows, a browser log
+  (load time, console errors, failed requests, canvas size), and the replay when one
+  arrives. If the two screenshots are byte-identical they are one receipt, and
+  `changedAfterInput` is false.
+- Stopping: the kernel's `withSandbox` takes `keepMs`, skips the kill, and meters the
+  kept minutes up front. The worker queues `prototype.stop` with `runAfter` at the end
+  of the playable window; that is the hard deadline, because Solari's idle timeout
+  restarts on every API call. A re-run kills the previous run's sandbox first.
+  `keepMinutes: 0` records and kills straight away.
+- Threaded Godot 4 exports need COOP/COEP headers (SharedArrayBuffer). Neither the
+  sandbox's server nor the document sends them, so export single-threaded. A paused sandbox's preview returned 502
+  after resume, so pause/resume is not used.
+- Verified 1 October against `gabrielecirulli/2048`: about 20 s from claim to
+  recording, 6 facts from 5 receipts, the embed plays, no token in any receipt.
+
 ## Things that will bite you
 
 - **`pnpm test` wipes the local database.** Some older suites truncate tables. Run a single
@@ -124,7 +151,7 @@ Typecheck is clean across core, db, steam, worker, api and web. Core has 13 test
 
 ## Solari profiles and desktops
 
-Ordered by value for the risk. 1 and 2 are built (1 October); the rest are proposals.
+Ordered by value for the risk. 1, 2 and 6 are built (1 October); the rest are proposals.
 
 1. **Replays as receipts. Built.** Store-page sessions launch with `recording: true`.
    After the browser is released, the worker calls `kernel.replay(providerId)`, which
@@ -156,6 +183,6 @@ Ordered by value for the risk. 1 and 2 are built (1 October); the rest are propo
 5. **A paused research desktop per document**, resumed when you open the doc
    (`pause`/`resume` snapshot RAM and disk), for checking a page by hand inside the same
    viewpoint the blocks used.
-6. **Prototype blocks** in a sandbox, with `previewUrl(port)` embedding a playable build in
-   the document beside the research it answers. This starts the "pipeline" half of the
-   pitch.
+6. **Prototype blocks. Built** (static builds; see "Added 1 October: /prototype").
+   Next: a build step in the sandbox for repos that need one, and a scripted playtest
+   (a short input script per game instead of the fixed keys).

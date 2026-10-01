@@ -14,6 +14,12 @@ import {
   type LaneValue,
   languageShares,
   type NeighboursValue,
+  type PrototypeBootValue,
+  type PrototypeBuildValue,
+  type PrototypeConsoleValue,
+  type PrototypeLiveValue,
+  type PrototypeParams,
+  type PrototypeScreenValue,
   paramsChanged,
   parseParams,
   type ReviewEarlyValue,
@@ -27,8 +33,8 @@ import {
 } from "@rd/research"
 import { searchTags, tagName } from "@rd/steam/tags"
 import { NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react"
-import { useMemo, useState } from "react"
-import type { BlockView } from "../api"
+import { useEffect, useMemo, useState } from "react"
+import { type BlockView, useReceipt } from "../api"
 import { useDocContext } from "../context"
 import { Dumbbells, HoursHistogram, priceTick, Scatter, ShareBars } from "./charts"
 import { ago, CiteButton, decisionEvidence, Evidence, nameOf } from "./parts"
@@ -75,6 +81,7 @@ function Card({ block, onRemove }: { block: BlockView; onRemove: () => void }) {
         {block.kind === "slop_share" && <ShareBody block={block} />}
         {block.kind === "niche_map" && <NicheBody block={block} />}
         {block.kind === "review_signals" && <ReviewsBody block={block} />}
+        {block.kind === "prototype" && <PrototypeBody block={block} />}
         {block.kind === "decision" && <DecisionBody block={block} />}
       </div>
       <Footer block={block} />
@@ -90,6 +97,7 @@ const KIND_TAGS: Record<BlockKind, string> = {
   slop_share: "DERIVED",
   niche_map: "STORE SEARCHES",
   review_signals: "REVIEWS API",
+  prototype: "SANDBOX + CLOUD BROWSER",
   decision: "YOUR CALL",
 }
 
@@ -159,9 +167,13 @@ function Header({ block, onRemove }: { block: BlockView; onRemove: () => void })
   )
 }
 
-/** A decision can only be recorded once it says something. */
+/** A decision can only be recorded once it says something, and a prototype once it names a repository. */
 const runnable = (b: BlockView): boolean =>
-  b.kind !== "decision" || decisionParams(b).statement.length > 0
+  b.kind === "decision"
+    ? decisionParams(b).statement.length > 0
+    : b.kind === "prototype"
+      ? prototypeParams(b).repo.length > 0
+      : true
 
 function StaleBanner({ block }: { block: BlockView }) {
   const { run } = useDocContext()
@@ -1275,5 +1287,263 @@ function DecisionBody({ block }: { block: BlockView }) {
         </p>
       )}
     </div>
+  )
+}
+
+// ---- prototype --------------------------------------------------------------------
+
+function prototypeParams(b: BlockView): PrototypeParams {
+  const p = parseParams("prototype", b.params)
+  return p.ok ? p.value : { repo: "", ref: "", dir: "", keepMinutes: 15 }
+}
+
+const KEEP_CHOICES = [0, 5, 15, 30, 60]
+
+const momentRank = (f: FactRecord) => ((f.value as PrototypeScreenValue).moment === "boot" ? 0 : 1)
+
+/** Re-renders once a minute, so a live build turns back into screenshots when its time is up. */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(t)
+  }, [])
+  return now
+}
+
+function PrototypeBody({ block }: { block: BlockView }) {
+  const { patch } = useDocContext()
+  const params = prototypeParams(block)
+  const [draft, setDraft] = useState(params)
+  const now = useNow()
+  const byKey = (key: string) => block.facts.find((f) => f.key === key)
+  const build = byKey("prototype.build")
+  const boot = byKey("prototype.boot")
+  const consoleFact = byKey("prototype.console")
+  const live = byKey("prototype.live")
+  const liveValue = live?.value as PrototypeLiveValue | undefined
+  const playable = liveValue && Date.parse(liveValue.until) > now ? liveValue : null
+  const shots = block.facts
+    .filter((f) => f.key === "prototype.screen")
+    .sort((a, b) => momentRank(a) - momentRank(b))
+  const save = (next: Partial<PrototypeParams>) => {
+    const merged = { ...draft, ...next }
+    setDraft(merged)
+    if (paramsChanged("prototype", params, merged) || merged.keepMinutes !== params.keepMinutes)
+      patch(block.id, merged)
+  }
+  const field =
+    "rounded-sm border border-rule bg-paper px-2 py-1 font-mono text-xs outline-none focus:border-ink"
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={draft.repo}
+          onChange={(e) => setDraft({ ...draft, repo: e.target.value })}
+          onBlur={() => save({ repo: draft.repo.trim() })}
+          placeholder="https://github.com/you/your-web-build"
+          aria-label="Git repository"
+          className={`${field} min-w-64 flex-1`}
+        />
+        <input
+          value={draft.ref}
+          onChange={(e) => setDraft({ ...draft, ref: e.target.value })}
+          onBlur={() => save({ ref: draft.ref.trim() })}
+          placeholder="branch"
+          aria-label="Branch or tag"
+          className={`${field} w-28`}
+        />
+        <input
+          value={draft.dir}
+          onChange={(e) => setDraft({ ...draft, dir: e.target.value })}
+          onBlur={() => save({ dir: draft.dir.trim() })}
+          placeholder="folder with index.html"
+          aria-label="Folder holding index.html"
+          className={`${field} w-44`}
+        />
+        <select
+          value={draft.keepMinutes}
+          onChange={(e) => save({ keepMinutes: Number(e.target.value) })}
+          aria-label="How long to keep it playable"
+          className={field}
+        >
+          {KEEP_CHOICES.map((m) => (
+            <option key={m} value={m}>
+              {m === 0 ? "record only" : `playable ${m} min`}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {!block.run && (
+        <p className="mt-3 text-ink-faint text-sm">
+          A static web build: a repository whose folder holds an index.html (an HTML5 export from
+          Godot, Unity, Phaser or plain JS). A Solari sandbox clones and serves it, a cloud browser
+          records it booting and taking input, and the document keeps it playable for a while.
+        </p>
+      )}
+
+      {playable ? (
+        <LiveBuild live={playable} poster={shots[0]} />
+      ) : (
+        shots.length > 0 && (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {shots.map((f) => (
+              <Shot key={f.id} fact={f} />
+            ))}
+          </div>
+        )
+      )}
+      {liveValue && !playable && (
+        <p className="mt-1.5 text-ink-faint text-xs">
+          Was playable until {new Date(liveValue.until).toLocaleTimeString("en-GB")}; run again to
+          play it.
+        </p>
+      )}
+
+      {(build || boot) && (
+        <ul className="mt-3 space-y-1.5 text-sm">
+          {build && <BuildLine fact={build} />}
+          {boot && <BootLine fact={boot} />}
+          {consoleFact && <ConsoleLines fact={consoleFact} />}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** The build itself, in the page. Mounted on a click, so opening the document never starts a game. */
+function LiveBuild({ live, poster }: { live: PrototypeLiveValue; poster: FactRecord | undefined }) {
+  const [playing, setPlaying] = useState(false)
+  const until = new Date(live.until).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+  return (
+    <div className="mt-3">
+      <div className="relative aspect-[16/10] overflow-hidden rounded-sm border border-rule bg-night">
+        {playing ? (
+          <iframe
+            src={live.url}
+            title="The prototype, running in a Solari sandbox"
+            sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups"
+            allow="fullscreen; gamepad; autoplay"
+            className="absolute inset-0 size-full"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPlaying(true)}
+            className="group absolute inset-0 flex items-center justify-center"
+          >
+            {poster && (
+              <ShotImage
+                fact={poster}
+                className="absolute inset-0 size-full object-cover opacity-60"
+              />
+            )}
+            <span className="relative rounded-sm bg-paper px-4 py-2 font-medium text-ink text-sm shadow-card group-hover:bg-marker">
+              ▶ Play the build
+            </span>
+          </button>
+        )}
+      </div>
+      <p className="mt-1.5 flex flex-wrap gap-x-3 font-mono text-[10.5px] text-ink-faint">
+        <span>Running in a Solari sandbox until {until}, then stopped.</span>
+        <a href={live.url} target="_blank" rel="noreferrer" className="underline">
+          open in a new tab
+        </a>
+        <span>The link carries an access token: do not paste it into a share.</span>
+      </p>
+    </div>
+  )
+}
+
+function ShotImage({ fact, className }: { fact: FactRecord; className: string }) {
+  const { data } = useReceipt(fact.receiptId)
+  if (!data) return null
+  const moment = (fact.value as PrototypeScreenValue).moment
+  return (
+    <img
+      src={`/receipts/${data.receipt.ref}`}
+      alt={moment === "boot" ? "The build after it booted" : "The build after a click and keys"}
+      className={className}
+    />
+  )
+}
+
+function Shot({ fact }: { fact: FactRecord }) {
+  return (
+    <figure>
+      <Evidence fact={fact} className="block w-full no-underline">
+        <ShotImage
+          fact={fact}
+          className="aspect-[16/10] w-full rounded-sm border border-rule object-cover"
+        />
+      </Evidence>
+      <figcaption className="mt-1 font-mono text-[10.5px] text-ink-faint">
+        {formatFact(fact)}
+      </figcaption>
+    </figure>
+  )
+}
+
+function BuildLine({ fact }: { fact: FactRecord }) {
+  const v = fact.value as PrototypeBuildValue
+  return (
+    <li className="flex flex-wrap items-baseline gap-2">
+      <span className="w-20 shrink-0 font-mono text-[10.5px] text-ink-faint">BUILD</span>
+      <Evidence fact={fact} />
+      <span className="text-ink-muted text-xs">
+        {(v.bytes / 1_048_576).toFixed(1)} MB
+        {v.committedAt && `, committed ${ago(v.committedAt)}`}
+      </span>
+      <CiteButton fact={fact} />
+    </li>
+  )
+}
+
+function BootLine({ fact }: { fact: FactRecord }) {
+  const v = fact.value as PrototypeBootValue
+  const notes = [
+    v.canvas ? `${v.canvas.width}×${v.canvas.height} canvas` : "no canvas element",
+    v.changedAfterInput === null
+      ? null
+      : v.changedAfterInput
+        ? "the screen changed after input"
+        : "the screen did not change after input",
+    v.failedRequests > 0 ? `${v.failedRequests} failed requests` : null,
+  ].filter(Boolean)
+  return (
+    <li className="flex flex-wrap items-baseline gap-2">
+      <span className="w-20 shrink-0 font-mono text-[10.5px] text-ink-faint">BOOT</span>
+      <Evidence
+        fact={fact}
+        className={v.errors > 0 || v.loadMs === null ? "text-signal-red" : ""}
+      />
+      <span className="text-ink-muted text-xs">{notes.join(", ")}</span>
+      <CiteButton fact={fact} />
+    </li>
+  )
+}
+
+function ConsoleLines({ fact }: { fact: FactRecord }) {
+  const v = fact.value as PrototypeConsoleValue
+  if (v.errors.length === 0 && v.failed.length === 0) return null
+  return (
+    <li className="flex items-baseline gap-2">
+      <span className="w-20 shrink-0 font-mono text-[10.5px] text-ink-faint">CONSOLE</span>
+      <div className="min-w-0 space-y-0.5">
+        {[...v.errors, ...v.failed].slice(0, 4).map((line) => (
+          <p key={line} className="truncate font-mono text-[11px] text-signal-red" title={line}>
+            {line}
+          </p>
+        ))}
+        <Evidence fact={fact} className="text-xs">
+          the whole log
+        </Evidence>
+      </div>
+    </li>
   )
 }

@@ -39,6 +39,11 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
     description: "When players give up, how many refund, and whether reception is slipping",
   },
   {
+    id: "prototype",
+    command: "/prototype",
+    description: "Your web build, served from a sandbox, recorded booting, and playable in the doc",
+  },
+  {
     id: "decision",
     command: "/decision",
     description: "A design call, with the numbers it rests on attached",

@@ -105,6 +105,8 @@ export interface SandboxConfig {
   template: string
   /** Rolling idle window, not a deadline — the kernel enforces the deadline. */
   timeoutMs: number
+  /** Labels the provider keeps on the sandbox, so a leaked one can be found and named. */
+  metadata?: Record<string, string>
 }
 
 export interface SandboxHandle {
@@ -117,9 +119,15 @@ export interface SandboxHandle {
   ): Promise<{ exitCode: number; stdout: string; stderr: string }>
   /** Destroys the VM. `close()` would only drop the local control channel. */
   kill(): Promise<void>
+  /** A public URL for an in-guest port. It carries an access token: never log or store it whole. */
+  previewUrl?(port: number): Promise<string>
+  /** Resets the provider's idle window to `ms` from now. */
+  keepAlive?(ms: number): Promise<void>
 }
 
 export interface SandboxLauncher {
   create(config: SandboxConfig): Promise<SandboxHandle>
+  /** Destroys a sandbox by id, from any process. False when it was already gone. */
+  kill?(id: string): Promise<boolean>
   dispose(): Promise<void>
 }

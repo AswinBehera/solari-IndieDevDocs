@@ -96,6 +96,15 @@ export interface SandboxOptions {
   deadlineMs?: number
   runId?: string
   attempts?: number
+  metadata?: Record<string, string>
+  /**
+   * After `fn` succeeds, leave the sandbox running for this long instead of
+   * killing it: something outside the call, a person, is going to use it. The
+   * caller owns the stop and must schedule it (`killSandbox`), because the
+   * provider's window is idle time and any use extends it. The kept minutes are
+   * metered up front.
+   */
+  keepMs?: number
 }
 
 export interface KernelDeps {
@@ -318,6 +327,7 @@ export class Kernel {
             // that when something does fire it is ours, with our error and our
             // force-close, rather than a provider timeout we have to decode.
             timeoutMs: deadlineMs + 60_000,
+            ...(opts.metadata ? { metadata: opts.metadata } : {}),
           })
         } catch (thrown) {
           return err(classify(thrown))
@@ -325,6 +335,7 @@ export class Kernel {
 
         const live = sandbox
         const startedAt = (this.deps.clock ?? (() => new Date()))()
+        let kept = false
         try {
           await live.connect()
           const raced = await withDeadline(
@@ -333,23 +344,41 @@ export class Kernel {
             () => live.kill(),
           )
           if (!raced.ok) return raced
+          if (opts.keepMs && live.keepAlive) {
+            await live.keepAlive(opts.keepMs)
+            kept = true
+          }
           return ok(raced.value)
         } catch (thrown) {
           return err(classify(thrown))
         } finally {
-          try {
-            // kill(), not close(): close() drops the local control channel and
-            // leaves the VM running until its idle timeout, still billing.
-            await live.kill()
-          } catch {
-            // Nothing further we can do; the idle timeout is the backstop.
+          if (!kept) {
+            try {
+              // kill(), not close(): close() drops the local control channel and
+              // leaves the VM running until its idle timeout, still billing.
+              await live.kill()
+            } catch {
+              // Nothing further we can do; the idle timeout is the backstop.
+            }
           }
-          const minutes = (Date.now() - startedAt.getTime()) / 60_000
+          const minutes =
+            (Date.now() - startedAt.getTime()) / 60_000 + (kept ? (opts.keepMs ?? 0) / 60_000 : 0)
           await this.meter("solari.minutes", minutes, scope, purpose)
         }
       },
       { attempts: opts.attempts ?? 3, logger: this.logger, purpose },
     )
+  }
+
+  /** Stops a sandbox `withSandbox` kept. False when it had already gone. */
+  async killSandbox(id: string): Promise<Result<boolean, Failure>> {
+    const launcher = this.deps.sandbox
+    if (!launcher?.kill) return err(failure("config", "this launcher cannot kill by id"))
+    try {
+      return ok(await launcher.kill(id))
+    } catch (thrown) {
+      return err(classify(thrown))
+    }
   }
 
   /**

@@ -335,14 +335,20 @@ export class PostgresResearchStore {
 
   /**
    * Everything one page load produced: the HTML, and the screenshot and replay that
-   * name it as their pair. Pass the HTML's id. Ordered HTML, screenshot, replay.
+   * name it as their pair. Pass the HTML's id. Ordered HTML, screenshot, log, replay,
+   * and by capture time within a kind so a boot screenshot comes before the next one.
    */
   async pageGroup(htmlId: string): Promise<ReceiptRecord[]> {
     const rows = await this.db
       .select()
       .from(receipts)
       .where(or(eq(receipts.id, htmlId), eq(receipts.pairedWith, htmlId)))
-    const order = ["html", "screenshot", "replay"]
-    return rows.map(toReceipt).sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))
+    const order = ["html", "screenshot", "json", "replay"]
+    return rows
+      .map(toReceipt)
+      .sort(
+        (a, b) =>
+          order.indexOf(a.kind) - order.indexOf(b.kind) || a.capturedAt.localeCompare(b.capturedAt),
+      )
   }
 }

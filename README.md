@@ -96,6 +96,7 @@ source: it goes stale when the evidence it cites moves.
 | `/ai-share` | The share of those store pages that disclose generative AI. Pages that could not be read are left out of the denominator and named, never counted as clean. | Derived |
 | `/breadth` | The niche's neighbourhood. One tag narrower: the tags the niche's games most often carry besides yours, each searched as niche + tag, with its size, median price, median reviews and most-reviewed games. One tag broader: the niche minus each of its own tags. Tags nearly every game carries are named as describing the niche, not splitting it. | API |
 | `/reviews` | Two pages of each comparable's Steam reviews, newest first: any kind, and negative only. Per game and pooled for the lane: hours played at review, negative reviews inside the two-hour refund window, the recent score against the all-time one, and the languages reviews are written in. Facts hold counts only; no reviewer's words or name. | API |
+| `/prototype` | Your web build beside the research. A Solari sandbox clones a public git repository (a branch, a folder holding `index.html`) and serves it; a recorded Solari browser opens it, waits for it to boot, clicks and presses a few keys, and screenshots before and after. Facts: the commit and file count, load time, console errors, failed requests, the canvas size, and whether the screen changed after input. The build stays playable in the document for up to an hour, then the sandbox is stopped. Static builds only: no install or build step runs. | Sandbox + Solari browser |
 | `/decision` | Your call, in a sentence, with the numbers it rests on attached from anywhere in the document. Recording it keeps those numbers as they stood. When a later run reads one differently, the decision says which number moved and offers the new reading. It never changes by itself. | Derived |
 
 Blocks draw their answers as charts as well as numbers, each mark opening the receipt it
@@ -119,7 +120,14 @@ which replays are missing. Every session starts from the same pinned Solari prof
 holding the store's viewpoint (age gate answered, English), and each receipt names
 the profile and version it was read with. The receipt drawer shows the screenshot
 scrolled to the box, plays the replay, and lists the browser session id. Without
-`SOLARI_API_KEY` the same blocks fall back to plain HTTP, and the receipts say so.
+`SOLARI_API_KEY` the same blocks fall back to plain HTTP, and the receipts say so;
+`/prototype` needs a sandbox, so it reports itself blocked.
+
+`/prototype` uses Solari sandboxes as well as browsers. The sandbox clones and serves
+the build; `previewUrl(port)` gives the URL the document embeds and the cloud browser
+records. That URL carries an access token, so it is kept only in the block's own fact and
+scrubbed from every receipt (the HTML, the browser log and the replay). A job queued for
+the end of the playable window kills the sandbox; Solari's idle timeout is the backstop.
 
 The kernel (`packages/samsara/kernel`) owns sessions, retries, deadlines and the
 per-owner budget. The worker (`apps/worker`) claims `block.run` jobs from a Postgres

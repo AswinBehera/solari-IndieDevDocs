@@ -10,6 +10,11 @@ import type {
   LaneValue,
   NeighboursValue,
   PriceValue,
+  PrototypeBootValue,
+  PrototypeBuildValue,
+  PrototypeConsoleValue,
+  PrototypeLiveValue,
+  PrototypeScreenValue,
   ReviewEarlyValue,
   ReviewHoursValue,
   ReviewLanguagesValue,
@@ -209,13 +214,17 @@ export function negativeReviews(rows: ReviewSample[]): ReviewNegativeValue {
   return {
     sampled: down.length,
     medianHours: hours(median(minutesOf(down))),
-    early: down.filter((r) => r.minutesAtReview !== null && r.minutesAtReview < EARLY_MINUTES).length,
+    early: down.filter((r) => r.minutesAtReview !== null && r.minutesAtReview < EARLY_MINUTES)
+      .length,
     refunded: down.filter((r) => r.refunded).length,
     spanDays: spanDays(down),
   }
 }
 
-export function reviewLanguages(rows: Pick<ReviewSample, "language">[], top = 5): ReviewLanguagesValue {
+export function reviewLanguages(
+  rows: Pick<ReviewSample, "language">[],
+  top = 5,
+): ReviewLanguagesValue {
   const counts = new Map<string, number>()
   for (const r of rows) counts.set(r.language, (counts.get(r.language) ?? 0) + 1)
   return {
@@ -455,6 +464,26 @@ export function formatFact(f: Pick<FactRecord, "key" | "value">): string {
       const r = f.value as ReviewEarlyValue
       return `${r.pct}% of negative reviews under 2 h`
     }
+    case "prototype.build": {
+      const b = f.value as PrototypeBuildValue
+      return `${b.commit.slice(0, 7)}, ${b.files} files`
+    }
+    case "prototype.boot": {
+      const b = f.value as PrototypeBootValue
+      const load =
+        b.loadMs === null ? "never loaded" : `loaded in ${(b.loadMs / 1000).toFixed(1)} s`
+      return `${load}, ${b.errors} console error${b.errors === 1 ? "" : "s"}`
+    }
+    case "prototype.console": {
+      const c = f.value as PrototypeConsoleValue
+      return c.errors[0] ?? "no console errors"
+    }
+    case "prototype.screen":
+      return (f.value as PrototypeScreenValue).moment === "boot"
+        ? "screen at boot"
+        : "screen after input"
+    case "prototype.live":
+      return `playable until ${(f.value as PrototypeLiveValue).until.slice(11, 16)} UTC`
     case "decision": {
       const d = f.value as DecisionValue
       return d.statement.length > 60 ? `"${d.statement.slice(0, 57)}…"` : `"${d.statement}"`
@@ -491,6 +520,8 @@ export function paramsChanged(kind: BlockKind, runParams: unknown, current: unkn
       return { tagIds: tags, sort: o.sort ?? "relevance" }
     }
     if (kind === "niche_map") return { source: o.source ?? null, neighbours: o.neighbours ?? 6 }
+    // How long it stays playable is not part of the question.
+    if (kind === "prototype") return { repo: o.repo ?? "", ref: o.ref ?? "", dir: o.dir ?? "" }
     if (kind === "decision") {
       const ev = Array.isArray(o.evidence) ? [...(o.evidence as string[])].sort() : []
       return { statement: String(o.statement ?? "").trim(), evidence: ev }
@@ -542,6 +573,19 @@ export function estimateCost(kind: BlockKind, items: number): CostEstimate {
         browserPages: 0,
         minutes: Math.ceil(items * 0.1 * 10) / 10,
         label: `${items} store searches, no browser`,
+      }
+    case "prototype":
+      // `items` is the minutes it stays playable. About a minute to clone, serve
+      // and open it in a browser, and the kept time is billed whether or not
+      // anyone plays.
+      return {
+        requests: 0,
+        browserPages: 1,
+        minutes: 1 + items,
+        label:
+          items > 0
+            ? `1 sandbox and 1 browser session, then playable for ${items} min: about ${1 + items} sandbox min`
+            : "1 sandbox and 1 browser session, about 1 min; recorded, not kept playable",
       }
     case "decision":
       return {

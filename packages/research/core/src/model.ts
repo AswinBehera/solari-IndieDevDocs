@@ -87,6 +87,40 @@ export const reviewSignalsParams = z.object({
   source: z.string().uuid(),
 })
 
+/** A relative path inside the repository: no leading slash, no `..`. */
+const repoPath = z
+  .string()
+  .trim()
+  .max(200)
+  .regex(/^[\w./-]*$/, "letters, digits, ., _, - and / only")
+  .refine((p) => !p.startsWith("/") && !p.split("/").includes(".."), "a path inside the repository")
+
+/**
+ * A playable build, served from a sandbox beside the research it answers. The
+ * build is a folder of static files with an `index.html` (an HTML5 export, a
+ * `gh-pages` branch); nothing is compiled.
+ */
+export const prototypeParams = z.object({
+  /** A public git repository over https. Empty until the writer sets one. */
+  repo: z
+    .string()
+    .trim()
+    .max(300)
+    .regex(/^(https:\/\/[^\s]+)?$/, "an https:// git URL")
+    .default(""),
+  /** A branch or tag. Empty for the default branch. */
+  ref: z
+    .string()
+    .trim()
+    .max(100)
+    .regex(/^[\w./-]*$/, "a branch or tag name")
+    .default(""),
+  /** The folder holding `index.html`. Empty for the repository's root. */
+  dir: repoPath.default(""),
+  /** How long the build stays playable after a run. 0 keeps only the recording. */
+  keepMinutes: z.number().int().min(0).max(60).default(15),
+})
+
 /**
  * A call the writer makes, and the numbers it rests on. It never re-runs by
  * itself: a run records the evidence as it stands, and when that evidence later
@@ -104,6 +138,7 @@ export const BLOCK_PARAMS = {
   slop_share: slopShareParams,
   niche_map: nicheMapParams,
   review_signals: reviewSignalsParams,
+  prototype: prototypeParams,
   decision: decisionParams,
 } as const
 
@@ -115,6 +150,7 @@ export type SnapshotParams = z.infer<typeof snapshotParams>
 export type SlopShareParams = z.infer<typeof slopShareParams>
 export type NicheMapParams = z.infer<typeof nicheMapParams>
 export type ReviewSignalsParams = z.infer<typeof reviewSignalsParams>
+export type PrototypeParams = z.infer<typeof prototypeParams>
 export type DecisionParams = z.infer<typeof decisionParams>
 
 export interface BlockParamsByKind {
@@ -123,6 +159,7 @@ export interface BlockParamsByKind {
   slop_share: SlopShareParams
   niche_map: NicheMapParams
   review_signals: ReviewSignalsParams
+  prototype: PrototypeParams
   decision: DecisionParams
 }
 
@@ -144,7 +181,7 @@ export function parseParams<K extends BlockKind>(
  * these. A decision has none: it rests on facts, which may come from any block.
  */
 export function sourceOf(kind: BlockKind, params: unknown): string | null {
-  if (kind === "comparables" || kind === "decision") return null
+  if (kind === "comparables" || kind === "decision" || kind === "prototype") return null
   const p = params as { source?: unknown }
   return typeof p?.source === "string" ? p.source : null
 }
@@ -155,6 +192,7 @@ export const BLOCK_TITLES: Record<BlockKind, string> = {
   slop_share: "AI disclosure share",
   niche_map: "Niche breadth",
   review_signals: "What players say",
+  prototype: "Prototype",
   decision: "Decision",
 }
 
@@ -273,6 +311,11 @@ export const FACT_KEYS = [
   "review.trend",
   "review.hours",
   "review.early",
+  "prototype.build",
+  "prototype.boot",
+  "prototype.console",
+  "prototype.screen",
+  "prototype.live",
   "decision",
   "unavailable",
 ] as const
@@ -400,4 +443,54 @@ export interface ReviewEarlyValue {
   of: number
   pct: number
   refunded: number
+}
+
+// ---- prototype ----------------------------------------------------------------
+
+/** The exact build a run served: the commit, not the branch name. */
+export interface PrototypeBuildValue {
+  repo: string
+  /** As asked; empty for the default branch. */
+  ref: string
+  commit: string
+  /** ISO time of the commit. */
+  committedAt: string | null
+  dir: string
+  files: number
+  bytes: number
+}
+
+/** What a cloud browser saw when it opened the build. */
+export interface PrototypeBootValue {
+  /** Until the page's `load` event. Null when it never fired. */
+  loadMs: number | null
+  title: string
+  /** The largest canvas on the page, if any: most web builds draw into one. */
+  canvas: { width: number; height: number } | null
+  errors: number
+  warnings: number
+  failedRequests: number
+  /** Whether the screen differed after the scripted input. A changing title screen also counts. */
+  changedAfterInput: boolean | null
+}
+
+/** The first console errors and failed requests, verbatim and trimmed. */
+export interface PrototypeConsoleValue {
+  errors: string[]
+  failed: string[]
+}
+
+/** Which screenshot this is. The fact's receipt is the screenshot. */
+export interface PrototypeScreenValue {
+  moment: "boot" | "input"
+}
+
+/**
+ * Where the build can be played until the sandbox is stopped. The URL carries the
+ * provider's access token, so it lives in this fact and in no receipt.
+ */
+export interface PrototypeLiveValue {
+  url: string
+  until: string
+  sandboxId: string
 }
