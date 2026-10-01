@@ -11,7 +11,7 @@ import { noopDispatcher } from "./dispatch.js"
 
 /**
  * P0.5's second acceptance criterion (ADR-0016): *a bounded query count for an SSE
- * stream held across a real harvest*.
+ * stream held across a real run*.
  *
  * The number being defended is not this app's. Hyperdrive's free plan meters
  * 100,000 queries a day **account-wide** — shared by every environment, every
@@ -84,7 +84,7 @@ const event = (seq: number, state: StoredJobEvent["state"]): StoredJobEvent => (
 describe("the progress stream's query budget", () => {
   it("stays under the ADR-0016 bound for a stream held its whole lifetime", async () => {
     // A job that never finishes: the worst case, and the realistic one for a
-    // harvest that hit a retry loop or a tab whose owner walked away.
+    // run that hit a retry loop or a tab whose owner walked away.
     const store = new CountingStore([event(0, "queued"), event(1, "running")])
     const time = fakeTime()
     const res = await appWith(store, time).request("/jobs/job-1/events", { headers: AUTH })

@@ -1,7 +1,7 @@
 // @samsara/kernel — every cloud session this system opens goes through here.
 //
-// No vertical vocabulary appears anywhere under packages/samsara/. That is not a
-// style preference; `pnpm check:seam` fails the build on it (P0.7).
+// Nothing under packages/samsara/ knows about Steam or documents; the kernel
+// imports no @rd/* package.
 //
 // The provider SDK is reachable only through `./solari.js`, which is exported
 // separately so that importing the kernel does not drag a browser client into a

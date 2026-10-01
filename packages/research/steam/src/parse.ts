@@ -41,7 +41,12 @@ export interface AppDetails {
   developers: Located<string[]>
   publishers: Located<string[]>
   /** Null when free or unpriced (unreleased). Cents in `currency`. */
-  price: Located<{ currency: string; initial: number; final: number; discountPercent: number }> | null
+  price: Located<{
+    currency: string
+    initial: number
+    final: number
+    discountPercent: number
+  }> | null
   releaseDate: Located<{ comingSoon: boolean; date: string }>
   genres: Located<string[]>
   shortDescription: string
@@ -293,7 +298,8 @@ const ENTITIES: Record<string, string> = {
 export function decodeEntities(s: string): string {
   return s.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (whole, body: string) => {
     if (body[0] === "#") {
-      const code = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : Number(body.slice(1))
+      const code =
+        body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : Number(body.slice(1))
       return Number.isFinite(code) ? String.fromCodePoint(code) : whole
     }
     return ENTITIES[body.toLowerCase()] ?? whole

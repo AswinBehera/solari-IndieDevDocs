@@ -24,7 +24,9 @@ export function FactChip({ node }: ReactNodeViewProps) {
 
   return (
     <NodeViewWrapper as="span" className="rd-chip">
-      {fact ? <Chip fact={fact} outdated={outdated} /> : (
+      {fact ? (
+        <Chip fact={fact} outdated={outdated} />
+      ) : (
         <span className="rounded-sm bg-surface-raised px-1 font-mono text-[0.8em] text-ink-faint">
           {older.isLoading ? "…" : "missing fact"}
         </span>

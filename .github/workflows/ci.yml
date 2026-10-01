@@ -29,7 +29,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: doen_thang
+          POSTGRES_DB: research_docs
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres"
@@ -38,7 +38,7 @@ jobs:
           --health-retries 10
 
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/doen_thang
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/research_docs
 
     steps:
       - uses: actions/checkout@v4
@@ -55,19 +55,12 @@ jobs:
       - run: pnpm db:migrate
 
       # Kept as separate steps rather than one `pnpm check`, because the step name
-      # is what the PR page shows. "check:seam" failing tells a reader the engine
-      # learned a travel word; "check" failing tells them nothing.
+      # is what the PR page shows.
       - name: lint
         run: pnpm lint
 
       - name: typecheck
         run: pnpm typecheck
-
-      - name: seam
-        run: pnpm check:seam
-
-      - name: test (tools)
-        run: pnpm test:tools
 
       - name: test
         run: pnpm test

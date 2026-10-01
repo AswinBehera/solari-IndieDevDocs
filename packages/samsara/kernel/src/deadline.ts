@@ -1,7 +1,7 @@
 import { err, type Failure, failure, ok, type Result } from "./result.js"
 
 /**
- * The hard deadline (plan section 2.4, item 3).
+ * The hard deadline.
  *
  * This exists because the provider's `timeoutMs` is a **rolling idle window**, not
  * a deadline: it resets on every use. A page that keeps doing something — an
@@ -10,11 +10,8 @@ import { err, type Failure, failure, ok, type Result } from "./result.js"
  * the only thing that can stop that.
  */
 
-/** Per-purpose defaults, from plan section 2.3. */
+/** Per-purpose defaults. */
 export const DEFAULT_DEADLINE_MS: Record<string, number> = {
-  "persona.seed": 6 * 60_000,
-  "persona.keepalive": 90_000,
-  harvest: 4 * 60_000,
   probe: 90_000,
   agent: 4 * 60_000,
 }

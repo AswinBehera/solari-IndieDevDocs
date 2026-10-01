@@ -2,7 +2,7 @@ import type { SessionOutcome, SessionPurpose } from "@samsara/core"
 import { type Logger, now, silentLogger } from "./log.js"
 
 /**
- * Session registry (plan section 2.4, item 1). An in-memory map plus a row per
+ * Session registry. An in-memory map plus a row per
  * session, and a reconcile pass on boot.
  *
  * The reconcile pass is not bookkeeping. A session row marked `running` with no
@@ -17,7 +17,6 @@ export interface SessionRecord {
   purpose: SessionPurpose
   ownerId: string | null
   domainId: string | null
-  personaId: string | null
   country: string
   /** What the browser claimed to be. Null means the provider's default: nobody. */
   locale: string | null
@@ -67,7 +66,6 @@ export class SessionRegistry {
       country: record.country,
       locale: record.locale,
       timezoneId: record.timezoneId,
-      personaId: record.personaId,
       domainId: record.domainId,
       recording: record.recordingRef !== null,
     })
@@ -90,7 +88,6 @@ export class SessionRegistry {
       sessionId: id,
       purpose: handle.record.purpose,
       country: handle.record.country,
-      personaId: handle.record.personaId,
       outcome,
       durationMs,
       minutes,

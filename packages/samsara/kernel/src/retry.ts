@@ -3,12 +3,12 @@ import { type Logger, now } from "./log.js"
 import { err, type Failure, type Result } from "./result.js"
 
 /**
- * Retry policy (plan section 2.4, item 4). Up to two retries, with jitter.
+ * Retry policy. Up to two retries, with jitter.
  *
  * What must *not* be retried is the interesting half:
  *
  * - `blocked` — the page refused us. Retrying spends minutes to be refused again,
- *   and worse, it trains the target that this persona is a bot. The adapter's next
+ *   and worse, it teaches the target that this browser is a bot. The adapter's next
  *   strategy is the correct response, which is why `blocked` is surfaced rather
  *   than swallowed.
  * - `budget` — the meter is exhausted. Retrying is the one thing a budget guard

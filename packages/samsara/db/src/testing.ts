@@ -1,13 +1,13 @@
 import postgres from "postgres"
 
 /**
- * One database, three test packages, and `turbo run test` runs them at once.
+ * One database, several test packages, and `turbo run test` runs them at once.
  *
  * Every `.pg.test.ts` file in this repository starts by truncating the tables it
  * is about to use, because a test that inherits the previous run's rows is a test
  * that passes for the wrong reason. That is correct in isolation and wrong in
- * parallel: Turbo runs `@samsara/kernel`, `@samsara/personas` and
- * `@samsara/harvest` concurrently against the same `DATABASE_URL`, so one
+ * parallel: Turbo runs `@samsara/kernel` and `@rd/db` concurrently
+ * against the same `DATABASE_URL`, so one
  * package's `truncate ... cascade` deletes rows another package inserted two
  * milliseconds ago. The symptom is a handful of `expected undefined to be 8`
  * failures that move around between runs and disappear entirely at

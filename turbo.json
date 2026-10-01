@@ -25,14 +25,6 @@
       "cache": false,
       "persistent": true,
       "dependsOn": []
-    },
-    "//#check:seam": {
-      "inputs": ["packages/samsara/**", "tools/check-seam.ts"],
-      "outputs": []
-    },
-    "//#test:tools": {
-      "inputs": ["tools/**"],
-      "outputs": []
     }
   }
 }

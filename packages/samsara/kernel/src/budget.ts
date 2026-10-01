@@ -2,7 +2,7 @@ import type { BudgetWindow, MeterId } from "@samsara/core"
 import { err, type Failure, failure, ok, type Result } from "./result.js"
 
 /**
- * The budget guard (plan section 2.4). Three meters, not one.
+ * The budget guard. Three meters, not one.
  *
  * Two honest limitations, stated here because they are properties of the design
  * rather than bugs to be found later:
@@ -12,7 +12,7 @@ import { err, type Failure, failure, ok, type Result } from "./result.js"
  *    before an operation starts and records the actual cost when it ends. The
  *    maximum overshoot is therefore one operation — bounded by that operation's
  *    hard deadline. At a 4-minute deadline against a 4,000-minute ceiling, that is
- *    0.1%. Where the cost *is* knowable up front (tokens, geocoding calls), pass it
+ *    0.1%. Where the cost *is* knowable up front (a fixed number of sessions), pass it
  *    as `requested` and the refusal becomes exact.
  * 2. **It is not a distributed lock.** Two runners can both pass a check at 99% of
  *    a ceiling. The `add` path is an atomic upsert so the count stays correct, and
@@ -40,11 +40,11 @@ export interface CounterStore {
 
 export const counterKeyString = (k: CounterKey): string => `${k.meter}|${k.window}|${k.windowKey}`
 
-/** What the spend is attributable to. Shapes the three windows of section 2.4. */
+/** What the spend is attributable to. Shapes the three windows. */
 export interface SpendScope {
   /** Opaque caller id. Absent when the system is spending on its own behalf. */
   ownerId?: string | null
-  /** Engine purpose plus the run it belongs to, e.g. `harvest` and a run id. */
+  /** Engine purpose plus the run it belongs to, e.g. `probe` and a run id. */
   purpose?: string
   runId?: string
 }
@@ -159,8 +159,7 @@ export class BudgetGuard {
 
   /**
    * Check, run, then account for whatever it actually cost. The callback reports
-   * its own cost because only it knows: a browser session knows its minutes, an
-   * LLM call knows its token usage.
+   * its own cost because only it knows: a browser session knows its minutes.
    */
   async spend<T>(
     meter: MeterId,

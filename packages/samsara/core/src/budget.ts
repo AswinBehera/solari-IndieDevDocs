@@ -2,29 +2,22 @@ import { z } from "zod"
 import { id, timestamps } from "./primitives.js"
 
 /**
- * The budget guard's state, as stored. Plan section 2.4: three meters, ceilings
+ * The budget guard's state, as stored. Ceilings
  * expressed as counts rather than dollars, counters living in Postgres because a
  * guard that forgets what it spent when a runner exits is not a guard (ADR-0014).
  */
 
 /**
- * What is being counted. Four counters, three meters: the LLM meter has separate
- * input and output ceilings because the two are priced an order of magnitude apart
- * and a single number would hide whichever one is actually overrunning.
+ * What is being counted. One meter today: Solari minutes, browser and sandbox alike.
  *
  * Ceilings are not stored here. They are constants in `@samsara/kernel`, each with
- * the rate it was derived from in a comment beside it (section 8).
+ * the rate it was derived from in a comment beside it.
  */
-export const meterId = z.enum([
-  "solari.minutes",
-  "llm.input.tokens",
-  "llm.output.tokens",
-  "geocode.calls",
-])
+export const meterId = z.enum(["solari.minutes"])
 export type MeterId = z.infer<typeof meterId>
 
 /**
- * Which slice of spend a counter covers. The three windows of section 2.4:
+ * Which slice of spend a counter covers. The three windows:
  *
  * - `global.day`  — everything the system spent today. The ceiling that matters.
  * - `owner.day`   — one caller's spend today, so one caller cannot exhaust the rest.

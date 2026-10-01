@@ -9,7 +9,6 @@ import { HTTPException } from "hono/http-exception"
 import { streamSSE } from "hono/streaming"
 import { requireAuth, type Verifier } from "./auth.js"
 import type { Dispatcher } from "./dispatch.js"
-import { type KernelDeps, kernelRoutes } from "./kernel.js"
 import { type ResearchDeps, researchRoutes } from "./research.js"
 
 /**
@@ -18,7 +17,7 @@ import { type ResearchDeps, researchRoutes } from "./research.js"
  * The free plan allows **10 ms of CPU per invocation** — not wall clock, which is
  * why a handler may wait on Hyperdrive for far longer than that and still fit. The
  * rule this imposes on every route below: validate, enqueue, read, serialise.
- * Nothing parses a harvested page, scores anything, or loops over a result set of
+ * Nothing parses a captured page, scores anything, or loops over a result set of
  * unbounded size. Where that rule is about to be broken the work belongs in
  * `apps/worker`, which runs on a machine that is allowed to think.
  *
@@ -38,8 +37,6 @@ export interface AppDeps {
    * without a database answers 404 on them rather than 500 on the first read.
    */
   research?: Pick<ResearchDeps, "store">
-  /** The ops dashboard (P5.5). Optional for the reason `lab` is. */
-  kernel?: Omit<KernelDeps, "verifier">
   /** Injectable for tests; production gets the defaults. */
   clock?: () => number
   sleep?: (ms: number) => Promise<void>
@@ -179,9 +176,6 @@ export function createApp(deps: AppDeps) {
   // Mounted, not inlined: a deployment without these deps simply has no such
   // routes, which is the difference between "not configured" and "configured
   // and broken".
-  if (deps.kernel) {
-    app.route("/lab/kernel", kernelRoutes({ ...deps.kernel, verifier: deps.verifier }))
-  }
   if (deps.research) {
     app.route(
       "/",

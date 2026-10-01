@@ -17,7 +17,7 @@ import type {
  * this file and nothing else — and, more usefully today, every test above this
  * line runs without a key and without spending a minute.
  *
- * Version pinning is deliberate (plan section 2.3): `@solarisdk/browser` is pinned
+ * Version pinning is deliberate: `@solarisdk/browser` is pinned
  * exactly, because 0.1.3 changed whether `browser.close()` alone lets Node exit.
  * Read changelog.getsolari.com before bumping.
  */

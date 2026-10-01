@@ -12,7 +12,7 @@ const guardWith = (store: MemoryCounterStore) =>
 
 describe("budget guard: every meter refuses at its ceiling", () => {
   // This is P0.4's acceptance criterion, and it is parameterised over the meter
-  // enum rather than written out four times — so adding a meter without a ceiling,
+  // enum rather than written out per meter — so adding a meter without a ceiling,
   // or a ceiling without enforcement, fails here instead of in production.
   for (const meter of meterId.options) {
     it(`refuses ${meter} once its ceiling is spent, naming the meter`, async () => {
@@ -68,10 +68,10 @@ describe("a meter sitting exactly on its ceiling is exhausted", () => {
 
 describe("windows", () => {
   it("counts global spend always, owner and run only when scoped", () => {
-    expect(keysFor("geocode.calls", {}, AT)).toHaveLength(2)
-    expect(keysFor("geocode.calls", { ownerId: "u1" }, AT)).toHaveLength(3)
+    expect(keysFor("solari.minutes", {}, AT)).toHaveLength(2)
+    expect(keysFor("solari.minutes", { ownerId: "u1" }, AT)).toHaveLength(3)
     expect(
-      keysFor("geocode.calls", { ownerId: "u1", purpose: "harvest", runId: "r1" }, AT),
+      keysFor("solari.minutes", { ownerId: "u1", purpose: "probe", runId: "r1" }, AT),
     ).toHaveLength(4)
   })
 
@@ -102,15 +102,15 @@ describe("windows", () => {
   it("stops a runaway loop inside a single run", async () => {
     const store = new MemoryCounterStore()
     const guard = guardWith(store)
-    const scope = { ownerId: "u1", purpose: "harvest", runId: "r1" }
-    const runCeiling = guard.ceilingFor("llm.output.tokens", "purpose.run")
+    const scope = { ownerId: "u1", purpose: "probe", runId: "r1" }
+    const runCeiling = guard.ceilingFor("solari.minutes", "purpose.run")
 
     store.seed(
-      { meter: "llm.output.tokens", window: "purpose.run", windowKey: "harvest:r1" },
+      { meter: "solari.minutes", window: "purpose.run", windowKey: "probe:r1" },
       runCeiling,
     )
 
-    const refused = await guard.check("llm.output.tokens", 1, scope)
+    const refused = await guard.check("solari.minutes", 1, scope)
     expect(refused.ok).toBe(false)
     if (refused.ok) return
     expect(refused.error.message).toContain("purpose.run")
@@ -136,10 +136,11 @@ describe("lifetime total", () => {
   })
 
   it("counts a meter with no total but never refuses on it", async () => {
+    // `guardWith` passes no totals, so the meter has none here.
     const store = new MemoryCounterStore()
     const guard = guardWith(store)
-    store.seed({ meter: "geocode.calls", window: "global.total", windowKey: "all" }, 1e9)
-    expect((await guard.check("geocode.calls", 1, {})).ok).toBe(true)
+    store.seed({ meter: "solari.minutes", window: "global.total", windowKey: "all" }, 1e9)
+    expect((await guard.check("solari.minutes", 1, {})).ok).toBe(true)
   })
 
   it("reads totals from <VAR>_TOTAL and throws on a bad one", () => {
@@ -155,11 +156,11 @@ describe("accounting", () => {
   it("records a spend against every window the scope touches", async () => {
     const store = new MemoryCounterStore()
     const guard = guardWith(store)
-    const scope = { ownerId: "u1", purpose: "harvest", runId: "r1" }
+    const scope = { ownerId: "u1", purpose: "probe", runId: "r1" }
 
-    await guard.record("geocode.calls", 3, scope)
+    await guard.record("solari.minutes", 3, scope)
 
-    const totals = await store.read(keysFor("geocode.calls", scope, AT))
+    const totals = await store.read(keysFor("solari.minutes", scope, AT))
     expect([...totals.values()]).toEqual([3, 3, 3, 3])
   })
 
@@ -168,7 +169,7 @@ describe("accounting", () => {
     const guard = guardWith(store)
 
     await expect(
-      guard.spend("geocode.calls", {}, 2, async () => {
+      guard.spend("solari.minutes", {}, 2, async () => {
         throw new Error("lookup exploded halfway through")
       }),
     ).rejects.toThrow("lookup exploded")
@@ -176,7 +177,7 @@ describe("accounting", () => {
     // The estimate is what gets booked when the callback never reports a cost.
     // The point is that the counter is not left at zero: a repeatedly-failing job
     // that spends real calls must move its meter, or it can loop forever for free.
-    const totals = await store.read(keysFor("geocode.calls", {}, AT))
+    const totals = await store.read(keysFor("solari.minutes", {}, AT))
     expect([...totals.values()]).toEqual([2, 2])
   })
 
@@ -184,13 +185,13 @@ describe("accounting", () => {
     const store = new MemoryCounterStore()
     const guard = guardWith(store)
 
-    const result = await guard.spend("llm.input.tokens", {}, 100, async () => ({
-      value: "extracted",
+    const result = await guard.spend("solari.minutes", {}, 100, async () => ({
+      value: "read",
       cost: 4_210,
     }))
 
     expect(result.ok).toBe(true)
-    const totals = await store.read(keysFor("llm.input.tokens", {}, AT))
+    const totals = await store.read(keysFor("solari.minutes", {}, AT))
     expect([...totals.values()]).toEqual([4_210, 4_210])
   })
 
@@ -198,12 +199,12 @@ describe("accounting", () => {
     const store = new MemoryCounterStore()
     const guard = guardWith(store)
     store.seed(
-      { meter: "geocode.calls", window: "global.day", windowKey: dayKey(AT) },
-      DEFAULT_CEILINGS["geocode.calls"],
+      { meter: "solari.minutes", window: "global.day", windowKey: dayKey(AT) },
+      DEFAULT_CEILINGS["solari.minutes"],
     )
 
     let ran = false
-    const result = await guard.spend("geocode.calls", {}, 1, async () => {
+    const result = await guard.spend("solari.minutes", {}, 1, async () => {
       ran = true
       return { value: null, cost: 1 }
     })
@@ -214,14 +215,13 @@ describe("accounting", () => {
 })
 
 describe("ceilings", () => {
-  it("uses the section 8 defaults when the environment says nothing", () => {
+  it("uses the defaults when the environment says nothing", () => {
     expect(loadCeilings({})).toEqual(DEFAULT_CEILINGS)
   })
 
   it("takes an override from the environment", () => {
-    const ceilings = loadCeilings({ BUDGET_GEOCODE_CALLS: "50" })
-    expect(ceilings["geocode.calls"]).toBe(50)
-    expect(ceilings["solari.minutes"]).toBe(DEFAULT_CEILINGS["solari.minutes"])
+    const ceilings = loadCeilings({ BUDGET_SOLARI_MINUTES: "50" })
+    expect(ceilings["solari.minutes"]).toBe(50)
   })
 
   it("throws on an unparseable ceiling rather than silently using the default", () => {
@@ -230,8 +230,8 @@ describe("ceilings", () => {
     expect(() => loadCeilings({ BUDGET_SOLARI_MINUTES: "eight hundred" })).toThrow(
       /BUDGET_SOLARI_MINUTES/,
     )
-    expect(() => loadCeilings({ BUDGET_LLM_INPUT_TOKENS: "-1" })).toThrow()
-    expect(() => loadCeilings({ BUDGET_GEOCODE_CALLS: "0" })).toThrow()
+    expect(() => loadCeilings({ BUDGET_SOLARI_MINUTES: "-1" })).toThrow()
+    expect(() => loadCeilings({ BUDGET_SOLARI_MINUTES: "0" })).toThrow()
   })
 
   it("has a ceiling for every meter, with no extras", () => {

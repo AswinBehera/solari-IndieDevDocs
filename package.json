@@ -1,5 +1,5 @@
 {
-  "name": "sourced",
+  "name": "indiedevdocs",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,19 +9,16 @@
   },
   "scripts": {
     "dev": "pnpm db:up && turbo run dev",
-    "typecheck": "tsc -p tools/tsconfig.json && turbo run typecheck",
+    "typecheck": "turbo run typecheck",
     "test": "node --env-file-if-exists=.env node_modules/turbo/bin/turbo run test",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "check": "pnpm lint && pnpm typecheck && turbo run check:seam test:tools && pnpm test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
     "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @rd/db db:generate",
     "db:migrate": "pnpm --filter @rd/db db:migrate",
-    "db:migrate:hosted": "./tools/with-hosted-env.sh pnpm --filter @rd/db db:migrate",
-    "db:reset": "docker compose down -v && pnpm db:up && pnpm db:migrate",
-    "check:seam": "tsx tools/check-seam.ts",
-    "test:tools": "vitest run --dir tools"
+    "db:reset": "docker compose down -v && pnpm db:up && pnpm db:migrate"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",

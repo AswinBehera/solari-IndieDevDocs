@@ -1,4 +1,10 @@
-import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet } from "@tanstack/react-router"
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  lazyRouteComponent,
+  Outlet,
+} from "@tanstack/react-router"
 import { DocsHome } from "./research/DocsHome"
 import { Shell } from "./shell/Shell"
 

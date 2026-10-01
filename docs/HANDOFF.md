@@ -1,7 +1,6 @@
 # Handoff: indieDevDocs
 
-Written 30 September 2026, at the pivot from the travel app (Doen Thang) to Steam research
-documents. The travel handoff is in git history, in this file before the pivot commit.
+Written 30 September 2026; updated as work lands.
 
 ## What works, verified end to end on 30 September
 
@@ -121,9 +120,8 @@ Typecheck is clean across core, db, steam, worker, api and web. Core has 13 test
 - **Review counts differ between blocks, and should.** A comparables row takes them from
   the search result's tooltip; the snapshot takes them from `appreviews`. Each shows its
   own receipt.
-- **Local Postgres runs in the container named `doen_thang_pg`.** It is shared with the
-  travel app on the author's machine. A fresh clone gets a `research_docs` database from
-  `docker-compose.yml`.
+- **Local Postgres runs in the container named `indiedevdocs_pg`**, with a `research_docs`
+  database, from `docker-compose.yml`.
 
 ## Open
 
@@ -143,8 +141,8 @@ Typecheck is clean across core, db, steam, worker, api and web. Core has 13 test
    - every theme fact cites review ids and verbatim quotes, and the drawer checks each
      quote is in the archived JSON.
    The model and prompt go into a computation receipt, and the UI labels these facts
-   "judged", never "read". `packages/samsara/llm` has an OpenRouter client from the
-   travel app. It needs a second key, so it should stay optional for reviewers.
+   "judged", never "read". It needs a model key, so it should stay
+   optional for reviewers.
 4. **Disclosure coverage.** `ai.disclosure` reads Steam's "AI Generated Content
    Disclosure" section. A game that uses AI without disclosing it reads as "none". The UI
    says "disclose", never "uses".

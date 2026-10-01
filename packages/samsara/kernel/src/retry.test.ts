@@ -44,7 +44,7 @@ describe("retry policy", () => {
         },
         { sleep: noSleep, random: fixedRandom },
       )
-      // Retrying a block trains the target that this persona is automated;
+      // Retrying a block teaches the target that this browser is automated;
       // retrying an exhausted meter is the thing a budget guard exists to stop.
       expect(calls).toBe(1)
     })
@@ -80,7 +80,7 @@ describe("retry policy", () => {
     const logger = new MemoryLogger()
     await withRetry(
       async () => err(failure("upstream", "provider returned 503", { cause: "Error: secret-ish" })),
-      { sleep: noSleep, random: fixedRandom, logger, purpose: "harvest" },
+      { sleep: noSleep, random: fixedRandom, logger, purpose: "probe" },
     )
     const retries = logger.events.filter((e) => e.event === "attempt.retry")
     expect(retries).toHaveLength(2)

@@ -19,10 +19,10 @@ whose entire value proposition is that it does not know what a user is.
 ## Decision
 
 **Supabase Auth.** The JWT it issues is verified by `apps/api`'s middleware, and the `sub` claim
-is the user id everywhere above the seam.
+is the user id everywhere above the kernel.
 
-The travel `users` table keys on that id rather than generating its own. One identity, one
-lifetime, no join table reconciling two id spaces.
+Every owned row (documents, blocks, jobs) keys on that id rather than generating its own. One
+identity, one lifetime, no join table reconciling two id spaces.
 
 ## Consequences
 
@@ -30,9 +30,8 @@ lifetime, no join table reconciling two id spaces.
   against the project's JWKS, then `sub` becomes `ownerId`. No network hop on the hot path, and
   nothing to pay for per monthly active user.
 - **`ownerId` stays an opaque string to the engine** — exactly as `Session.ownerId` and
-  `ProbeTarget.ownerId` already declare in section 3.1. Samsara does not learn that Supabase
-  exists, and this decision therefore touches nothing under `packages/samsara/`. That is a small
-  test of the seam, and it passes.
+  `Job.ownerId` already declare. The kernel does not learn that Supabase exists, and this decision
+  therefore touches nothing under `packages/samsara/`.
 - **Row Level Security becomes available and is deliberately not used in v1.** All database access
   goes through `apps/api` and `apps/worker` with a service role; the worker writes rows on behalf
   of users who are not present, and RLS fights that. Authorisation lives in the API layer, which
@@ -51,7 +50,6 @@ lifetime, no join table reconciling two id spaces.
 - **Clerk.** Better components and a better organisations model, but a second vendor, a second
   bill, and a second id space to reconcile against Supabase Postgres — for a demo whose auth
   requirement is "email in, JWT out". ADR-0005's swap point (Neon + Clerk) stands if Supabase auth
-  chafes; nothing in this decision makes that move harder, because the seam keeps auth entirely
-  above it.
+  chafes; nothing in this decision makes that move harder, because the kernel never sees auth.
 - **Roll our own sessions.** Cheapest in dollars, most expensive in the one currency this project
   does not have: a month of calendar time, spent on a solved problem that is not the demo.

@@ -121,7 +121,7 @@ export class DocumentSaver {
 
 /**
  * The rail footer's words. No version number: "v41" and "edited" were the
- * saver's state, and all a traveller needs is whether their writing is safe.
+ * saver's state, and all a writer needs is whether their writing is safe.
  */
 export function statusLine(s: SaverStatus): string {
   switch (s.kind) {

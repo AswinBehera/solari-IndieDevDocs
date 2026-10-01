@@ -7,9 +7,7 @@
     "./app": "./src/app.ts",
     "./auth": "./src/auth.ts",
     "./dispatch": "./src/dispatch.ts",
-    "./env": "./src/env.ts",
-    "./lab": "./src/lab.ts",
-    "./places": "./src/places.ts"
+    "./env": "./src/env.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
@@ -21,11 +19,7 @@
     "@rd/db": "workspace:*",
     "@rd/research": "workspace:*",
     "@samsara/core": "workspace:*",
-    "@samsara/harvest": "workspace:*",
     "@samsara/kernel": "workspace:*",
-    "@samsara/personas": "workspace:*",
-    "@samsara/probe": "workspace:*",
-    "@samsara/refine": "workspace:*",
     "hono": "^4.9.10",
     "jose": "^6.1.0",
     "zod": "^4.6.1"

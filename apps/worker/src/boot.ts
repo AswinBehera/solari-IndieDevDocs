@@ -19,7 +19,6 @@ import {
   createSolariSandboxLauncher,
   solariCredentials,
 } from "@samsara/kernel/solari"
-import { PackRegistry } from "@samsara/refine"
 import { HandlerRegistry, noopHandler } from "./handlers.js"
 import { FilesystemReceiptArchive } from "./research/archive.js"
 import { BLOCK_RUN, createBlockRunHandler } from "./research/block-run.js"
@@ -38,7 +37,6 @@ export interface Boot {
   kernel: Kernel
   registry: SessionRegistry
   handlers: HandlerRegistry
-  packs: PackRegistry
   logger: Logger
   close(): Promise<void>
 }
@@ -100,8 +98,6 @@ export function boot(env: NodeJS.ProcessEnv = process.env): Boot {
     kernel,
     registry,
     handlers,
-    // The refine pipeline's packs. Research blocks read no mentions, so none.
-    packs: new PackRegistry(),
     logger,
     async close() {
       await database.sql.end({ timeout: 5 })

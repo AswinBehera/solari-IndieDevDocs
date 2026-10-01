@@ -35,7 +35,7 @@ export type FailureKind =
 
 export interface Failure {
   kind: FailureKind
-  /** Safe for a public log: no secrets, no request bodies, no harvested text. */
+  /** Safe for a public log: no secrets, no request bodies, no page text. */
   message: string
   /** Present on `budget`. Which meter refused, and the arithmetic behind it. */
   meter?: string

@@ -36,11 +36,10 @@ export function supabaseVerifier(supabaseUrl: string): Verifier {
 /**
  * A verifier that checks nothing and answers with one fixed owner.
  *
- * This exists so that the Persona Lab is usable on a laptop. Every route it needs
- * is authenticated, ADR-0013 puts authentication in Supabase, and there is no
- * Supabase project — so without this the internal tool would be a tool nobody can
- * open, which is how internal tools end up with their own unauthenticated side
- * door instead.
+ * This exists so that the app is usable on a laptop. Every route is
+ * authenticated, ADR-0013 puts authentication in Supabase, and a fresh clone has no
+ * Supabase project — so without this nobody could open it locally, which is how
+ * tools end up with their own unauthenticated side door instead.
  *
  * **Why this cannot reach production.** It is selected only from `DEV_OWNER_ID`,
  * and that variable lives in `apps/api/.dev.vars` — a file `wrangler dev` reads

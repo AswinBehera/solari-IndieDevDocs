@@ -41,7 +41,7 @@ export const reviewPageUrl = (appid: number, type: "any" | "negative", count = 1
   `${STORE}/appreviews/${appid}?json=1&filter=recent&review_type=${type === "any" ? "all" : "negative"}` +
   `&language=all&purchase_type=all&num_per_page=${count}&cursor=*`
 
-export const storePageUrl =(appid: number, cc = "us"): string =>
+export const storePageUrl = (appid: number, cc = "us"): string =>
   `${STORE}/app/${appid}/?l=english&cc=${cc}`
 
 export type SearchSort = "relevance" | "reviews" | "released"

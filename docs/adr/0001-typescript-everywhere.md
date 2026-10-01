@@ -8,7 +8,7 @@
 
 The system spans a browser app, an HTTP API, a batch worker, and a set of shared schema packages.
 Each of those could reasonably be written in a different language, and the parts that do the most
-interesting work — driving a headless browser, parsing harvested pages — have strong Python
+interesting work — driving a headless browser, parsing captured pages — have strong Python
 ecosystems.
 
 Solari's primary SDK is TypeScript. The schemas in section 3 are the contract between every layer,
@@ -23,8 +23,6 @@ Drizzle tables and the inferred TS types both derive from them rather than resta
 ## Consequences
 
 - One toolchain, one formatter, one test runner. An executor session never context-switches.
-- The seam (ADR-0009) can be enforced by reading import statements, because there is only one kind
-  of import statement to read.
 - Cost: Python's parsing and data-wrangling libraries are off the table. Accepted — the parsing here
   is DOM-shaped, which is TypeScript's home ground.
 - The strict flags are cheap to adopt now and expensive to retrofit. `noUncheckedIndexedAccess` in

@@ -11,7 +11,8 @@ import {
 } from "./parse.js"
 
 // Real responses, fetched 2026-09-30. They pin the markup the parsers were written against.
-const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8")
+const fixture = (name: string) =>
+  readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8")
 
 describe("parseAppDetails", () => {
   it("reads price, people and dates, each with its path", () => {
@@ -89,9 +90,14 @@ describe("parseReviewPage", () => {
     const rows = parseReviewPage(JSON.parse(fixture("reviews-recent-413150.json")))
     expect(rows).toHaveLength(5)
     expect(rows?.[0]).toMatchObject({ votedUp: true, minutesAtReview: 1835, language: "schinese" })
-    expect(Object.keys(rows?.[0] ?? {}).sort()).toEqual(
-      ["created", "id", "language", "minutesAtReview", "refunded", "votedUp"],
-    )
+    expect(Object.keys(rows?.[0] ?? {}).sort()).toEqual([
+      "created",
+      "id",
+      "language",
+      "minutesAtReview",
+      "refunded",
+      "votedUp",
+    ])
   })
 
   it("answers null for a failed page", () => {

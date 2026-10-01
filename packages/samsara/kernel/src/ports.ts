@@ -7,7 +7,7 @@
  * `upstream` path works, which is the only way to know that a real maintenance
  * window will be reported as the provider's problem rather than ours.
  *
- * The shapes mirror `@solarisdk/browser` and `@solarisdk/sdk` (plan section 2.3)
+ * The shapes mirror `@solarisdk/browser` and `@solarisdk/sdk`
  * but deliberately narrowly: `newPage` and `close`, nothing else. A page is
  * `unknown` to this file — Playwright's own type belongs to the caller, and
  * importing it here would drag a browser automation library into a package the
@@ -21,10 +21,9 @@
  * proxy country is the visible knob. A platform deciding what to show a visitor
  * reads, roughly in descending order of weight: the account's region, the query's
  * language, any explicit region preference it has stored, the browser's locale
- * and timezone, and only then the egress IP. A `us` session asking in Vietnamese
- * with a `vi-VN` browser on `Asia/Ho_Chi_Minh` is closer to a local viewpoint than
- * a `vn` IP asking in English would be — if a `vn` IP were available at all, which
- * on this provider it is not (see `countries.ts`).
+ * and timezone, and only then the egress IP. A session's locale and timezone can
+ * matter more than its IP, and not every country is in the proxy pool (see
+ * `countries.ts`).
  *
  * The provider does **not** set these. Its `newPage()` gives you the pool's
  * default context, which is `en-US` and UTC — i.e. nobody. Every session this

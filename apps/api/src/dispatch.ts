@@ -1,7 +1,7 @@
 /**
  * `workflow_dispatch` (ADR-0016, decision 2).
  *
- * Foreground work is dispatched, not scheduled: a user who triggers a harvest and
+ * Foreground work is dispatched, not scheduled: a user who runs a block and
  * then watches a five-minute cron floor is watching a product that looks dead.
  *
  * Three properties of the GitHub endpoint shape this file, and all three are
@@ -45,7 +45,7 @@ export function githubDispatcher(cfg: GithubDispatchConfig): Dispatcher {
             "content-type": "application/json",
             // GitHub rejects requests without one, and a descriptive agent is what
             // shows up in their abuse tooling if we ever get rate limited.
-            "user-agent": "doen-thang-api",
+            "user-agent": "indiedevdocs-api",
           },
           // `inputs` values must be strings; GitHub rejects anything else with a
           // 422 that does not say which field.

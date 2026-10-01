@@ -32,7 +32,7 @@ import type {
 
 /** Hex SHA-256 via Web Crypto, which Node 22 and Workers both have as a global. */
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes as BufferSource)
+  const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes))
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("")
 }
 

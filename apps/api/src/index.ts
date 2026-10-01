@@ -1,7 +1,6 @@
 // @rd/api — Hono on Cloudflare Workers (ADR-0014). Thin: validates, enqueues, reads.
 
 import { createDb, PostgresResearchStore } from "@rd/db"
-import { PostgresOpsReader } from "@samsara/kernel/ops"
 import { PostgresJobStore } from "@samsara/kernel/postgres"
 import { createApp } from "./app.js"
 import { devVerifier, supabaseVerifier, type Verifier } from "./auth.js"
@@ -39,13 +38,6 @@ export default {
         jobs: (bindings) => {
           const e = bindings as Env
           return new PostgresJobStore(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
-        },
-        // The ops dashboard (P5.5), per request like everything above.
-        kernel: {
-          reader: (bindings) => {
-            const e = bindings as Env
-            return new PostgresOpsReader(createDb(e.HYPERDRIVE.connectionString, { max: 1 }).db)
-          },
         },
         // Research documents, per request like everything above.
         research: {

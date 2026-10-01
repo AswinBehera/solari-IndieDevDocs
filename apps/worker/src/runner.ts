@@ -1,6 +1,5 @@
 import type { ClaimedJob, JobStore, Kernel, Logger } from "@samsara/kernel"
 import { classify, failure, now, silentLogger } from "@samsara/kernel"
-import type { PackRegistry } from "@samsara/refine"
 import type { HandlerLookup, JobContext } from "./handlers.js"
 
 /**
@@ -17,7 +16,6 @@ import type { HandlerLookup, JobContext } from "./handlers.js"
 export interface DrainDeps {
   jobs: JobStore
   kernel: Kernel
-  packs: PackRegistry
   handlers: HandlerLookup
   logger?: Logger
 }
@@ -202,7 +200,6 @@ async function runOne(
   const ctx: JobContext = {
     job,
     kernel: deps.kernel,
-    packs: deps.packs,
     logger,
     signal: opts.signal,
     heartbeat: (note) => deps.jobs.heartbeat(job.id, opts.leaseMs, note),

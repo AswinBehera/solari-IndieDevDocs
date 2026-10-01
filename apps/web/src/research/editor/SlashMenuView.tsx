@@ -10,7 +10,10 @@ export function SlashMenuView({ menu }: { menu: SlashMenu }) {
       role="listbox"
       aria-label="Research blocks"
       className="fixed z-30 w-[460px] max-w-[calc(100vw-32px)] rounded-md bg-night p-1.5 text-surface shadow-[0_20px_50px_-20px_rgba(0,0,0,.6)]"
-      style={{ left: Math.min(state.rect.left, window.innerWidth - 476), top: state.rect.bottom + 8 }}
+      style={{
+        left: Math.min(state.rect.left, window.innerWidth - 476),
+        top: state.rect.bottom + 8,
+      }}
     >
       {state.items.map((item, i) => (
         <button

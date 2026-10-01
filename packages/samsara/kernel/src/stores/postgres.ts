@@ -88,7 +88,6 @@ export class PostgresSessionStore implements SessionStore {
       purpose: row.purpose,
       ownerId: row.ownerId,
       domainId: row.domainId,
-      personaId: row.personaId,
       country: row.country,
       locale: row.locale,
       timezoneId: row.timezoneId,
@@ -122,7 +121,6 @@ export class PostgresSessionStore implements SessionStore {
       purpose: r.purpose,
       ownerId: r.ownerId,
       domainId: r.domainId,
-      personaId: r.personaId,
       country: r.country,
       locale: r.locale,
       timezoneId: r.timezoneId,
@@ -317,7 +315,7 @@ export class PostgresJobStore implements JobStore {
 
     // Two independent reasons not to retry, and they are not the same reason.
     // Attempts exhausted is a budget question. A non-retryable failure class is a
-    // correctness one: `blocked` retried is a persona being trained into a ban,
+    // correctness one: `blocked` retried is a browser being trained into a ban,
     // `budget` retried is the guard being argued with, `config` retried is the same
     // wrong argument sent twice. `retry.ts` states the full case.
     const retryable = failure.kind === "upstream" || failure.kind === "internal"

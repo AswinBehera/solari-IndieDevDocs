@@ -23,7 +23,7 @@ describe("timezone ids that name the same zone", () => {
   })
 
   it("returns an unknown id unchanged rather than throwing", () => {
-    // A persona row can carry a zone this runtime's tzdb has never heard of —
+    // A session row can carry a zone this runtime's tzdb has never heard of —
     // older container image, newer database. Returning the input keeps the
     // comparison honest (it will simply not match) instead of taking down the
     // caller with a RangeError.

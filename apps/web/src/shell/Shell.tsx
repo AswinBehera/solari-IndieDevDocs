@@ -13,7 +13,9 @@ export function Shell() {
           <span className="font-display text-[24px] tracking-tight">
             indieDevDocs<span className="text-marker">.</span>
           </span>
-          <span className="font-mono text-[10px] text-ink-faint tracking-[.08em]">STEAM RESEARCH</span>
+          <span className="font-mono text-[10px] text-ink-faint tracking-[.08em]">
+            STEAM RESEARCH
+          </span>
         </Link>
         <nav className="ml-auto flex items-center gap-1 text-sm">
           <Link to="/" className="px-2 py-1 text-ink-muted hover:text-ink">
@@ -35,9 +37,10 @@ export function Shell() {
               >
                 Solari
               </a>{" "}
-              cloud browsers, one session per page, and kept as HTML plus a screenshot with the cited region
-              marked. Numbers from Steam's public API keep the raw response. Receipts stay on the machine that
-              ran the block: they are Steam's content, not ours to republish.
+              cloud browsers, one session per page, and kept as HTML plus a screenshot with the
+              cited region marked. Numbers from Steam's public API keep the raw response. Receipts
+              stay on the machine that ran the block: they are Steam's content, not ours to
+              republish.
             </p>
           </div>
         </div>

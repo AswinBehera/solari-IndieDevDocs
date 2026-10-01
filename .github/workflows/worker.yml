@@ -1,55 +1,8 @@
 # The runner (ADR-0014). There is no always-on box: this workflow *is* the worker.
 #
-# Two triggers, because there are two kinds of work:
-#
-#   schedule          — background drains. Five minutes is GitHub's floor, and it
-#                       is a floor rather than a guarantee: a scheduled run may be
-#                       delayed under load and is dropped entirely on a repository
-#                       with no recent activity. Everything here assumes that.
-#
-#                       **Green from 2026-09-16, in the commit that set the secret.**
-#                       Worth recording what was true before that, because the docs
-#                       had it wrong for a day and the way they were wrong is the
-#                       point. `4e95b89` commented this schedule out on 2026-09-16 —
-#                       and was never pushed. Actions reads the workflow from the
-#                       default branch on the remote, so stopping the cron in a local
-#                       commit stopped nothing: the remote kept the `*/5` from
-#                       `3ee2a66` (2026-09-12) and every tick failed on the runner's
-#                       refusal to start without `DATABASE_URL`. **22 scheduled runs,
-#                       22 failures, 2026-09-13 09:43 through 2026-09-16 16:59** —
-#                       not thousands, because GitHub drops scheduled runs on a
-#                       repository with no recent activity, which is the quiet part:
-#                       a broken cron on an idle repo neither works nor announces
-#                       itself. The fix and the un-fix shipped together in `e4c34a0`.
-#                       Supabase (ap-southeast-1) and both secrets exist now, and a
-#                       `workflow_dispatch` drained clean (`claimed: 0`, nothing yet
-#                       due) before day 1 came due.
-#
-#                       **Fifteen minutes, not five.** The floor is for foreground
-#                       work, and foreground work does not come through here: a
-#                       human pressing a button gets `workflow_dispatch` (ADR-0016).
-#                       What the schedule carries is the drift experiment, whose
-#                       jobs come due once a day. At five minutes a seven-day
-#                       experiment costs about two thousand runs to drain fourteen
-#                       jobs; at fifteen it costs under seven hundred, and the
-#                       worst case is that a day starts fourteen minutes late on a
-#                       plot whose x-axis is the time the run actually happened.
-#                       Minutes are free on a public repository, but a queue that
-#                       is polled three times as often is not three times more
-#                       correct, and GitHub drops scheduled runs under load.
-#
-#                       **The drift experiment (P1.8) is what depends on this.** It
-#                       queues a week of `harvest.run` jobs up front, each with a
-#                       `run_after` a day apart, and nothing else drains them: with
-#                       no schedule, the days come due and stay due, and the plot
-#                       shows six `missing` points and no line — the honest
-#                       rendering of a queue nobody is reading, not a bug in the
-#                       chart.
-#   workflow_dispatch — foreground work (ADR-0016). A human pressed a button and is
-#                       watching a progress stream; waiting up to five minutes for
-#                       the next tick would make the product look dead. Left on, and
-#                       left failing loudly without the secret: somebody who presses
-#                       the button is owed the reason, not a green tick.
+# `workflow_dispatch` is foreground work (ADR-0016): someone pressed Run on a block
+# and is watching a progress stream, so the API dispatches a run rather than
+# waiting for a schedule. Locally, `pnpm dev` runs the same runner on a timer.
 #
 # The `jobId` input is not used to select work. The runner claims from the queue
 # with `FOR UPDATE SKIP LOCKED` and drains whatever it wins, which is what makes a
@@ -59,8 +12,6 @@
 name: worker
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       jobId:
@@ -91,7 +42,7 @@ permissions:
 
 jobs:
   # A matrix cannot be sized by an input directly, so this turns `shards` into the
-  # list the drain job fans out over. The cron has no inputs and gets one shard.
+  # list the drain job fans out over.
   plan:
     runs-on: ubuntu-latest
     outputs:
@@ -111,9 +62,7 @@ jobs:
 
   # The concurrency group above is per workflow run, so shards run side by side
   # inside one run while a second run still waits. `FOR UPDATE SKIP LOCKED` hands
-  # each shard different rows. A shard is sequential, and an extraction is about
-  # six minutes of model calls, so a hundred queued extractions are ten hours on
-  # one shard and under two on six.
+  # each shard different rows.
   drain:
     needs: plan
     runs-on: ubuntu-latest
@@ -121,8 +70,8 @@ jobs:
       fail-fast: false
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.shards) }}
-    # Hard stop. The drain's own budget (WORKER_BUDGET_MS) is four minutes on the
-    # cron, at most 45 on a dispatch, so it finishes on its own before this; the
+    # Hard stop. The drain's own budget (WORKER_BUDGET_MS) is four minutes by
+    # default, at most 45, so it finishes on its own before this; the
     # timeout is the backstop for a handler that hangs on something that never
     # settles. Minutes spent here are free on a public repository, but a hung run
     # holds the concurrency group.
@@ -153,28 +102,17 @@ jobs:
           # API's streams. The runner has no reason to compete for it.
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SOLARI_API_KEY: ${{ secrets.SOLARI_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          # Optional: the Jev page judge on price probes. Unset, probes use the regex only.
-          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
-          # The route the 18 September bake-off chose (STATUS, P2.1; `.env.example`).
-          # Defaulted here because an unset model makes every `refine.extract` fail,
-          # and a repository variable of the same name overrides it.
-          LLM_MODEL_EXTRACT: ${{ vars.LLM_MODEL_EXTRACT || 'deepseek/deepseek-v4-flash' }}
           # Ceilings are read from the environment but *defaulted in code*
           # (`loadCeilings`). A missing secret cannot raise a budget.
           BUDGET_SOLARI_MINUTES: ${{ vars.BUDGET_SOLARI_MINUTES }}
-          BUDGET_LLM_INPUT_TOKENS: ${{ vars.BUDGET_LLM_INPUT_TOKENS }}
-          BUDGET_LLM_OUTPUT_TOKENS: ${{ vars.BUDGET_LLM_OUTPUT_TOKENS }}
-          BUDGET_GEOCODE_CALLS: ${{ vars.BUDGET_GEOCODE_CALLS }}
           BUDGET_SOLARI_MINUTES_TOTAL: ${{ vars.BUDGET_SOLARI_MINUTES_TOTAL }}
           # Finish inside the grace period GitHub gives a cancelled run, with room
           # to close browser sessions and hand the claims back.
-          # A dispatch may ask for longer (`budgetMinutes`); the cron has no inputs
-          # and gets four. Clamped in the step below, not trusted as typed.
+          # A dispatch may ask for longer (`budgetMinutes`). Clamped in the step
+          # below, not trusted as typed.
           WORKER_BUDGET_MINUTES: ${{ inputs.budgetMinutes || '4' }}
-          # Longer than the slowest handler that does not heartbeat. An extraction
-          # runs about six minutes; on a five-minute lease another shard would
-          # reclaim it mid-call and pay for the same batch twice.
+          # Longer than the slowest handler that does not heartbeat, so another
+          # shard never reclaims a job mid-run and pays for it twice.
           WORKER_LEASE_MS: "900000"
           # Logged for correlation only. The runner does not read it.
           WORKER_TRIGGER_JOB_ID: ${{ inputs.jobId }}

@@ -17,13 +17,7 @@
     "@rd/research": "workspace:*",
     "@rd/steam": "workspace:*",
     "@samsara/core": "workspace:*",
-    "@samsara/harvest": "workspace:*",
-    "@samsara/kernel": "workspace:*",
-    "@samsara/llm": "workspace:*",
-    "@samsara/personas": "workspace:*",
-    "@samsara/probe": "workspace:*",
-    "@samsara/refine": "workspace:*",
-    "@samsara/sources": "workspace:*"
+    "@samsara/kernel": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

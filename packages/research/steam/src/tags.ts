@@ -443,6 +443,8 @@ export function searchTags(query: string, exclude: readonly number[], limit = 8)
   const pool = STEAM_TAGS.filter(([id]) => !out.has(id))
   if (!q) return pool.slice(0, limit)
   const starts = pool.filter(([, n]) => n.toLowerCase().startsWith(q))
-  const within = pool.filter(([, n]) => !n.toLowerCase().startsWith(q) && n.toLowerCase().includes(q))
+  const within = pool.filter(
+    ([, n]) => !n.toLowerCase().startsWith(q) && n.toLowerCase().includes(q),
+  )
   return [...starts, ...within].slice(0, limit)
 }

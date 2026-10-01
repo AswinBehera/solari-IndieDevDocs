@@ -11,7 +11,8 @@ function fakeClock() {
   }
 }
 
-const ok = () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } })
+const ok = () =>
+  new Response("{}", { status: 200, headers: { "content-type": "application/json" } })
 
 describe("SteamClient", () => {
   it("spaces requests, including concurrent ones", async () => {

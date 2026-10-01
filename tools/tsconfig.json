@@ -1,9 +1,0 @@
-{
-  "extends": "../tsconfig.base.json",
-  "compilerOptions": {
-    // A build-time script: Node, and the only place in the repo that reads the
-    // source tree as data rather than compiling it.
-    "types": ["node"]
-  },
-  "include": ["."]
-}

@@ -11,15 +11,15 @@ P0.5 had to put the job queue somewhere. Two facts made that harder than it soun
 
 The first is that **both apps need it, from opposite ends**. `apps/api` enqueues a job and reads its
 events; `apps/worker` claims rows, heartbeats, and finishes them. The obvious home — a package of its
-own, `@samsara/queue` — is not available: section 2.1 fixes the engine at nine packages, and a tenth
-one added by the executor is exactly the sort of drift the seam exists to prevent.
+own, `@samsara/queue` — is not available: the plan of record fixed the engine's package count, and adding
+one was not the executor's call.
 
 The second is that **the two apps do not run on the same runtime**, and until P0.5 nothing had
 noticed. Packages are source-only (an executor decision from P0.1: `exports` points at `./src/*.ts`,
 no build step). That is a good decision with a consequence nobody had cashed: when `apps/api` imports
 `@samsara/kernel`, the Workers typechecker compiles the kernel's *source*. The kernel's barrel reaches
 `process.stdout`, `NodeJS.Timeout`, `node:crypto` and `.unref()`. None of those exist on Workers. The
-build broke the first time an app above the seam ran somewhere other than Node — which is the correct
+build broke the first time an app above the kernel ran somewhere other than Node — which is the correct
 time for it to break, and later than it feels like it should have.
 
 ## Decision
@@ -55,8 +55,8 @@ Node's types over the tests alone. A single config would have to lie about one o
   `nodejs_compat` polyfill — would have made it work locally and fail differently in production.
 - **`nodejs_compat` stays on** for `apps/api` anyway, because postgres-js needs it. The flag is what
   makes the driver run; the subpath split is what stops it from being an excuse.
-- **The seam is unaffected.** Nothing here is domain-aware; `@samsara/kernel` still imports no `@dt/*`
-  package, and `pnpm check:seam` (P0.7) will still find that true.
+- **The kernel stays domain-free.** Nothing here is domain-aware; `@samsara/kernel` still imports no
+  `@rd/*` package.
 - **A memory fake cannot test the property that matters.** `MemoryJobStore` reproduces ordering, lease
   expiry, and attempt accounting, but it cannot reproduce `FOR UPDATE SKIP LOCKED`, because nothing in
   it is concurrent. So `jobs.pg.test.ts` runs against a real Postgres, gated on `DATABASE_URL`, and
@@ -67,8 +67,7 @@ Node's types over the tests alone. A single config would have to lie about one o
 
 ## Alternatives rejected
 
-- **A tenth engine package.** Cleanest on paper; contradicts section 2.1, which is a document the
-  executor does not get to amend.
+- **A tenth engine package.** Cleanest on paper; not the executor's call to make.
 - **Duplicating the port in each app.** Two interfaces that must stay identical, kept identical by
   hope. The claim SQL is subtle enough that a second copy would be a second set of bugs.
 - **Building the packages (a `dist` per package) so the API consumes compiled output.** Would have

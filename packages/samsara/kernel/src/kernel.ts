@@ -1,11 +1,7 @@
 import { randomUUID } from "node:crypto"
 import type { SessionOutcome, SessionPurpose } from "@samsara/core"
 import type { BudgetGuard, SpendScope } from "./budget.js"
-import {
-  isSupportedProxyCountry,
-  NEAREST_AVAILABLE,
-  SUPPORTED_PROXY_COUNTRIES,
-} from "./countries.js"
+import { isSupportedProxyCountry, SUPPORTED_PROXY_COUNTRIES } from "./countries.js"
 import { deadlineFor, withDeadline } from "./deadline.js"
 import { type Logger, now, silentLogger } from "./log.js"
 import type { BrowserLauncher, LaunchConfig, SandboxLauncher } from "./ports.js"
@@ -14,7 +10,7 @@ import { classify, err, type Failure, failure, ok, type Result } from "./result.
 import { withRetry } from "./retry.js"
 
 /**
- * `withBrowser` and `withSandbox` (plan section 2.4).
+ * `withBrowser` and `withSandbox`.
  *
  * The contract worth stating plainly: **`fn` never receives a raw handle.** Every
  * path through this file opens a session, registers it, races it against a hard
@@ -43,7 +39,6 @@ export interface BrowserOptions {
   locale?: string
   timezoneId?: string
   geolocation?: { latitude: number; longitude: number; accuracy?: number }
-  personaId?: string | null
   ownerId?: string | null
   domainId?: string | null
   /** Sticky egress IP, so one identity keeps one address across sessions. */
@@ -52,12 +47,12 @@ export interface BrowserOptions {
   profileId?: string
   proxyTier?: "residential" | "mobile"
   captcha?: boolean
-  /** On for the first runs of a new adapter, off by default (section 8). */
+  /** On for the first runs of a new adapter, off by default. */
   recording?: boolean
   deadlineMs?: number
   /** Attributes the spend to a run, enabling the `purpose.run` window. */
   runId?: string
-  /** One try plus this many retries. Defaults to the section 2.4 policy. */
+  /** One try plus this many retries. Defaults to the policy in `retry.ts`. */
   attempts?: number
   /**
    * Called once per attempt, after the session is closed and metered.
@@ -127,41 +122,36 @@ export class Kernel {
   /**
    * Validate a launch config before the provider sees it.
    *
-   * `proxy` and `captcha` both require `stealth` (section 2.3). Letting the
+   * `proxy` and `captcha` both require `stealth`. Letting the
    * provider reject the pairing costs a round trip and returns an error that has
    * to be decoded; refusing here is instant and says exactly what is wrong. This is
    * a `config` failure, and `config` is deliberately not retryable.
    */
   static validateLaunch(config: LaunchConfig): Result<LaunchConfig, Failure> {
     if ((config.proxy || config.captcha) && !config.stealth) {
-      return err(
-        failure("config", "proxy and captcha both require stealth: true (plan section 2.3)"),
-      )
+      return err(failure("config", "proxy and captcha both require stealth: true"))
     }
     if (config.proxy && !/^[a-z]{2}$/.test(config.proxy.country)) {
       return err(failure("config", "proxy country must be lowercase ISO 3166-1 alpha-2"))
     }
     if (config.viewpoint && !/^[a-z]{2}(-[A-Za-z0-9]{2,8})*$/.test(config.viewpoint.locale)) {
-      return err(failure("config", "locale must be BCP 47, e.g. vi-VN"))
+      return err(failure("config", "locale must be BCP 47, e.g. en-US"))
     }
     if (config.viewpoint && !config.viewpoint.timezoneId.includes("/")) {
-      // "Asia/Ho_Chi_Minh", not "GMT+7". An offset drifts across a DST boundary and,
+      // "America/New_York", not "GMT-5". An offset drifts across a DST boundary and,
       // worse, an offset is not what a real browser reports — which makes it a
       // tell on exactly the surfaces this exists to blend into.
-      return err(failure("config", "timezoneId must be an IANA zone, e.g. Asia/Ho_Chi_Minh"))
+      return err(failure("config", "timezoneId must be an IANA zone, e.g. America/New_York"))
     }
     if (config.proxy && !isSupportedProxyCountry(config.proxy.country)) {
       // Caught here rather than at the provider, which answers a 400 — a round
       // trip, a decoded error, and, before `classify` learned to read a 4xx, two
-      // pointless retries. The alternative is named but never substituted: a
-      // silent country swap changes what a persona sees, which is the one
-      // variable the Persona Lab exists to hold still.
-      const nearest = NEAREST_AVAILABLE[config.proxy.country]
+      // pointless retries. No other country is substituted: a silent swap changes
+      // what the page shows.
       return err(
         failure(
           "config",
           `proxy country ${config.proxy.country} is not in the provider's pool` +
-            (nearest ? `; nearest available is ${nearest}` : "") +
             `. Supported: ${SUPPORTED_PROXY_COUNTRIES.join(", ")}`,
         ),
       )
@@ -243,7 +233,6 @@ export class Kernel {
             purpose,
             ownerId: opts.ownerId ?? null,
             domainId: opts.domainId ?? null,
-            personaId: opts.personaId ?? null,
             country: opts.country,
             locale: config.viewpoint?.locale ?? null,
             timezoneId: config.viewpoint?.timezoneId ?? null,

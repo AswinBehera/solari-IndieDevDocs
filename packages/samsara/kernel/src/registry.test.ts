@@ -5,10 +5,9 @@ import { MemorySessionStore } from "./stores/memory.js"
 
 const row = (over: Partial<SessionRecord> = {}): SessionRecord => ({
   id: "11111111-1111-4111-8111-111111111111",
-  purpose: "harvest",
+  purpose: "probe",
   ownerId: null,
   domainId: null,
-  personaId: null,
   country: "sg",
   locale: "vi-VN",
   timezoneId: "Asia/Ho_Chi_Minh",
@@ -90,17 +89,17 @@ describe("session registry", () => {
 })
 
 describe("structured logs", () => {
-  it("emits open and close events with the fields section 2.4 asks for", async () => {
+  it("emits open and close events with the fields the log contract asks for", async () => {
     const store = new MemorySessionStore()
     const logger = new MemoryLogger()
     const registry = new SessionRegistry(store, logger, () => new Date(0))
 
-    await registry.open(row({ personaId: "22222222-2222-4222-8222-222222222222" }), async () => {})
+    await registry.open(row(), async () => {})
     await registry.close(row().id, "ok", 4096)
 
     const open = logger.events.find((e) => e.event === "session.open")
     const close = logger.events.find((e) => e.event === "session.close")
-    expect(open).toMatchObject({ purpose: "harvest", country: "sg", locale: "vi-VN" })
+    expect(open).toMatchObject({ purpose: "probe", country: "sg", locale: "vi-VN" })
     expect(close).toMatchObject({ outcome: "ok", bytes: 4096 })
   })
 
@@ -121,7 +120,6 @@ describe("structured logs", () => {
       "sessionId",
       "purpose",
       "country",
-      "personaId",
       "domainId",
       "recording",
       "outcome",

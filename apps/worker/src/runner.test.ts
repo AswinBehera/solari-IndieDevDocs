@@ -8,7 +8,6 @@ import {
   MemorySessionStore,
   SessionRegistry,
 } from "@samsara/kernel"
-import { PackRegistry } from "@samsara/refine"
 import { describe, expect, it } from "vitest"
 import { type HandlerLookup, HandlerRegistry, type JobHandler, noopHandler } from "./handlers.js"
 import { drain } from "./runner.js"
@@ -29,7 +28,6 @@ const deps = (handlers: HandlerLookup, jobs = new MemoryJobStore()) => {
   return {
     jobs,
     kernel: new Kernel({ registry, guard }),
-    packs: new PackRegistry(),
     handlers,
     logger: new MemoryLogger(),
   }
@@ -109,11 +107,11 @@ describe("the drain loop", () => {
     // the row waits for a deploy, which is a thing a human does rather than a
     // thing a backoff fixes.
     const inconsistent: HandlerLookup = {
-      types: () => ["harvest.run"],
+      types: () => ["block.run"],
       get: () => undefined,
     }
     const d = deps(inconsistent)
-    const { id } = await d.jobs.enqueue({ type: "harvest.run" })
+    const { id } = await d.jobs.enqueue({ type: "block.run" })
 
     await drain(d, opts())
 
@@ -126,7 +124,7 @@ describe("the drain loop", () => {
     const handlers = new HandlerRegistry()
     handlers.register("noop", noopHandler)
     const d = deps(handlers)
-    await d.jobs.enqueue({ type: "harvest.run" })
+    await d.jobs.enqueue({ type: "block.run" })
 
     const summary = await drain(d, opts())
 

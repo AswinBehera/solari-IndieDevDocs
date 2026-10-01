@@ -2,16 +2,10 @@ import { z } from "zod"
 import { countryCode, domainId, id, storageRef, timestamps } from "./primitives.js"
 
 /**
- * A closed union of *engine* purposes. It does not gain a member when a vertical is
- * added: a vertical's work is a harvest or a probe, tagged with its `domainId`.
+ * What a session was opened for. `probe` reads a page or records a build; `agent`
+ * is the worker itself, for log lines that belong to no session.
  */
-export const sessionPurpose = z.enum([
-  "persona.seed",
-  "persona.keepalive",
-  "harvest",
-  "probe",
-  "agent",
-])
+export const sessionPurpose = z.enum(["probe", "agent"])
 export type SessionPurpose = z.infer<typeof sessionPurpose>
 
 export const sessionOutcome = z.enum(["running", "ok", "blocked", "timeout", "error", "orphaned"])
@@ -31,7 +25,6 @@ export const session = z
      */
     ownerId: z.string().min(1).nullable(),
     domainId: domainId.nullable(),
-    personaId: id.nullable(),
     country: countryCode,
     /**
      * The viewpoint the session presented, which is **not** the same thing as

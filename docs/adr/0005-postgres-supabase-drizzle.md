@@ -21,12 +21,12 @@ the deployment target, not a local dependency.
   system.
 - Drizzle keeps the schema in the same language and the same repository as the schemas it mirrors,
   so the two cannot drift silently.
-- Migrations are files, reviewed like code. `packages/travel/db/migrations/` owns them, because the
-  travel schema composes the engine schema and only one package can own the migration history.
+- Migrations are files, reviewed like code. `packages/research/db/migrations/` owns them, because the
+  research schema composes the kernel's tables and only one package can own the migration history.
 - Cost: Supabase's connection pooler has opinions, and drizzle-kit is young enough that its
   generated SQL is worth reading before applying. Both were true in P0.3 and both were fine.
 
 ## Swap point
 
-Neon + Clerk, if Supabase Auth chafes (ADR-0013 has the same swap point). The seam keeps the engine
+Neon + Clerk, if Supabase Auth chafes (ADR-0013 has the same swap point). The kernel stays
 unaware of either.

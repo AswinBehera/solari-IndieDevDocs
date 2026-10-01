@@ -33,12 +33,11 @@ export const isTerminal = (s: JobState): boolean =>
   (terminalJobStates as readonly string[]).includes(s)
 
 /**
- * What kind of work this is: `harvest.run`, `refine.run`, `persona.keepalive`.
+ * What kind of work this is: `block.run`, `prototype.stop`.
  *
- * Free text, not an enum, and that is the seam doing its job. A pack registers the
- * handlers it needs at worker boot (section 2.1: "a queue is `refine.run` carrying
- * a `domainId`, not `refine.places`"), so a closed union here would mean the engine
- * had to be edited every time a vertical learned to do something new.
+ * Free text, not an enum. The worker registers the handlers it has at boot, so a
+ * closed union here would mean editing the kernel every time the product learned
+ * to do something new.
  */
 export const jobType = z.string().min(1)
 export type JobType = z.infer<typeof jobType>
@@ -47,14 +46,14 @@ export const job = z
   .object({
     id,
     type: jobType,
-    /** Which pack the work belongs to. `null` for engine-owned housekeeping. */
+    /** Which part of the product the work belongs to. `null` for kernel housekeeping. */
     domainId: domainId.nullable(),
     /** Opaque to the engine, exactly as on Session. `null` means the system asked. */
     ownerId: z.string().min(1).nullable(),
     /** The handler's input. The engine never reads inside it. */
     payload: z.unknown(),
     /**
-     * The idempotency key from section 2.2's rule that every job is idempotent and
+     * The idempotency key from the rule that every job is idempotent and
      * resumable. Unique where present: enqueuing the same logical work twice — a
      * double-clicked button, a cron overlapping its own previous run — yields one
      * row, not two runners spending two sets of browser minutes on it.

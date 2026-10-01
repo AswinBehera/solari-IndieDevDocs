@@ -77,9 +77,7 @@ describe.skipIf(!live)("@live kernel against the real provider", () => {
       logger,
     })
 
-    // `sg`, not `th`. Solari's residential pool carries no Thai egress — read from
-    // a live 400 on 11 September 2026 and recorded in `countries.ts`. Singapore is
-    // the nearest available and proves exactly the same thing about the kernel: a
+    // `sg`, one of the countries in Solari's residential pool (`countries.ts`): a
     // real session, a real residential proxy, a real egress address.
     const result = await kernel.withBrowser(
       "probe",
@@ -202,9 +200,7 @@ describe.skipIf(!live)("@live kernel against the real provider", () => {
         // without the viewpoint that produced it (ADR-0015).
         expect(row?.locale).toBe("vi-VN")
         // Stored as asked for, which is correct: the row records the viewpoint we
-        // requested. What the page reported back is a separate fact, and P1.1 is
-        // where a persona will start carrying both — the gap between them is the
-        // whole reason an Observation is readable at all.
+        // requested. What the page reported back is a separate fact.
         expect(row?.timezone_id).toBe("Asia/Ho_Chi_Minh")
         expect(Number(row?.minutes)).toBeGreaterThan(0)
         console.log(`[live] sessions row ${closed.sessionId} written to Postgres`)

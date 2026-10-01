@@ -182,7 +182,6 @@ packages/samsara/*       the kernel: jobs, sessions, budgets, Solari launcher
 
 ## History
 
-This repository started as Doen Thang, a travel document built on the same kernel; that
-history is kept below the pivot commit, and the travel code was removed after it.
-`docs/STATUS.md` is the travel-era log. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for what
-is open.
+The repository began as a different project on the same kernel and pivoted to
+indieDevDocs on 30 September 2026. Commits before then are that earlier project; none of
+its code is in the current tree. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for what is open.

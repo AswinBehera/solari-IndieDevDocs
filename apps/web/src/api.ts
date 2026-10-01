@@ -40,7 +40,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     // The API's own message when it sent one: its 400s are written for a reader
-    // ("a and b must be different personas"), and replacing them with the status
+    // ("body is too large"), and replacing them with the status
     // code would throw away the only part of the response worth showing.
     const body = (await res.json().catch(() => null)) as { error?: string } | null
     throw new ApiError(res.status, body?.error ?? `api returned ${res.status}`, body)

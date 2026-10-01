@@ -1,5 +1,4 @@
 import type { ClaimedJob, Kernel, Logger } from "@samsara/kernel"
-import type { PackRegistry } from "@samsara/refine"
 
 /**
  * What a job handler is given, and nothing more.
@@ -15,8 +14,6 @@ import type { PackRegistry } from "@samsara/refine"
 export interface JobContext {
   job: ClaimedJob
   kernel: Kernel
-  /** One pack since P2.2, still registered in one line. See `packs.ts`. */
-  packs: PackRegistry
   logger: Logger
   /** Aborted on SIGTERM. Pass it to every await that can take one. */
   signal: AbortSignal
@@ -28,12 +25,6 @@ export type JobHandler = (ctx: JobContext) => Promise<void>
 
 /**
  * `Map<string, JobHandler>`, keyed by job type.
- *
- * Separate from the pack registry on purpose. A pack says what a *domain* is; a
- * handler says what a *verb* does. `harvest.run` is one handler serving every pack,
- * which is the same rule that makes source adapters per-source rather than
- * per-domain (section 2.1). Collapsing the two would put `harvest.run.travel` in
- * the queue, and that is the seam breaking.
  */
 /**
  * What the runner actually needs, which is less than the registry provides.
@@ -73,7 +64,7 @@ export class HandlerRegistry implements HandlerLookup {
  * It does nothing on purpose. Its value is that it exercises every edge of the
  * cycle that is hard to test with real work in it — claim, lease, heartbeat,
  * event append, terminal transition, and the SIGTERM path — without opening a
- * browser, spending a minute, or needing a pack. It stays in the tree after real
+ * browser or spending a minute. It stays in the tree after real
  * handlers arrive, because it is also the cheapest possible end-to-end check that
  * a deployed runner is alive at all.
  */

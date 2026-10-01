@@ -7,7 +7,7 @@ import type { Failure } from "./result.js"
  * runs without Postgres, and the real implementation lives in `stores/postgres.ts`.
  *
  * It sits in `@samsara/kernel` rather than in a package of its own because
- * section 2.1 fixes the nine engine packages and both `apps/api` (which enqueues
+ * ADR-0019 keeps the engine's package count fixed and both `apps/api` (which enqueues
  * and reads) and `apps/worker` (which claims and drains) need it. The kernel
  * already owns the other two pieces of runtime plumbing those apps share — the
  * budget counters and the session registry — and a queue whose rows outlive the

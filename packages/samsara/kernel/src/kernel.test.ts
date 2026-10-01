@@ -45,7 +45,7 @@ describe("withBrowser", () => {
     const closes: string[] = []
     const { kernel, sessions } = harness(fakeLauncher({ closes }))
 
-    const result = await kernel.withBrowser("harvest", { country: "sg" }, async (page) => {
+    const result = await kernel.withBrowser("probe", { country: "sg" }, async (page) => {
       expect(page).toBeTruthy()
       return "read the page"
     })
@@ -86,7 +86,7 @@ describe("a provider outage is not our bug", () => {
     const { kernel } = harness(launcher)
 
     const result = await kernel.withBrowser(
-      "harvest",
+      "probe",
       { country: "sg", attempts: 1 },
       async () => "never runs",
     )
@@ -135,7 +135,7 @@ describe("a provider outage is not our bug", () => {
     })
     const { kernel } = harness(launcher)
 
-    const result = await kernel.withBrowser("harvest", { country: "sg" }, async () => "recovered")
+    const result = await kernel.withBrowser("probe", { country: "sg" }, async () => "recovered")
 
     expect(attempts).toBe(3)
     expect(result).toEqual({ ok: true, value: "recovered" })
@@ -150,7 +150,7 @@ describe("a provider outage is not our bug", () => {
       }),
     )
     const result = await kernel.withBrowser(
-      "harvest",
+      "probe",
       { country: "sg", attempts: 1 },
       async () => null,
     )
@@ -169,7 +169,7 @@ describe("the budget guard runs before anything opens", () => {
       DEFAULT_CEILINGS["solari.minutes"],
     )
 
-    const result = await kernel.withBrowser("harvest", { country: "sg" }, async () => "nope")
+    const result = await kernel.withBrowser("probe", { country: "sg" }, async () => "nope")
 
     expect(launched).toBe(0)
     expect(result.ok).toBe(false)
@@ -180,7 +180,7 @@ describe("the budget guard runs before anything opens", () => {
 
   it("meters the minutes a session actually consumed", async () => {
     const { kernel, counters } = harness(fakeLauncher())
-    await kernel.withBrowser("harvest", { country: "sg", ownerId: "u1" }, async () => "done")
+    await kernel.withBrowser("probe", { country: "sg", ownerId: "u1" }, async () => "done")
 
     const totals = await counters.read([
       { meter: "solari.minutes", window: "global.day", windowKey: dayKey(AT) },
@@ -211,26 +211,23 @@ describe("config is refused locally, not by the provider", () => {
     expect(Kernel.validateLaunch({ stealth: true, proxy: { country: "sg" } }).ok).toBe(true)
   })
 
-  it("rejects a country the provider's pool does not carry, and names the nearest", () => {
-    // The shape that matters: a country the product wants and the pool does not
-    // carry. Solari's residential pool has no `vn` egress — nor `th`, the first
-    // market — learned from a live 400 on 11 Sep 2026 that listed the whole pool.
-    // The kernel refuses locally so this surfaces as a config error at the call
-    // site rather than a 400 after a round trip.
+  it("rejects a country the provider's pool does not carry", () => {
+    // Solari's residential pool has no `vn` egress, learned from a live 400 on
+    // 11 Sep 2026 that listed the whole pool. The kernel refuses locally so this
+    // surfaces as a config error at the call site rather than a 400 after a round
+    // trip.
     const result = Kernel.validateLaunch({ stealth: true, proxy: { country: "vn" } })
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error.kind).toBe("config")
     expect(result.error.message).toContain("not in the provider's pool")
-    expect(result.error.message).toContain("nearest available is sg")
   })
 
   it("never substitutes a country on the caller's behalf", async () => {
-    // Naming an alternative is help; applying one silently would change what a
-    // persona sees, which is the variable the Persona Lab holds still.
+    // Applying an alternative silently would change what the page shows.
     let launched = 0
     const { kernel } = harness(fakeLauncher({ onLaunch: () => void launched++ }))
-    const result = await kernel.withBrowser("harvest", { country: "th" }, async () => null)
+    const result = await kernel.withBrowser("probe", { country: "th" }, async () => null)
     expect(launched).toBe(0)
     expect(result.ok).toBe(false)
   })
@@ -248,7 +245,7 @@ describe("config is refused locally, not by the provider", () => {
         },
       }),
     )
-    const result = await kernel.withBrowser("harvest", { country: "sg" }, async () => null)
+    const result = await kernel.withBrowser("probe", { country: "sg" }, async () => null)
     expect(launches).toBe(1)
     expect(result.ok).toBe(false)
     if (result.ok) return
@@ -266,7 +263,7 @@ describe("config is refused locally, not by the provider", () => {
       async dispose() {},
     }
     const { kernel } = harness(launcher)
-    await kernel.withBrowser("harvest", { country: "sg" }, async () => null)
+    await kernel.withBrowser("probe", { country: "sg" }, async () => null)
     expect(seen).toMatchObject({ stealth: true, proxy: { country: "sg" } })
   })
 })
@@ -289,7 +286,7 @@ describe("the viewpoint is not the proxy country", () => {
     }
     const { kernel } = harness(launcher)
     await kernel.withBrowser(
-      "harvest",
+      "probe",
       { country: "sg", locale: "vi-VN", timezoneId: "Asia/Ho_Chi_Minh" },
       async () => null,
     )
@@ -302,7 +299,7 @@ describe("the viewpoint is not the proxy country", () => {
   it("records the viewpoint on the session row, next to the country", async () => {
     const { kernel, sessions, logger } = harness(fakeLauncher())
     await kernel.withBrowser(
-      "harvest",
+      "probe",
       { country: "sg", locale: "vi-VN", timezoneId: "Asia/Ho_Chi_Minh" },
       async () => null,
     )
@@ -317,7 +314,7 @@ describe("the viewpoint is not the proxy country", () => {
     // Not a neutral default: no viewpoint means en-US on UTC, which is a specific
     // person. Recording null is how a comparison run can tell the two apart.
     const { kernel, sessions } = harness(fakeLauncher())
-    await kernel.withBrowser("harvest", { country: "sg" }, async () => null)
+    await kernel.withBrowser("probe", { country: "sg" }, async () => null)
     expect([...sessions.rows.values()][0]).toMatchObject({ locale: null, timezoneId: null })
   })
 
@@ -388,7 +385,7 @@ describe("shutdown", () => {
 
     // Start something that will not finish, then shut down underneath it.
     const running = kernel.withBrowser(
-      "harvest",
+      "probe",
       { country: "sg", deadlineMs: 5_000, attempts: 1 },
       () => new Promise(() => {}),
     )

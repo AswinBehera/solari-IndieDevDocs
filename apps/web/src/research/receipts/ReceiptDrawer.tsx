@@ -47,7 +47,12 @@ export function ReceiptDrawer({ focus, onClose }: { focus: ReceiptFocus; onClose
           <p className="font-mono text-[10px] text-marker tracking-[0.18em]">RECEIPT</p>
           <FactHeading fact={focus.fact} />
         </div>
-        <button type="button" onClick={onClose} aria-label="Close receipt" className="text-2xl text-surface/70 leading-none hover:text-surface">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close receipt"
+          className="text-2xl text-surface/70 leading-none hover:text-surface"
+        >
           ×
         </button>
       </div>
@@ -65,7 +70,9 @@ export function ReceiptDrawer({ focus, onClose }: { focus: ReceiptFocus; onClose
                     type="button"
                     onClick={() => setTab(r.id)}
                     className={`-mb-px rounded-t-sm border px-3 py-1.5 text-xs ${
-                      shown.id === r.id ? "border-rule border-b-paper bg-paper font-medium" : "border-transparent text-ink-muted"
+                      shown.id === r.id
+                        ? "border-rule border-b-paper bg-paper font-medium"
+                        : "border-transparent text-ink-muted"
                     }`}
                   >
                     {tabLabel(group, r)}
@@ -129,7 +136,10 @@ function useBytes(receipt: ReceiptRecord) {
     staleTime: Number.POSITIVE_INFINITY,
     queryFn: async () => {
       const res = await fetch(`/receipts/${receipt.ref}`)
-      if (!res.ok) throw new Error(`The archived bytes are not here (${res.status}). Receipts stay on the machine that ran the block.`)
+      if (!res.ok)
+        throw new Error(
+          `The archived bytes are not here (${res.status}). Receipts stay on the machine that ran the block.`,
+        )
       const bytes = new Uint8Array(await res.arrayBuffer())
       return { bytes, sha256: await sha256Hex(bytes) }
     },
@@ -145,24 +155,49 @@ function Meta({ receipt }: { receipt: ReceiptRecord }) {
     [
       "Source",
       isComputation ? (
-        <code className="font-mono text-xs">{receipt.url}</code>
+        <code key="url" className="font-mono text-xs">
+          {receipt.url}
+        </code>
       ) : (
-        <a href={receipt.url} target="_blank" rel="noreferrer" className="break-all font-mono text-link text-xs underline">
+        <a
+          key="url"
+          href={receipt.url}
+          target="_blank"
+          rel="noreferrer"
+          className="break-all font-mono text-link text-xs underline"
+        >
           {receipt.url}
         </a>
       ),
     ],
-    ["Captured", `${new Date(receipt.capturedAt).toLocaleString("en-GB")} (${ago(receipt.capturedAt)})`],
+    [
+      "Captured",
+      `${new Date(receipt.capturedAt).toLocaleString("en-GB")} (${ago(receipt.capturedAt)})`,
+    ],
   ]
   if (receipt.viewpoint) rows.push(["Viewpoint", receipt.viewpoint.toUpperCase()])
-  if (receipt.sessionId) rows.push(["Browser session", <code key="s" className="font-mono text-xs">{receipt.sessionId}</code>])
-  if (receipt.profile) rows.push(["Profile", <code key="p" className="font-mono text-xs">{receipt.profile}</code>])
+  if (receipt.sessionId)
+    rows.push([
+      "Browser session",
+      <code key="s" className="font-mono text-xs">
+        {receipt.sessionId}
+      </code>,
+    ])
+  if (receipt.profile)
+    rows.push([
+      "Profile",
+      <code key="p" className="font-mono text-xs">
+        {receipt.profile}
+      </code>,
+    ])
   rows.push([
     "SHA-256",
     <span key="h" className="font-mono text-xs">
       {receipt.sha256.slice(0, 16)}… · {(receipt.bytes / 1024).toFixed(1)} KB ·{" "}
       {verified === null ? (
-        <span className="text-ink-faint">{bytes.error ? "bytes not available here" : "checking…"}</span>
+        <span className="text-ink-faint">
+          {bytes.error ? "bytes not available here" : "checking…"}
+        </span>
       ) : verified ? (
         <span className="text-signal-green">bytes match ✓</span>
       ) : (
@@ -184,7 +219,8 @@ function Meta({ receipt }: { receipt: ReceiptRecord }) {
 
 function Body({ receipt, locator }: { receipt: ReceiptRecord; locator: Locator }) {
   const bytes = useBytes(receipt)
-  if (bytes.error) return <p className="px-5 pb-5 text-signal-amber text-sm">{bytes.error.message}</p>
+  if (bytes.error)
+    return <p className="px-5 pb-5 text-signal-amber text-sm">{bytes.error.message}</p>
   if (!bytes.data) return null
   switch (receipt.kind) {
     case "screenshot":
@@ -231,7 +267,13 @@ function Replay({ bytes }: { bytes: Uint8Array }) {
         // from `svelte`, which this app does not install.
         player = new Player({
           target: el,
-          props: { events: events as never, width: el.clientWidth, height: 420, autoPlay: false, skipInactive: true },
+          props: {
+            events: events as never,
+            width: el.clientWidth,
+            height: 420,
+            autoPlay: false,
+            skipInactive: true,
+          },
         }) as unknown as { $destroy(): void }
       })
       .catch((e: unknown) => setFailed(e instanceof Error ? e.message : String(e)))
@@ -271,8 +313,15 @@ function Screenshot({ src, box }: { src: string; box: Box | undefined }) {
   const scale = natural ? shown / natural.w : 1
   return (
     <div className="px-5 pb-5">
-      {box && <p className="mb-2 text-ink-muted text-xs">The marked region is where the number was read.</p>}
-      <div ref={frame} className="relative max-h-[70vh] overflow-y-auto rounded-sm border border-rule bg-night">
+      {box && (
+        <p className="mb-2 text-ink-muted text-xs">
+          The marked region is where the number was read.
+        </p>
+      )}
+      <div
+        ref={frame}
+        className="relative max-h-[70vh] overflow-y-auto rounded-sm border border-rule bg-night"
+      >
         <img
           src={src}
           alt="The page as the cloud browser saw it"
@@ -286,7 +335,12 @@ function Screenshot({ src, box }: { src: string; box: Box | undefined }) {
         {natural && box && (
           <div
             className="pointer-events-none absolute border-[3px] border-marker bg-marker/20 shadow-[0_0_0_9999px_rgba(22,28,38,.35)]"
-            style={{ left: box.x * scale - 4, top: box.y * scale - 4, width: box.width * scale + 8, height: box.height * scale + 8 }}
+            style={{
+              left: box.x * scale - 4,
+              top: box.y * scale - 4,
+              width: box.width * scale + 8,
+              height: box.height * scale + 8,
+            }}
           />
         )}
       </div>
@@ -298,7 +352,10 @@ function Screenshot({ src, box }: { src: string; box: Box | undefined }) {
 
 function Excerpt({ text, quote }: { text: string; quote: string }) {
   const i = text.indexOf(quote)
-  if (i < 0) return <p className="text-signal-amber text-xs">The quoted text is not in these bytes verbatim.</p>
+  if (i < 0)
+    return (
+      <p className="text-signal-amber text-xs">The quoted text is not in these bytes verbatim.</p>
+    )
   const before = text.slice(Math.max(0, i - 360), i)
   const after = text.slice(i + quote.length, i + quote.length + 360)
   return (
@@ -331,12 +388,17 @@ function Html({ text, locator }: { text: string; locator: Locator }) {
     <div className="space-y-3 px-5 pb-5">
       {locator.selector && (
         <p className="text-xs">
-          Read from <code className="rounded-sm bg-surface-raised px-1 font-mono">{locator.selector}</code>
+          Read from{" "}
+          <code className="rounded-sm bg-surface-raised px-1 font-mono">{locator.selector}</code>
         </p>
       )}
       {locator.quote ? <Excerpt text={text} quote={locator.quote} /> : null}
       {locator.absent ? <Absent text={text} absent={locator.absent} /> : null}
-      <button type="button" onClick={() => setRender(!render)} className="text-ink-muted text-xs underline">
+      <button
+        type="button"
+        onClick={() => setRender(!render)}
+        className="text-ink-muted text-xs underline"
+      >
         {render ? "Hide the page" : "Render the archived page (scripts off; loads Steam's images)"}
       </button>
       {render && (
@@ -359,7 +421,8 @@ export function atPath(root: unknown, path: string): { found: boolean; value: un
   let cur: unknown = root
   for (const p of parts) {
     const key = p.startsWith("[") ? Number(p.slice(1, -1)) : p
-    if (cur === null || typeof cur !== "object" || !(key in (cur as object))) return { found: false, value: undefined }
+    if (cur === null || typeof cur !== "object" || !(key in (cur as object)))
+      return { found: false, value: undefined }
     cur = (cur as Record<string | number, unknown>)[key]
   }
   return { found: true, value: cur }
@@ -397,7 +460,11 @@ function Json({ text, locator }: { text: string; locator: Locator }) {
         </div>
       )}
       {locator.from && locator.from.length > 0 && <FromFacts ids={locator.from} />}
-      <button type="button" onClick={() => setWhole(!whole)} className="text-ink-muted text-xs underline">
+      <button
+        type="button"
+        onClick={() => setWhole(!whole)}
+        className="text-ink-muted text-xs underline"
+      >
         {whole ? "Hide" : "Show"} the whole {(text.length / 1024).toFixed(1)} KB
       </button>
       {whole && (

@@ -9,8 +9,7 @@
     "./jobs": "./src/jobs.ts",
     "./limits": "./src/limits.ts",
     "./solari": "./src/solari.ts",
-    "./postgres": "./src/stores/postgres.ts",
-    "./ops": "./src/stores/ops.ts"
+    "./postgres": "./src/stores/postgres.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

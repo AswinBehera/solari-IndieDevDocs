@@ -12,7 +12,8 @@
       "!docs/design",
       "!**/dist",
       "!**/migrations/meta",
-      "!**/__fixtures__"
+      "!**/__fixtures__",
+      "!**/src/fixtures"
     ]
   },
   "formatter": {

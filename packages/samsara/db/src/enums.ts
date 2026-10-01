@@ -1,20 +1,10 @@
 import {
   type BudgetWindow,
   budgetWindow,
-  type DriftState,
-  driftState,
-  type HarvestOutcome,
-  harvestOutcome,
   type JobState,
   jobState,
   type MeterId,
   meterId,
-  type PersonaHealth,
-  type PersonaTier,
-  personaHealth,
-  personaTier,
-  type ResolutionState,
-  resolutionState,
   type SessionOutcome,
   type SessionPurpose,
   sessionOutcome,
@@ -35,14 +25,6 @@ import { pgEnum } from "drizzle-orm/pg-core"
  */
 type Values<T extends string> = [T, ...T[]]
 
-export const personaTierEnum = pgEnum(
-  "persona_tier",
-  personaTier.options as unknown as Values<PersonaTier>,
-)
-export const personaHealthEnum = pgEnum(
-  "persona_health",
-  personaHealth.options as unknown as Values<PersonaHealth>,
-)
 export const sessionPurposeEnum = pgEnum(
   "session_purpose",
   sessionPurpose.options as unknown as Values<SessionPurpose>,
@@ -51,23 +33,7 @@ export const sessionOutcomeEnum = pgEnum(
   "session_outcome",
   sessionOutcome.options as unknown as Values<SessionOutcome>,
 )
-export const harvestOutcomeEnum = pgEnum(
-  "harvest_outcome",
-  harvestOutcome.options as unknown as Values<HarvestOutcome>,
-)
 export const jobStateEnum = pgEnum("job_state", jobState.options as unknown as Values<JobState>)
-export const resolutionStateEnum = pgEnum(
-  "resolution_state",
-  resolutionState.options as unknown as Values<ResolutionState>,
-)
-/** Nullable in the row; the enum itself holds only the real cadences. */
-export const probeCadenceEnum = pgEnum("probe_cadence", ["hourly", "daily", "weekly"])
-
-export const driftStateEnum = pgEnum(
-  "drift_state",
-  driftState.options as unknown as Values<DriftState>,
-)
-
 export const meterIdEnum = pgEnum("meter_id", meterId.options as unknown as Values<MeterId>)
 export const budgetWindowEnum = pgEnum(
   "budget_window",

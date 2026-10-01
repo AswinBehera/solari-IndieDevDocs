@@ -12,7 +12,10 @@ import { AGE_COOKIES, AI_SECTION_SELECTOR } from "@rd/steam"
 
 export interface PageLike {
   context(): { addCookies(cookies: object[]): Promise<void> }
-  goto(url: string, opts: { waitUntil: "domcontentloaded" | "load"; timeout: number }): Promise<unknown>
+  goto(
+    url: string,
+    opts: { waitUntil: "domcontentloaded" | "load"; timeout: number },
+  ): Promise<unknown>
   content(): Promise<string>
   screenshot(opts: { fullPage: boolean; type: "jpeg"; quality: number }): Promise<Uint8Array>
   evaluate<R, A>(fn: (arg: A) => R, arg: A): Promise<R>
@@ -50,9 +53,9 @@ function measure(selectors: string[]): (Box | null)[] {
 }
 
 export async function captureStorePage(page: PageLike, url: string): Promise<PageCapture> {
-  await page.context().addCookies(
-    AGE_COOKIES.map((c) => ({ ...c, domain: "store.steampowered.com", path: "/" })),
-  )
+  await page
+    .context()
+    .addCookies(AGE_COOKIES.map((c) => ({ ...c, domain: "store.steampowered.com", path: "/" })))
   await page.setViewportSize?.({ width: 1280, height: 900 })
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 })
   const html = await page.content()

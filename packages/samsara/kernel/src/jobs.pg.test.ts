@@ -165,7 +165,7 @@ describe.skipIf(!hasDb)("the queue, against Postgres", () => {
 
   it("filters to the types the runner can actually handle", async () => {
     const s = store()
-    await s.enqueue({ type: "harvest.run" })
+    await s.enqueue({ type: "block.run" })
     const claimed = await s.claim({ runId: "run-a", limit: 5, leaseMs: 60_000, types: ["noop"] })
     expect(claimed.jobs).toHaveLength(0)
   })
@@ -201,7 +201,7 @@ describe.skipIf(!hasDb)("the queue, against Postgres", () => {
   })
 
   it("refuses to retry a failure class that retrying cannot fix", async () => {
-    // `blocked` retried is a persona being trained into a ban; `config` retried is
+    // `blocked` retried is a browser being trained into a ban; `config` retried is
     // the same wrong argument sent twice. See `retry.ts` for the full case.
     const s = store()
     const { id } = await s.enqueue({ type: "noop", maxAttempts: 5 })

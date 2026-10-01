@@ -1,8 +1,7 @@
-// @samsara/db — Drizzle tables for the engine (plan section 3.1).
+// @samsara/db — Drizzle tables for the kernel.
 //
 // This package exports table definitions and nothing else. It owns no migrations:
-// there is one database and one migration history, and @dt/db holds it. If Samsara is
-// ever extracted to its own repo, the folder splits then, not now.
+// there is one database and one migration history, and @rd/db holds it.
 
 export * from "./enums.js"
 export * from "./tables.js"

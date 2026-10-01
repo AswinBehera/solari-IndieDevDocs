@@ -68,7 +68,6 @@ export async function main(): Promise<number> {
       {
         jobs: app.jobs,
         kernel: app.kernel,
-        packs: app.packs,
         handlers: app.handlers,
         logger: app.logger,
       },

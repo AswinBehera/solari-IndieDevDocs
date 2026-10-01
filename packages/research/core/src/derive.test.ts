@@ -8,10 +8,10 @@ import {
   laneOf,
   laneReviews,
   negativeReviews,
-  recentReviews,
-  reviewTrend,
   neighbourTags,
   paramsChanged,
+  recentReviews,
+  reviewTrend,
   sha256Hex,
 } from "./derive.js"
 import { blockIdsIn } from "./index.js"
@@ -215,7 +215,13 @@ describe("evidenceMoves", () => {
 
 describe("review signals", () => {
   const day = 86_400
-  const r = (votedUp: boolean, minutes: number | null, language = "english", created = 0, refunded = false) => ({
+  const r = (
+    votedUp: boolean,
+    minutes: number | null,
+    language = "english",
+    created = 0,
+    refunded = false,
+  ) => ({
     votedUp,
     minutesAtReview: minutes,
     language,
@@ -224,12 +230,22 @@ describe("review signals", () => {
   })
 
   it("reads the recent score and the hours positive reviewers had played", () => {
-    const v = recentReviews([r(true, 600, "english", 10 * day), r(true, 1200), r(false, 30, "english", 4 * day)])
+    const v = recentReviews([
+      r(true, 600, "english", 10 * day),
+      r(true, 1200),
+      r(false, 30, "english", 4 * day),
+    ])
     expect(v).toEqual({ sampled: 3, positive: 2, pct: 67, spanDays: 6, medianHoursUp: 15 })
   })
 
   it("counts negatives inside the refund window, and ignores a positive that slipped in", () => {
-    const v = negativeReviews([r(false, 45, "english", 0, true), r(false, 119), r(false, 120), r(true, 5), r(false, null)])
+    const v = negativeReviews([
+      r(false, 45, "english", 0, true),
+      r(false, 119),
+      r(false, 120),
+      r(true, 5),
+      r(false, null),
+    ])
     expect(v).toMatchObject({ sampled: 4, early: 2, refunded: 1, medianHours: 2 })
   })
 
@@ -249,7 +265,10 @@ describe("review signals", () => {
 
   it("pools the lane, every sampled review once", () => {
     const lane = laneReviews(
-      [[r(true, 600), r(true, 60, "schinese")], [r(true, 1200), r(false, 10)]],
+      [
+        [r(true, 600), r(true, 60, "schinese")],
+        [r(true, 1200), r(false, 10)],
+      ],
       [[r(false, 30), r(false, 300)], [r(false, 90, "english", 0, true)]],
     )
     expect(lane.hours).toMatchObject({ medianHoursUp: 10, medianHoursDown: 1.5, up: 3, down: 3 })
@@ -272,7 +291,9 @@ describe("review signals", () => {
       "67% of negative reviews under 2 h",
     )
     expect(
-      formatFact(fact("set", "review.languages", { sampled: 4, top: [{ language: "schinese", n: 1 }] })),
+      formatFact(
+        fact("set", "review.languages", { sampled: 4, top: [{ language: "schinese", n: 1 }] }),
+      ),
     ).toBe("Simplified Chinese 25%")
   })
 })
