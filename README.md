@@ -17,7 +17,7 @@ taken on trust.
               HTML, screenshot, and a replay of the browser that read it
 ```
 
-[![Demo: scouting a Steam niche, opening a receipt, the charts, and a playable /prototype block (2.5 min)](docs/demo/indieDevDocs-demo.jpg)](docs/demo/indieDevDocs-demo.mp4)
+
 
 https://github.com/user-attachments/assets/ec71ae0f-00ab-43ff-a6ec-595c4ce118b6
 
