@@ -252,7 +252,17 @@ describe("review signals", () => {
       [[r(true, 600), r(true, 60, "schinese")], [r(true, 1200), r(false, 10)]],
       [[r(false, 30), r(false, 300)], [r(false, 90, "english", 0, true)]],
     )
-    expect(lane.hours).toEqual({ medianHoursUp: 10, medianHoursDown: 1.5, up: 3, down: 3 })
+    expect(lane.hours).toMatchObject({ medianHoursUp: 10, medianHoursDown: 1.5, up: 3, down: 3 })
+    // 600, 60, 1200 minutes up; 30, 300, 90 down. An edge belongs to the bucket above it.
+    expect(lane.hours.buckets?.map((b) => [b.up, b.down])).toEqual([
+      [0, 1],
+      [1, 1],
+      [0, 0],
+      [0, 1],
+      [1, 0],
+      [1, 0],
+      [0, 0],
+    ])
     expect(lane.early).toEqual({ early: 2, of: 3, pct: 67, refunded: 1 })
     expect(lane.languages.top[0]).toEqual({ language: "english", n: 3 })
   })

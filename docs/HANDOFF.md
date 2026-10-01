@@ -64,6 +64,18 @@ Typecheck is clean across core, db, steam, worker, api and web. Core has 13 test
 - **Read the trend with its window.** "Newest 100" spans 2 days for Balatro and 854 for
   Cento. The card shows each game's span.
 
+## Added 1 October: charts
+
+- `apps/web/src/research/editor/charts.tsx`: hand-drawn SVG, no chart library, the
+  page's colour tokens. Every mark opens its fact's receipt.
+- Comparables: price × reviews. Breadth: lane map (games × median reviews, both log).
+  Reviews: hours histogram, recent vs all-time dumbbells, under-2 h share bars (pale
+  under 20 negatives in the sample).
+- The histogram needs `review.hours` `buckets`, added to the computation on 1 October.
+  Reviews runs from before that show the other two charts only; re-run to get it.
+- Scatter labels are placed greedily and dropped rather than overlapped; the dropped
+  ones show on hover.
+
 ## Things that will bite you
 
 - **`pnpm test` wipes the local database.** Some older suites truncate tables. Run a single

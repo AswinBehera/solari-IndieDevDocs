@@ -387,6 +387,11 @@ export interface ReviewHoursValue {
   medianHoursDown: number | null
   up: number
   down: number
+  /**
+   * Reviews by hours played, in `HOUR_BUCKETS` order. Absent on runs before
+   * 1 October 2026.
+   */
+  buckets?: { label: string; up: number; down: number }[]
 }
 
 /** Negative reviews written inside the refund window, across the lane. */

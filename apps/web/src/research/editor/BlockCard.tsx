@@ -30,6 +30,7 @@ import { NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react"
 import { useMemo, useState } from "react"
 import type { BlockView } from "../api"
 import { useDocContext } from "../context"
+import { Dumbbells, HoursHistogram, priceTick, Scatter, ShareBars } from "./charts"
 import { ago, CiteButton, decisionEvidence, Evidence, nameOf } from "./parts"
 
 /**
@@ -290,6 +291,19 @@ function ComparablesBody({ block }: { block: BlockView }) {
           Pick two or three tags that describe your game, then Run. One store search, no browser.
         </p>
       )}
+
+      <Scatter
+        points={rows.flatMap((f) => {
+          const v = f.value as ComparableValue
+          return kept.has(f.id) && v.priceCents && v.reviewCount
+            ? [{ key: f.id, x: v.reviewCount, y: v.priceCents, label: v.name, fact: f }]
+            : []
+        })}
+        xLabel="reviews (log)"
+        yLabel="price"
+        yFormat={priceTick}
+        caption="The kept comparables by review count and price, from the search rows. Dashed lines are the medians. Click a dot for its row."
+      />
 
       {listed.length > 0 && (
         <ol className="mt-3 divide-y divide-rule border-rule border-y">
@@ -734,6 +748,32 @@ function NicheBody({ block }: { block: BlockView }) {
           those describe the niche rather than split it.
         </p>
       )}
+      {narrower.length > 0 && home && h && (
+        <Scatter
+          points={[home, ...narrower].flatMap((f) => {
+            const v = f.value as LaneValue
+            return v.medianReviews
+              ? [
+                  {
+                    key: f.id,
+                    x: v.total,
+                    y: v.medianReviews,
+                    label: v.pivot ? `+ ${v.pivot.name}` : "this niche",
+                    fact: f,
+                    emphasis: !v.pivot,
+                  },
+                ]
+              : []
+          })}
+          xLabel="games in the lane (log)"
+          yLabel="median reviews"
+          yLog
+          yFormat={(n) => n.toLocaleString("en-US")}
+          labelled={narrower.length + 1}
+          corner="↖ fewer games, more reviews each"
+          caption="The niche and each lane one tag narrower: how many games it holds against how many reviews its typical game gets. Up and to the left is less crowded and better attended."
+        />
+      )}
       {narrower.length > 0 && h && (
         <div className="mt-4">
           <h4 className="font-mono text-[10px] text-ink-faint uppercase tracking-wider">
@@ -895,8 +935,8 @@ function ReviewsBody({ block }: { block: BlockView }) {
       {!block.run && (
         <p className="mt-4 text-ink-faint text-sm">
           Reads two pages of each comparable's Steam reviews: the newest 100, and the newest 100
-          negative ones. It counts hours played, the refund window and languages. No reviewer's words
-          or name are copied into the document; the pages are kept as receipts.
+          negative ones. It counts hours played, the refund window and languages. No reviewer's
+          words or name are copied into the document; the pages are kept as receipts.
         </p>
       )}
       {early && e && (
@@ -954,6 +994,58 @@ function ReviewsBody({ block }: { block: BlockView }) {
             </li>
           )}
         </ul>
+      )}
+      {hours && h?.buckets && <HoursHistogram fact={hours} buckets={h.buckets} />}
+      {rows.length > 0 && (
+        <>
+          <h4 className="mt-5 font-mono text-[10px] text-ink-faint uppercase tracking-wider">
+            Newest reviews against all-time score
+          </h4>
+          <Dumbbells
+            margin={t?.margin ?? 5}
+            rows={rows.flatMap((r) => {
+              const rv = r.recent?.value as ReviewRecentValue | undefined
+              const all = allTime.get(r.subject)
+              return r.recent && rv && all != null
+                ? [
+                    {
+                      key: r.subject,
+                      label: nameOf(names, r.subject),
+                      from: all,
+                      to: rv.pct,
+                      fact: r.recent,
+                      note: `${rv.spanDays} d`,
+                    },
+                  ]
+                : []
+            })}
+          />
+          <h4 className="mt-5 font-mono text-[10px] text-ink-faint uppercase tracking-wider">
+            Negative reviews written inside the refund window
+          </h4>
+          <ShareBars
+            unit="negative reviews under 2 h"
+            pooled={e?.pct ?? null}
+            rows={rows.flatMap((r) => {
+              const nv = r.negative?.value as ReviewNegativeValue | undefined
+              return r.negative && nv
+                ? [
+                    {
+                      key: r.subject,
+                      label: nameOf(names, r.subject),
+                      n: nv.early,
+                      of: nv.sampled,
+                      fact: r.negative,
+                    },
+                  ]
+                : []
+            })}
+          />
+          <p className="mt-1 text-ink-faint text-xs">
+            The dashed line is the lane's pooled share. A pale bar has under 20 negative reviews in
+            its sample and swings far on one review.
+          </p>
+        </>
       )}
       {rows.length > 0 && (
         <div className="mt-4 overflow-x-auto">
@@ -1035,7 +1127,8 @@ function ReviewsBody({ block }: { block: BlockView }) {
           </table>
           <p className="mt-1.5 text-ink-faint text-xs">
             "Newest 100" is the share positive among each game's latest 100 reviews, against its
-            all-time score from the store search. Hours are hours played when the review was written.
+            all-time score from the store search. Hours are hours played when the review was
+            written.
           </p>
         </div>
       )}

@@ -98,6 +98,15 @@ source: it goes stale when the evidence it cites moves.
 | `/reviews` | Two pages of each comparable's Steam reviews, newest first: any kind, and negative only. Per game and pooled for the lane: hours played at review, negative reviews inside the two-hour refund window, the recent score against the all-time one, and the languages reviews are written in. Facts hold counts only; no reviewer's words or name. | API |
 | `/decision` | Your call, in a sentence, with the numbers it rests on attached from anywhere in the document. Recording it keeps those numbers as they stood. When a later run reads one differently, the decision says which number moved and offers the new reading. It never changes by itself. | Derived |
 
+Blocks draw their answers as charts as well as numbers, each mark opening the receipt it
+was read from: comparables as price against reviews; the lane map, with each narrower
+lane's size against how many reviews its typical game gets; reviews by hours played,
+positive above the line and negative below, with the refund window shaded; each game's
+recent score against its all-time one; and each game's share of negative reviews written
+in under two hours, beside the lane's.
+
+![Reviews by hours played at review, Indie + Roguelike Deckbuilder + Pixel Graphics](docs/demo/reviews-by-hours.png)
+
 ## Built on Solari
 
 Store pages are read in Solari cloud browsers in `direct` mode, one session per page,

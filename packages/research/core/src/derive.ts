@@ -247,6 +247,29 @@ export function reviewTrend(
   }
 }
 
+/** Upper edges in hours; the last bucket is open. The first two split Steam's refund window. */
+export const HOUR_BUCKETS: { label: string; below: number }[] = [
+  { label: "<1 h", below: 1 },
+  { label: "1–2 h", below: 2 },
+  { label: "2–5 h", below: 5 },
+  { label: "5–10 h", below: 10 },
+  { label: "10–20 h", below: 20 },
+  { label: "20–50 h", below: 50 },
+  { label: "50+ h", below: Number.POSITIVE_INFINITY },
+]
+
+export function hourBuckets(
+  up: ReviewSample[],
+  down: ReviewSample[],
+): { label: string; up: number; down: number }[] {
+  const at = (r: ReviewSample) =>
+    HOUR_BUCKETS.findIndex((b) => (r.minutesAtReview as number) / 60 < b.below)
+  const out = HOUR_BUCKETS.map((b) => ({ label: b.label, up: 0, down: 0 }))
+  for (const r of up) if (r.minutesAtReview !== null) (out[at(r)] as { up: number }).up++
+  for (const r of down) if (r.minutesAtReview !== null) (out[at(r)] as { down: number }).down++
+  return out
+}
+
 /**
  * The lane's reviews pooled: every sampled review counts once, so a game with a
  * long history weighs no more than its sample of 100.
@@ -264,6 +287,7 @@ export function laneReviews(
       medianHoursDown: hours(median(minutesOf(down))),
       up: up.length,
       down: down.length,
+      buckets: hourBuckets(up, down),
     },
     early: {
       early: early.length,
