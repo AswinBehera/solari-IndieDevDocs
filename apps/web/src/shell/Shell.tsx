@@ -11,7 +11,7 @@ export function Shell() {
       <header className="sticky top-0 z-20 flex min-h-13 items-center gap-x-5 border-rule border-b bg-surface px-4 py-2 sm:px-7">
         <Link to="/" className="flex flex-none items-baseline gap-2 whitespace-nowrap">
           <span className="font-display text-[24px] tracking-tight">
-            Sourced<span className="text-marker">.</span>
+            indieDevDocs<span className="text-marker">.</span>
           </span>
           <span className="font-mono text-[10px] text-ink-faint tracking-[.08em]">STEAM RESEARCH</span>
         </Link>

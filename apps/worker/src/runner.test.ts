@@ -8,9 +8,9 @@ import {
   MemorySessionStore,
   SessionRegistry,
 } from "@samsara/kernel"
+import { PackRegistry } from "@samsara/refine"
 import { describe, expect, it } from "vitest"
 import { type HandlerLookup, HandlerRegistry, type JobHandler, noopHandler } from "./handlers.js"
-import { createPackRegistry } from "./packs.js"
 import { drain } from "./runner.js"
 
 /**
@@ -29,7 +29,7 @@ const deps = (handlers: HandlerLookup, jobs = new MemoryJobStore()) => {
   return {
     jobs,
     kernel: new Kernel({ registry, guard }),
-    packs: createPackRegistry(),
+    packs: new PackRegistry(),
     handlers,
     logger: new MemoryLogger(),
   }
@@ -181,21 +181,5 @@ describe("the drain loop", () => {
     expect(second.id).toBe(first.id)
     expect(second.deduped).toBe(true)
     expect(d.jobs.rows.size).toBe(1)
-  })
-})
-
-describe("the pack registry", () => {
-  it("holds exactly the packs that were written, and no more", () => {
-    // Until P2.2 this asserted zero, which was the claim that the runner had no
-    // vertical compiled into it. One pack exists now, so the assertion that still
-    // means something is the count: a second id appearing here without a second
-    // pack being written is the seam leaking, which is what P2.8 tries to break.
-    // The second is the Deal hunter's pack: extract only, no places to resolve.
-    expect(createPackRegistry().ids()).toEqual(["travel", "deals"])
-  })
-
-  it("names what is registered when a job asks for a pack that is not", () => {
-    const packs = createPackRegistry()
-    expect(() => packs.require("atlas")).toThrow(/registered: travel, deals/)
   })
 })

@@ -1,4 +1,4 @@
-# Handoff: Sourced
+# Handoff: indieDevDocs
 
 Written 30 September 2026, at the pivot from the travel app (Doen Thang) to Steam research
 documents. The travel handoff is in git history, in this file before the pivot commit.
@@ -49,22 +49,13 @@ Typecheck is clean across core, db, steam, worker, api and web. Core has 9 tests
 
 ## Open
 
-1. **Delete the travel code.** Nothing imports it, and `apps/web/tsconfig.json` excludes
-   it. Remove:
-   - `packages/travel/*`
-   - `apps/web/src/{trip,trips,places,lab,samsara,share,onboarding,kernel}`
-   - the travel routes in `apps/api/src` (`lab`, `places`, `probes`, `trips`, `drift`
-     and their tests)
-   - the travel handlers in `apps/worker/src`
-
-   Then drop `packages/travel/*` from `pnpm-workspace.yaml` and the tsconfig exclude.
-2. **More block kinds**, on the same Recorder:
+1. **More block kinds**, on the same Recorder:
    - price history across regions (`cc=` per viewpoint)
    - review language mix
    - a follower/wishlist proxy from the community hub
    - "what changed since last run" as a diff of two runs' facts. Runs are kept for this.
-3. **Sharing.** A read-only doc view whose chips open receipts. It needs receipts off the
+2. **Sharing.** A read-only doc view whose chips open receipts. It needs receipts off the
    local disk first (see above).
-4. **Disclosure coverage.** `ai.disclosure` reads Steam's "AI Generated Content
+3. **Disclosure coverage.** `ai.disclosure` reads Steam's "AI Generated Content
    Disclosure" section. A game that uses AI without disclosing it reads as "none". The UI
    says "disclose", never "uses".

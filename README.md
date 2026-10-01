@@ -1,4 +1,4 @@
-# Sourced
+# indieDevDocs
 
 **Research documents for indie game developers, where every number carries its receipt.**
 
@@ -23,7 +23,7 @@ Indie developers make expensive decisions on thin evidence: whether a niche is
 crowded, what comparable games charge, how they are received, and how much of the
 lane is filling with AI-generated work. The usual sources are a spreadsheet of
 copy-pasted numbers nobody can trace, or third-party sites whose data you can't check.
-Sourced keeps the question, the answer and the evidence in one document, and keeps
+indieDevDocs keeps the question, the answer and the evidence in one document, and keeps
 them attached to each other.
 
 ## The model
@@ -95,7 +95,7 @@ any bearer token as that owner. It is committed on purpose and holds nothing sec
   gates or bot checks. A gated page becomes an `unavailable` fact, not a workaround.
 - Receipts stay on the machine that ran the block (`apps/web/public/receipts/`,
   gitignored). They are Steam's content and are not ours to redistribute.
-- The data is for your own research. Sourced is not a data product.
+- The data is for your own research. indieDevDocs is not a data product.
 
 ## Layout
 
@@ -112,6 +112,6 @@ packages/samsara/*       the kernel: jobs, sessions, budgets, Solari launcher
 ## History
 
 This repository started as Doen Thang, a travel document built on the same kernel; that
-history is kept below the pivot commit. The travel packages (`packages/travel/*` and the
-travel pages under `apps/web/src`) are no longer imported or built and will be removed.
-See [`docs/HANDOFF.md`](docs/HANDOFF.md) for what is open.
+history is kept below the pivot commit, and the travel code was removed after it.
+`docs/STATUS.md` is the travel-era log. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for what
+is open.

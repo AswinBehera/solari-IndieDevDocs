@@ -13,7 +13,7 @@
 # So the hosted connection string lives in `.env.supabase`, which nothing loads by
 # default, and reaches a command only through this wrapper:
 #
-#   ./tools/with-hosted-env.sh pnpm --filter @dt/db db:migrate
+#   ./tools/with-hosted-env.sh pnpm --filter @rd/db db:migrate
 #
 # STATUS has carried the note that the test suite truncates the same database
 # `pnpm dev` drains since P0.8, as an architect's call that was "harmless while the

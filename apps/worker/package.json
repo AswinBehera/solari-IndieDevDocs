@@ -1,5 +1,5 @@
 {
-  "name": "@dt/worker",
+  "name": "@rd/worker",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,14 +10,9 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --passWithNoTests",
     "start": "tsx src/index.ts",
-    "dev": "tsx watch --env-file-if-exists=../../.env src/dev.ts",
-    "record:plan": "tsx --env-file-if-exists=../../.env src/record-capture.ts --dry-run",
-    "record": "tsx --env-file-if-exists=../../.env src/record-capture.ts"
+    "dev": "tsx watch --env-file-if-exists=../../.env src/dev.ts"
   },
   "dependencies": {
-    "@dt/core": "workspace:*",
-    "@dt/db": "workspace:*",
-    "@dt/travel-pack": "workspace:*",
     "@rd/db": "workspace:*",
     "@rd/research": "workspace:*",
     "@rd/steam": "workspace:*",

@@ -29,12 +29,6 @@ importers:
 
   apps/api:
     dependencies:
-      '@dt/db':
-        specifier: workspace:*
-        version: link:../../packages/travel/db
-      '@dt/travel-pack':
-        specifier: workspace:*
-        version: link:../../packages/travel/pack
       '@rd/db':
         specifier: workspace:*
         version: link:../../packages/research/db
@@ -133,15 +127,6 @@ importers:
 
   apps/worker:
     dependencies:
-      '@dt/core':
-        specifier: workspace:*
-        version: link:../../packages/travel/core
-      '@dt/db':
-        specifier: workspace:*
-        version: link:../../packages/travel/db
-      '@dt/travel-pack':
-        specifier: workspace:*
-        version: link:../../packages/travel/pack
       '@rd/db':
         specifier: workspace:*
         version: link:../../packages/research/db
@@ -372,115 +357,6 @@ importers:
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1
-
-  packages/travel/core:
-    dependencies:
-      '@samsara/core':
-        specifier: workspace:*
-        version: link:../../samsara/core
-      zod:
-        specifier: ^4.6.1
-        version: 4.6.1
-
-  packages/travel/db:
-    dependencies:
-      '@dt/core':
-        specifier: workspace:*
-        version: link:../core
-      '@samsara/db':
-        specifier: workspace:*
-        version: link:../../samsara/db
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@4.20260702.1)(postgres@3.4.9)
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
-    devDependencies:
-      drizzle-kit:
-        specifier: ^0.31.10
-        version: 0.31.10
-      tsx:
-        specifier: ^4.23.13
-        version: 4.23.13
-
-  packages/travel/lab:
-    dependencies:
-      '@samsara/db':
-        specifier: workspace:*
-        version: link:../../samsara/db
-      '@samsara/harvest':
-        specifier: workspace:*
-        version: link:../../samsara/harvest
-      '@samsara/kernel':
-        specifier: workspace:*
-        version: link:../../samsara/kernel
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@4.20260702.1)(postgres@3.4.9)
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
-    devDependencies:
-      '@types/node':
-        specifier: ^22.20.2
-        version: 22.20.2
-      tsx:
-        specifier: ^4.23.13
-        version: 4.23.13
-
-  packages/travel/pack:
-    dependencies:
-      '@dt/core':
-        specifier: workspace:*
-        version: link:../core
-      '@dt/db':
-        specifier: workspace:*
-        version: link:../db
-      '@samsara/core':
-        specifier: workspace:*
-        version: link:../../samsara/core
-      '@samsara/kernel':
-        specifier: workspace:*
-        version: link:../../samsara/kernel
-      '@samsara/llm':
-        specifier: workspace:*
-        version: link:../../samsara/llm
-      '@samsara/probe':
-        specifier: workspace:*
-        version: link:../../samsara/probe
-      '@samsara/refine':
-        specifier: workspace:*
-        version: link:../../samsara/refine
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@4.20260702.1)(postgres@3.4.9)
-      zod:
-        specifier: ^4.6.1
-        version: 4.6.1
-    devDependencies:
-      '@samsara/db':
-        specifier: workspace:*
-        version: link:../../samsara/db
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
-
-  packages/travel/ui:
-    dependencies:
-      '@dt/core':
-        specifier: workspace:*
-        version: link:../core
-      '@samsara/core':
-        specifier: workspace:*
-        version: link:../../samsara/core
-    devDependencies:
-      '@types/react':
-        specifier: ^19.3.0
-        version: 19.3.0
-      react:
-        specifier: ^19.3.0
-        version: 19.3.0
 
 packages:
 
