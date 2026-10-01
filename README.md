@@ -19,8 +19,9 @@ taken on trust.
 
 [![Demo: scouting a Steam niche, opening a receipt, the charts, and a playable /prototype block (2.5 min)](docs/demo/indieDevDocs-demo.jpg)](docs/demo/indieDevDocs-demo.mp4)
 
-**[Watch the demo (2.5 min)](docs/demo/indieDevDocs-demo.mp4)**: scouting a niche, a receipt, the
-charts, and a 2048 build played inside the document.
+https://github.com/user-attachments/assets/ec71ae0f-00ab-43ff-a6ec-595c4ce118b6
+
+
 
 ## The question it answers
 
