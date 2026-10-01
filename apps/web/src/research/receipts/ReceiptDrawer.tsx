@@ -19,7 +19,7 @@ import { ago, nameOf } from "../editor/parts"
  */
 export function ReceiptDrawer({ focus, onClose }: { focus: ReceiptFocus; onClose: () => void }) {
   const { data, error, isLoading } = useReceipt(focus.receiptId)
-  const [tab, setTab] = useState<"primary" | "pair">("primary")
+  const [tab, setTab] = useState<string | null>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose()
@@ -27,13 +27,15 @@ export function ReceiptDrawer({ focus, onClose }: { focus: ReceiptFocus; onClose
     return () => window.removeEventListener("keydown", onKey)
   }, [onClose])
 
-  // A boxed fact on an HTML receipt is best seen on its paired screenshot.
-  const pair = data?.pair ?? null
+  // One page's receipts: its HTML, the screenshot and the session replay. A boxed
+  // fact is best seen on the screenshot, whichever of them it cites.
+  const group = data?.group ?? []
+  const shotId = group.find((r) => r.kind === "screenshot")?.id
   useEffect(() => {
-    setTab(focus.locator.box && pair?.kind === "screenshot" ? "pair" : "primary")
-  }, [focus, pair?.kind])
+    setTab(focus.locator.box && shotId ? shotId : focus.receiptId)
+  }, [focus, shotId])
 
-  const shown = tab === "pair" && pair ? pair : data?.receipt
+  const shown = group.find((r) => r.id === tab) ?? data?.receipt
 
   return (
     <aside
@@ -55,23 +57,20 @@ export function ReceiptDrawer({ focus, onClose }: { focus: ReceiptFocus; onClose
         {error && <p className="p-5 text-signal-red text-sm">{error.message}</p>}
         {data && shown && (
           <>
-            {pair && (
+            {group.length > 1 && (
               <div className="flex gap-1 border-rule border-b px-5 pt-3">
-                {(["primary", "pair"] as const).map((t) => {
-                  const r = t === "primary" ? data.receipt : pair
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setTab(t)}
-                      className={`-mb-px rounded-t-sm border px-3 py-1.5 text-xs ${
-                        tab === t ? "border-rule border-b-paper bg-paper font-medium" : "border-transparent text-ink-muted"
-                      }`}
-                    >
-                      {KIND_LABEL[r.kind]}
-                    </button>
-                  )
-                })}
+                {group.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setTab(r.id)}
+                    className={`-mb-px rounded-t-sm border px-3 py-1.5 text-xs ${
+                      shown.id === r.id ? "border-rule border-b-paper bg-paper font-medium" : "border-transparent text-ink-muted"
+                    }`}
+                  >
+                    {KIND_LABEL[r.kind]}
+                  </button>
+                ))}
               </div>
             )}
             <Meta receipt={shown} />
@@ -87,6 +86,7 @@ const KIND_LABEL: Record<ReceiptRecord["kind"], string> = {
   json: "API response",
   html: "Store page HTML",
   screenshot: "Screenshot",
+  replay: "Session replay",
   computation: "Computation",
 }
 
@@ -144,6 +144,7 @@ function Meta({ receipt }: { receipt: ReceiptRecord }) {
   ]
   if (receipt.viewpoint) rows.push(["Viewpoint", receipt.viewpoint.toUpperCase()])
   if (receipt.sessionId) rows.push(["Browser session", <code key="s" className="font-mono text-xs">{receipt.sessionId}</code>])
+  if (receipt.profile) rows.push(["Profile", <code key="p" className="font-mono text-xs">{receipt.profile}</code>])
   rows.push([
     "SHA-256",
     <span key="h" className="font-mono text-xs">
@@ -181,7 +182,65 @@ function Body({ receipt, locator }: { receipt: ReceiptRecord; locator: Locator }
     case "json":
     case "computation":
       return <Json text={new TextDecoder().decode(bytes.data.bytes)} locator={locator} />
+    case "replay":
+      return <Replay bytes={bytes.data.bytes} />
   }
+}
+
+// ---- replay ----------------------------------------------------------------------
+
+/**
+ * The browser session, played back from its rrweb recording. The player is loaded
+ * only when a replay is opened. It rebuilds the page in an iframe sandboxed
+ * without scripts, so, like the HTML, Steam's code never runs on our origin.
+ */
+function Replay({ bytes }: { bytes: Uint8Array }) {
+  const target = useRef<HTMLDivElement>(null)
+  const [failed, setFailed] = useState<string | null>(null)
+  const events = useMemo(
+    () =>
+      new TextDecoder()
+        .decode(bytes)
+        .split("\n")
+        .filter((l) => l.trim() !== "")
+        .map((l) => JSON.parse(l) as { type: number; timestamp: number }),
+    [bytes],
+  )
+
+  useEffect(() => {
+    const el = target.current
+    if (!el) return
+    let player: { $destroy(): void } | null = null
+    let gone = false
+    Promise.all([import("rrweb-player"), import("rrweb-player/dist/style.css")])
+      .then(([{ default: Player }]) => {
+        if (gone) return
+        // A Svelte component: `$destroy` is there at runtime, but its types come
+        // from `svelte`, which this app does not install.
+        player = new Player({
+          target: el,
+          props: { events: events as never, width: el.clientWidth, height: 420, autoPlay: false, skipInactive: true },
+        }) as unknown as { $destroy(): void }
+      })
+      .catch((e: unknown) => setFailed(e instanceof Error ? e.message : String(e)))
+    return () => {
+      gone = true
+      player?.$destroy()
+    }
+  }, [events])
+
+  const first = events[0]
+  const last = events.at(-1)
+  const seconds = first && last ? Math.round((last.timestamp - first.timestamp) / 1000) : 0
+  return (
+    <div className="space-y-2 px-5 pb-5">
+      <p className="text-ink-muted text-xs">
+        What the cloud browser did on this page: {events.length} recorded events over {seconds} s.
+      </p>
+      {failed && <p className="text-signal-amber text-xs">The player did not load: {failed}</p>}
+      <div ref={target} className="overflow-hidden rounded-sm border border-rule" />
+    </div>
+  )
 }
 
 // ---- screenshot ------------------------------------------------------------------

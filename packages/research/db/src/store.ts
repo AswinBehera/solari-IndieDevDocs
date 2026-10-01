@@ -13,7 +13,7 @@ import type {
   RunStats,
   Runtime,
 } from "@rd/research"
-import { and, desc, eq, inArray, sql } from "drizzle-orm"
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm"
 import type { Db } from "./client.js"
 import { blocks, docs, facts, receipts, runs } from "./tables.js"
 
@@ -36,6 +36,7 @@ export interface NewReceipt {
   contentType: string
   ref: string
   viewpoint: string | null
+  profile?: string | null
   sessionId?: string | null
   pairedWith?: string | null
   capturedAt: Date
@@ -102,6 +103,7 @@ const toReceipt = (r: ReceiptRow): ReceiptRecord => ({
   contentType: r.contentType,
   ref: r.ref,
   viewpoint: r.viewpoint,
+  profile: r.profile,
   sessionId: r.sessionId,
   capturedAt: r.capturedAt.toISOString(),
 })
@@ -274,6 +276,7 @@ export class PostgresResearchStore {
       .insert(receipts)
       .values({
         ...r,
+        profile: r.profile ?? null,
         sessionId: r.sessionId ?? null,
         pairedWith: r.pairedWith ?? null,
       })
@@ -330,13 +333,16 @@ export class PostgresResearchStore {
       : null
   }
 
-  /** A screenshot's HTML twin, or the other way round. */
-  async pairOf(receiptId: string): Promise<ReceiptRecord | null> {
-    const [row] = await this.db
+  /**
+   * Everything one page load produced: the HTML, and the screenshot and replay that
+   * name it as their pair. Pass the HTML's id. Ordered HTML, screenshot, replay.
+   */
+  async pageGroup(htmlId: string): Promise<ReceiptRecord[]> {
+    const rows = await this.db
       .select()
       .from(receipts)
-      .where(eq(receipts.pairedWith, receiptId))
-      .limit(1)
-    return row ? toReceipt(row) : null
+      .where(or(eq(receipts.id, htmlId), eq(receipts.pairedWith, htmlId)))
+    const order = ["html", "screenshot", "replay"]
+    return rows.map(toReceipt).sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))
   }
 }

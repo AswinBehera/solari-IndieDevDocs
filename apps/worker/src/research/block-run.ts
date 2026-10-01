@@ -2,6 +2,7 @@ import type { NewFact, PostgresResearchStore } from "@rd/db"
 import {
   type AiDisclosureValue,
   type AiShareValue,
+  aiShare,
   appSubject,
   type BlockRecord,
   type ComparableValue,
@@ -11,18 +12,19 @@ import {
   type FactKey,
   formatFact,
   type LaneRow,
-  laneOf,
   type Locator,
+  laneOf,
   neighbourTags,
   parseParams,
   type ReceiptKind,
   type RunOutcome,
   type RunStats,
   type Runtime,
-  aiShare,
+  sha256Hex,
   sourceOf,
 } from "@rd/research"
 import {
+  AGE_COOKIES,
   appDetailsUrl,
   parseAppDetails,
   parseReviewSummary,
@@ -30,10 +32,10 @@ import {
   parseStorePage,
   reviewShareFromTooltip,
   reviewSummaryUrl,
-  SteamClient,
+  type SearchRow,
+  type SteamClient,
   searchUrl,
   storePageUrl,
-  type SearchRow,
   tagName,
 } from "@rd/steam"
 import type { JobStore } from "@samsara/kernel"
@@ -107,6 +109,7 @@ class Recorder {
     viewpoint?: string | null
     sessionId?: string | null
     pairedWith?: string | null
+    profile?: string | null
     at?: Date
   }) {
     const archived = await this.deps.archive.put(input.kind, input.body)
@@ -121,6 +124,7 @@ class Recorder {
       viewpoint: input.viewpoint ?? null,
       sessionId: input.sessionId ?? null,
       pairedWith: input.pairedWith ?? null,
+      profile: input.profile ?? null,
       capturedAt: input.at ?? new Date(),
       ...archived,
     })
@@ -304,12 +308,13 @@ async function snapshot(
   if (games.length === 0) return { outcome: "failed", note: "The comparables list is empty" }
 
   const notes = new Set<string>()
+  const viewpoint = deps.browser ? await steamViewpoint(ctx, notes) : null
   let done = 0
   const one = async (g: ComparableValue) => {
     const subject = appSubject(g.appid)
     try {
       await readApi(g, subject, rec, steam)
-      const page = await readStorePage(g, subject, rec, steam, deps, ctx, notes)
+      const page = await readStorePage(g, subject, rec, steam, deps, ctx, notes, viewpoint)
       if (page) rec.stats.covered++
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
@@ -413,11 +418,14 @@ async function readStorePage(
   deps: BlockRunDeps,
   ctx: JobContext,
   notes: Set<string>,
+  viewpoint: Viewpoint | null,
 ): Promise<boolean> {
   const url = storePageUrl(g.appid)
 
   if (deps.browser) {
     let sessionId: string | null = null
+    let providerId: string | null = null
+    const profile = viewpoint?.label ?? null
     const captured = await ctx.kernel.withBrowser(
       "probe",
       {
@@ -428,8 +436,11 @@ async function readStorePage(
         ownerId: ctx.job.ownerId,
         domainId: "steam",
         runId: rec.runId,
+        recording: true,
+        ...(viewpoint ? { profileId: viewpoint.id } : {}),
         onSession: (s) => {
           sessionId = s.sessionId
+          providerId = s.providerId
           rec.stats.browserSessions++
           rec.stats.browserMinutes += s.minutes
         },
@@ -446,6 +457,7 @@ async function readStorePage(
         contentType: "text/html",
         viewpoint: "us",
         sessionId,
+        profile,
         at,
       })
       const shot = await rec.receipt({
@@ -457,8 +469,10 @@ async function readStorePage(
         viewpoint: "us",
         sessionId,
         pairedWith: html.id,
+        profile,
         at,
       })
+      await keepReplay(providerId, url, html.id, sessionId, profile, rec, ctx, notes)
       return pageFacts(captured.value.html, subject, shot.id, rec, captured.value.boxes)
     }
     notes.add(`browser: ${captured.error.kind}, read over HTTP instead`)
@@ -475,6 +489,78 @@ async function readStorePage(
     at: fetched.fetchedAt,
   })
   return pageFacts(new TextDecoder().decode(fetched.body), subject, html.id, rec, null)
+}
+
+/** The cookie jar store pages are read with, pinned by name and version. */
+interface Viewpoint {
+  id: string
+  /** `name@vN`, written on every receipt read with it. */
+  label: string
+}
+
+/**
+ * The provider profile holding Steam's viewpoint cookies: the age gate answered
+ * as an adult, and English. The name carries a hash of the cookies, so changing
+ * them makes a new profile instead of editing one receipts already cite, and the
+ * kernel never re-saves a profile it finds. Without one, pages are still read:
+ * `captureStorePage` sets the same cookies by hand.
+ */
+async function steamViewpoint(ctx: JobContext, notes: Set<string>): Promise<Viewpoint | null> {
+  const jar = [...AGE_COOKIES, { name: "Steam_Language", value: "english" }]
+  const digest = await sha256Hex(
+    new TextEncoder().encode(jar.map((c) => `${c.name}=${c.value}`).join("; ")),
+  )
+  const name = `indiedevdocs-steam-us-${digest.slice(0, 8)}`
+  const cookies = jar.map((c) => ({
+    ...c,
+    domain: "store.steampowered.com",
+    path: "/",
+    expires: 4_102_444_800, // 2100-01-01: fixed, so the jar is the same every time it is made
+    httpOnly: false,
+    secure: true,
+    sameSite: "Lax" as const,
+  }))
+  const made = await ctx.kernel.ensureProfile(name, { cookies, origins: [] })
+  if (!made.ok) {
+    notes.add(`profile: ${made.error.kind}, pages read without one`)
+    return null
+  }
+  return { id: made.value.id, label: `${made.value.name}@v${made.value.version}` }
+}
+
+/**
+ * The session's recording, kept as a receipt beside the page's HTML. Fetched
+ * after the browser is released, so waiting for the upload costs no minutes. A
+ * missing replay is a note, not a failed page: the HTML and screenshot stand.
+ */
+async function keepReplay(
+  providerId: string | null,
+  url: string,
+  htmlId: string,
+  sessionId: string | null,
+  profile: string | null,
+  rec: Recorder,
+  ctx: JobContext,
+  notes: Set<string>,
+): Promise<void> {
+  if (!providerId) return
+  const replay = await ctx.kernel.replay(providerId)
+  if (!replay.ok) {
+    const why = (replay.error.cause ?? replay.error.message).slice(0, 90)
+    notes.add(`replay: ${why}; kept the page without one`)
+    return
+  }
+  await rec.receipt({
+    kind: "replay",
+    runtime: "browser",
+    url,
+    body: replay.value,
+    contentType: "application/x-ndjson",
+    viewpoint: "us",
+    sessionId,
+    pairedWith: htmlId,
+    profile,
+  })
 }
 
 function pageFacts(

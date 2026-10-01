@@ -78,6 +78,11 @@ export interface BrowserOptions {
 /** What one attempt of `withBrowser` actually cost. See `onSession`. */
 export interface SessionSpend {
   sessionId: string
+  /**
+   * The provider's id for the same session (`BrowserHandle.id`), which is what the
+   * provider's own endpoints take: a replay, a support request.
+   */
+  providerId: string
   outcome: SessionOutcome
   minutes: number
   /** 1-based, within this `withBrowser` call. */
@@ -271,7 +276,7 @@ export class Kernel {
           }
           const minutes = await this.deps.registry.close(sessionId, outcome)
           await this.meter("solari.minutes", minutes, scope, purpose)
-          opts.onSession?.({ sessionId, outcome, minutes, attempt })
+          opts.onSession?.({ sessionId, providerId: live.id, outcome, minutes, attempt })
         }
       },
       {
@@ -347,6 +352,45 @@ export class Kernel {
     )
   }
 
+  /**
+   * A recorded session's replay, by the provider id `onSession` reported. Call it
+   * after `withBrowser` returns: the provider uploads the replay on release. No
+   * minutes are metered, because no session is open while it downloads.
+   */
+  async replay(providerId: string, timeoutMs?: number): Promise<Result<Uint8Array, Failure>> {
+    const launcher = this.deps.browser
+    if (!launcher?.replay) return err(failure("config", "this launcher cannot fetch replays"))
+    try {
+      return ok(await launcher.replay(providerId, timeoutMs))
+    } catch (thrown) {
+      return err(classify(thrown))
+    }
+  }
+
+  /**
+   * The provider profile called `name`, created with `storageState` if there is none.
+   *
+   * An existing profile is used as it is and never re-saved: every save bumps the
+   * provider's version, and the version is what a receipt records to say "read with
+   * this exact jar". A caller that changes the state changes the name too.
+   */
+  async ensureProfile(
+    name: string,
+    storageState: unknown,
+  ): Promise<Result<{ id: string; name: string; version: number }, Failure>> {
+    const profiles = this.deps.browser?.profiles
+    if (!profiles) return err(failure("config", "this launcher has no profiles"))
+    try {
+      const found = (await profiles.list()).find((p) => p.name === name)
+      if (found) return ok({ id: found.id, name, version: versionOf(found) })
+      const made = await profiles.create(name)
+      const saved = await profiles.save(made.id, storageState)
+      return ok({ id: made.id, name, version: saved.version })
+    } catch (thrown) {
+      return err(classify(thrown))
+    }
+  }
+
   /** Every kernel session is released. For the SIGTERM path in the worker. */
   async shutdown(): Promise<void> {
     await this.deps.registry.shutdown()
@@ -383,4 +427,10 @@ export class Kernel {
     await this.deps.guard.record(meter, amount, scope)
     this.logger.emit({ at: now(), event: "budget.spent", meter, amount, purpose })
   }
+}
+
+/** The provider's list carries `version`; the port's type does not promise it. */
+const versionOf = (p: object): number => {
+  const v = (p as { version?: unknown }).version
+  return typeof v === "number" ? v : Number(v ?? 0)
 }

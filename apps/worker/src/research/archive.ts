@@ -20,6 +20,7 @@ const EXT: Record<ReceiptKind, string> = {
   json: "json",
   html: "html.txt",
   screenshot: "jpg",
+  replay: "ndjson",
   computation: "json",
 }
 

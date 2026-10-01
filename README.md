@@ -59,11 +59,14 @@ source: it goes stale when the evidence it cites moves.
 ## Built on Solari
 
 Store pages are read in Solari cloud browsers in `direct` mode, one session per page,
-three at a time. Each page yields two receipts, paired: the HTML the browser rendered,
-and a full-page screenshot with boxes around the regions facts were read from. The
-receipt drawer shows the screenshot scrolled to the box, and lists the browser session
-id. Without `SOLARI_API_KEY` the same blocks fall back to plain HTTP, and the receipts
-say so.
+three at a time. Each page yields three receipts, kept together: the HTML the browser
+rendered, a full-page screenshot with boxes around the regions facts were read from,
+and the session's replay (Solari's rrweb recording, downloaded after the browser is
+released). Every session starts from the same pinned Solari profile, a cookie jar
+holding the store's viewpoint (age gate answered, English), and each receipt names
+the profile and version it was read with. The receipt drawer shows the screenshot
+scrolled to the box, plays the replay, and lists the browser session id. Without
+`SOLARI_API_KEY` the same blocks fall back to plain HTTP, and the receipts say so.
 
 The kernel (`packages/samsara/kernel`) owns sessions, retries, deadlines and the
 per-owner budget. The worker (`apps/worker`) claims `block.run` jobs from a Postgres
@@ -75,7 +78,7 @@ You need Node 22.9+, pnpm 11, and Docker (for Postgres). A Solari key is optiona
 the point: without one, store pages are read over HTTP and there are no screenshots.
 
 ```sh
-git clone https://github.com/AswinBehera/solari-Sourced.git && cd solari-Sourced
+git clone https://github.com/AswinBehera/solari-IndieDevDocs.git && cd solari-IndieDevDocs
 pnpm install
 cp .env.example .env          # set SOLARI_API_KEY; DATABASE_URL already points at local Docker
 pnpm db:up && pnpm db:migrate

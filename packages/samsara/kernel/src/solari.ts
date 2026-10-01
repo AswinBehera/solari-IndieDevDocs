@@ -71,6 +71,24 @@ export function createSolariBrowserLauncher(creds: SolariCredentials): BrowserLa
     // proxy listener. Skipping it used to hang Node at exit; since 0.1.3 the
     // listener is unref'd, but a scheduled runner should still free it explicitly.
     dispose: () => solari.close(),
+    // The SDK says a replay is ready 1-3 s after release. Measured on 1 October 2026
+    // it took 6 s for one store page, answered meanwhile as a 404 with the code
+    // `ReplayPending`. Any other error is real and is thrown at once.
+    async replay(providerId: string, timeoutMs = 60_000) {
+      const until = Date.now() + timeoutMs
+      for (;;) {
+        try {
+          return await solari.sessions.downloadReplay(providerId)
+        } catch (e) {
+          const pending = e instanceof Error && e.message.includes("ReplayPending")
+          if (!pending) throw e
+          if (Date.now() > until) {
+            throw new Error(`replay still uploading after ${timeoutMs / 1000} s`, { cause: e })
+          }
+          await new Promise((r) => setTimeout(r, 2_000))
+        }
+      }
+    },
     // Hung off the launcher rather than given its own factory, because a second
     // `new Solari()` is a second API client and a second loopback listener for
     // four HTTP calls. One client, one dispose.

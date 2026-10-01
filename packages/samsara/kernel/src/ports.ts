@@ -64,6 +64,13 @@ export interface BrowserLauncher {
   /** Process shutdown. Releases the client's pool; separate from closing a browser. */
   dispose(): Promise<void>
   /**
+   * A recorded session's replay, by the provider's session id (`BrowserHandle.id`).
+   * Only after the session is closed: the provider uploads it on release, and for
+   * some seconds after that it answers "pending". The launcher waits that out, up to
+   * `timeoutMs`, and throws after. Optional, like `profiles`.
+   */
+  replay?(providerId: string, timeoutMs?: number): Promise<Uint8Array>
+  /**
    * Optional because every test above this line uses a fake that has no profiles,
    * and because a launcher without one is still a working launcher — it just
    * cannot carry state between sessions.

@@ -22,7 +22,8 @@
     "@tiptap/starter-kit": "^3.31.3",
     "@tiptap/suggestion": "^3.31.3",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "rrweb-player": "^2.1.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

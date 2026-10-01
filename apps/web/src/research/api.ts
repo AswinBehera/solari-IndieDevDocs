@@ -39,7 +39,8 @@ export interface DocResponse {
 
 export interface ReceiptResponse {
   receipt: ReceiptRecord & { pairedWith: string | null; blockId: string }
-  pair: (ReceiptRecord & { pairedWith?: string | null }) | null
+  /** The page this receipt belongs to, in order: HTML, screenshot, replay. Just the receipt otherwise. */
+  group: ReceiptRecord[]
 }
 
 /** What the receipt drawer is showing: a receipt, and where in it to look. */

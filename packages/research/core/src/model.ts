@@ -22,7 +22,7 @@ export type Runtime = (typeof RUNTIMES)[number]
 export const RUN_OUTCOMES = ["running", "ok", "partial", "blocked", "failed"] as const
 export type RunOutcome = (typeof RUN_OUTCOMES)[number]
 
-export const RECEIPT_KINDS = ["json", "html", "screenshot", "computation"] as const
+export const RECEIPT_KINDS = ["json", "html", "screenshot", "replay", "computation"] as const
 export type ReceiptKind = (typeof RECEIPT_KINDS)[number]
 
 export const BLOCK_STATUSES = ["idle", "queued", "running", "done", "failed"] as const
@@ -205,6 +205,8 @@ export interface ReceiptRecord {
   ref: string
   /** The region the store was read as (`cc`), or the browser's egress country. */
   viewpoint: string | null
+  /** The browser profile the page was read with, as `name@vN`: the exact cookie jar. */
+  profile: string | null
   sessionId: string | null
   capturedAt: string
 }

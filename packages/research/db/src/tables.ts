@@ -89,8 +89,9 @@ export const receipts = pgTable(
     contentType: text("content_type").notNull(),
     ref: text("ref").notNull(),
     viewpoint: text("viewpoint"),
+    profile: text("profile"),
     sessionId: uuid("session_id"),
-    /** A screenshot's companion: the HTML captured in the same page load, if any. */
+    /** The HTML captured in the same page load, for a screenshot or a replay. */
     pairedWith: uuid("paired_with"),
     capturedAt: ts("captured_at"),
   },

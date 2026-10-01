@@ -15,6 +15,13 @@
       "when": 1790787386298,
       "tag": "0001_run_params",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790841905560,
+      "tag": "0002_receipt_profile",
+      "breakpoints": true
     }
   ]
 }

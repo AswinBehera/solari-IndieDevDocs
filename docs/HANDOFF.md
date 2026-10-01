@@ -83,28 +83,34 @@ Typecheck is clean across core, db, steam, worker, api and web. Core has 13 test
    Disclosure" section. A game that uses AI without disclosing it reads as "none". The UI
    says "disclose", never "uses".
 
-## Proposed: Solari profiles and desktops
+## Solari profiles and desktops
 
-Ordered by value for the risk. None of these is built yet.
+Ordered by value for the risk. 1 and 2 are built (1 October); the rest are proposals.
 
-1. **Replays as receipts.** Pass `recording: true` on store-page sessions, then
-   `downloadReplay` and archive the NDJSON content-addressed like any other receipt,
-   paired with the HTML and screenshot. The drawer gets a third tab, "how it was read".
-   Cost: storage only.
-2. **A pinned viewpoint profile.** Create one Solari profile per viewpoint (US English,
-   age-gate cookie, mature-content preference), `profiles.save` its storage state, and
-   record `{profileId, version}` in each receipt's viewpoint. Two runs a month apart then
-   differ because Steam changed, not because the browser did. Store pages that are gated
-   by age today become readable without clicking through the gate on every run.
+1. **Replays as receipts. Built.** Store-page sessions launch with `recording: true`.
+   After the browser is released, the worker calls `kernel.replay(providerId)`, which
+   polls `downloadReplay` past `ReplayPending` (the upload took about 6 s when measured).
+   It archives the rrweb NDJSON as a `replay` receipt paired with the page's HTML.
+   The receipt drawer shows the page group (HTML, screenshot, replay) as tabs and plays
+   the replay with `rrweb-player`, loaded only when that tab opens. A missing replay is
+   a run note; the page's other receipts stand. In the first live run, 7 of 8 pages kept
+   a replay. The eighth failed with a 4xx whose cause was not recorded; the note now
+   carries the cause, so the next one says whether it was still uploading.
+2. **A pinned viewpoint profile. Built.** Once per snapshot run, `kernel.ensureProfile`
+   finds or creates `indiedevdocs-steam-us-<sha8>`, where the hash covers its cookies
+   (the age-gate answer, the mature-content preference and English). A profile that
+   already exists is never re-saved, so its version stays put. Each browser receipt
+   records `profile` as `name@vN` (migration `0002_receipt_profile`). If the profile
+   cannot be made, pages are still read, because `captureStorePage` sets the same
+   cookies by hand.
 3. **Regional viewpoints.** Same profile shape, plus `proxy: {country}`, which needs
    `stealth: true`. This is the "price across regions" block in Open #1. It needs a check
    that the README's "no evading bot checks" still holds: a proxy for locale is not
    evasion, but captcha solving would be, so `captcha` stays off.
-4. **"Connect your Steamworks"** (needs the owner's decision): a Solari desktop streamed
-   into the page over VNC, where you sign in yourself. The cookies are saved to a profile
-   owned by you and used only for your own wishlist and traffic pages. This reverses the
-   README's "no logged-in sessions" line, and it handles credentials, so it waits for an
-   explicit yes.
+4. **"Connect your Steamworks": dropped** (1 October, the owner's call). No logged-in
+   Steam sessions, and Solari's `captcha` stays off everywhere. The safer route to
+   your own numbers is Valve's Steamworks Web API with a publisher key, if that is
+   ever wanted.
 5. **A paused research desktop per document**, resumed when you open the doc
    (`pause`/`resume` snapshot RAM and disk), for checking a page by hand inside the same
    viewpoint the blocks used.

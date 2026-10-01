@@ -47,7 +47,7 @@ type Store = Pick<
   | "factsForRuns"
   | "ownedFacts"
   | "ownedReceipt"
-  | "pairOf"
+  | "pageGroup"
 >
 
 export interface ResearchDeps {
@@ -342,11 +342,13 @@ export function researchRoutes(deps: ResearchDeps) {
     const store = deps.store(c.env)
     const receipt = await store.ownedReceipt(c.get("ownerId"), c.req.param("id"))
     if (!receipt) throw new HTTPException(404, { message: "no such receipt" })
-    // A screenshot names its HTML; HTML is named by its screenshot.
-    const pair = receipt.pairedWith
-      ? await store.ownedReceipt(c.get("ownerId"), receipt.pairedWith)
-      : await store.pairOf(receipt.id)
-    return c.json({ receipt, pair })
+    // A screenshot and a replay name their HTML. The group is what that page load
+    // produced, so the drawer can show each beside the others.
+    const group =
+      receipt.kind === "html" || receipt.pairedWith
+        ? await store.pageGroup(receipt.pairedWith ?? receipt.id)
+        : [receipt]
+    return c.json({ receipt, group: group.length > 0 ? group : [receipt] })
   })
 
   return app
